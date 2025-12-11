@@ -12,6 +12,7 @@ import {
   Car,
   Wallet,
   Warehouse,
+  Users,
 } from "lucide-react";
 
 import {
@@ -36,6 +37,7 @@ const menuItems = [
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/vehicles", label: "Vehicles", icon: Car },
   { href: "/salaries", label: "Salaries", icon: Wallet },
+  { href: "/teams-members", label: "Team Members", icon: Users },
 ];
 
 export default function AppSidebar() {
