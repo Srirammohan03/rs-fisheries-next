@@ -29,6 +29,11 @@ export const POST = apiHandler(async (req: Request) => {
 
 export const GET = apiHandler(async (_req: Request) => {
   const salaries = await prisma.salaries.findMany({
+    include: {
+      user: {
+        select: { name: true, id: true, email: true },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 

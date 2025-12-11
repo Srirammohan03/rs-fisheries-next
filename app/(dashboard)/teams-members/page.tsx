@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
+import { useUsers } from "@/utils/api-config";
 
 export default function UserPage() {
   const [openDialog, setOpenDialog] = useState(false);
@@ -25,17 +26,7 @@ export default function UserPage() {
 
   const queryClient = useQueryClient();
 
-  const {
-    data: users,
-    isLoading,
-    isError,
-  } = useQuery<User[]>({
-    queryKey: ["team-members"],
-    queryFn: async () => {
-      const { data } = await axios.get("/api/team-member");
-      return data.data || [];
-    },
-  });
+  const { data: users, isLoading, isError } = useUsers();
 
   const createMutation = useMutation({
     mutationFn: async (payload: UserFormValues) => {

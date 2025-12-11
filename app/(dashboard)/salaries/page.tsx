@@ -1,80 +1,188 @@
 "use client";
 
 import { useState } from "react";
-import { CardCustom } from "@/components/ui/card-custom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import SalaryDialog from "@/app/(dashboard)/salaries/component/SalaryDialog";
+import DeleteDialog from "@/components/helpers/DeleteDialog";
+import { Loader2, Pencil, Trash } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 
-import { Textarea } from "@/components/ui/textarea";
-import { Save } from "lucide-react";
-import { toast } from "sonner";
-import { Field } from "@/components/helpers/Field";
+export default function SalariesPage() {
+  const queryClient = useQueryClient();
 
-export default function Salaries() {
-  const [employeeName, setEmployeeName] = useState("");
-  const [month, setMonth] = useState("");
-  const [amount, setAmount] = useState(0);
-  const [notes, setNotes] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [selectedSalary, setSelectedSalary] = useState<any>(null);
+  const [mode, setMode] = useState<"add" | "edit">("add");
 
-  const handleSave = () => {
-    console.log("Salary:", { employeeName, month, amount, notes });
-    toast.success("Salary record saved successfully");
+  // Fetch salaries + user details
+  const { data: salaries, isLoading } = useQuery({
+    queryKey: ["salaries"],
+    queryFn: async () => {
+      const { data } = await axios.get("/api/salaries");
+      return data.data;
+    },
+  });
+
+  // Create
+  const createMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const { data } = await axios.post("/api/salaries", payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["salaries"] });
+      setOpenDialog(false);
+    },
+  });
+
+  // Update
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, payload }: any) => {
+      const { data } = await axios.put(`/api/salaries/${id}`, payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["salaries"] });
+      setOpenDialog(false);
+    },
+  });
+
+  // Delete
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await axios.delete(`/api/salaries/${id}`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["salaries"] });
+      setOpenDeleteDialog(false);
+    },
+  });
+
+  const handleCreate = (data: any) => createMutation.mutate(data);
+  const handleUpdate = (data: any) => {
+    if (!selectedSalary) return;
+    updateMutation.mutate({ id: selectedSalary.id, payload: data });
+  };
+
+  const handleDelete = () => {
+    if (selectedSalary) deleteMutation.mutate(selectedSalary.id);
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Salaries</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage employee salary records
-        </p>
+    <div className="p-8 space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">Salary Records</h2>
+        <Button
+          onClick={() => {
+            setMode("add");
+            setSelectedSalary(null);
+            setOpenDialog(true);
+          }}
+        >
+          Add Salary
+        </Button>
       </div>
 
-      <CardCustom
-        title="Employee Salary"
-        actions={
-          <Button onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            Save
-          </Button>
-        }
-      >
-        <div className="space-y-4 max-w-2xl">
-          <Field label="Employee Name">
-            <Input
-              value={employeeName}
-              onChange={(e) => setEmployeeName(e.target.value)}
-              placeholder="Enter employee name"
-            />
-          </Field>
-
-          <Field label="Month">
-            <Input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
-          </Field>
-
-          <Field label="Amount">
-            <Input
-              type="number"
-              value={amount || ""}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-              placeholder="Enter salary amount"
-            />
-          </Field>
-
-          <Field label="Notes">
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Additional notes (optional)"
-              rows={4}
-            />
-          </Field>
+      {isLoading ? (
+        <div className="flex items-center gap-2">
+          <Loader2 className="animate-spin" />
+          Loading salary records...
         </div>
-      </CardCustom>
+      ) : (
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Month</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {salaries.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-6 text-muted-foreground"
+                  >
+                    No salaries found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                salaries?.map((sal: any) => (
+                  <TableRow key={sal.id}>
+                    <TableCell>{sal.user?.name || sal.user?.email}</TableCell>
+                    <TableCell>
+                      {new Date(sal.month).toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </TableCell>
+                    <TableCell>₹{sal.amount}</TableCell>
+                    <TableCell>{sal.notes}</TableCell>
+
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedSalary(sal);
+                            setMode("edit");
+                            setOpenDialog(true);
+                          }}
+                        >
+                          <Pencil size={16} />
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          onClick={() => {
+                            setSelectedSalary(sal);
+                            setOpenDeleteDialog(true);
+                          }}
+                        >
+                          <Trash size={16} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <SalaryDialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        mode={mode}
+        defaultValues={selectedSalary}
+        onSubmit={mode === "add" ? handleCreate : handleUpdate}
+        isLoading={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <DeleteDialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
