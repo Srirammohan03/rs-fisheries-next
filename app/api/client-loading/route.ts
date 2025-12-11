@@ -60,3 +60,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: "Save failed" }, { status: 500 });
   }
 }
+// app/api/client-loading/route.ts → Add this GET
+
+export async function GET() {
+  try {
+    const loadings = await prisma.clientLoading.findMany({
+      include: {
+        items: {
+          select: {
+            id: true,
+            varietyCode: true,
+            noTrays: true,
+            trayKgs: true,
+            loose: true,
+            totalKgs: true,
+            pricePerKg: true,
+            totalPrice: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json({ success: true, data: loadings });
+  } catch (error) {
+    console.error("Fetch failed:", error);
+    return NextResponse.json({ success: false }, { status: 500 });
+  }
+}

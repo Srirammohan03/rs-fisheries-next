@@ -6,7 +6,14 @@ import axios from "axios";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Edit, Check, X, Trash } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Edit, Check, X, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -23,6 +30,7 @@ interface VendorItem {
   source?: "farmer" | "agent";
   billNo?: string;
   name?: string;
+  date?: string;
 }
 
 interface LoadingRecord {
@@ -40,14 +48,14 @@ interface LoadingRecord {
   grandTotal?: number;
 }
 
-const fetchFarmerLoadings = async () => {
+const fetchFarmerLoadings = async (): Promise<LoadingRecord[]> => {
   const res = await axios.get("/api/former-loading");
-  return res.data?.data ?? [];
+  return (res.data?.data ?? []) as LoadingRecord[];
 };
 
-const fetchAgentLoadings = async () => {
+const fetchAgentLoadings = async (): Promise<LoadingRecord[]> => {
   const res = await axios.get("/api/agent-loading");
-  return res.data?.data ?? [];
+  return (res.data?.data ?? []) as LoadingRecord[];
 };
 
 const patchItemPrice = async (itemId: string, body: Partial<VendorItem>) => {
@@ -64,14 +72,15 @@ export default function VendorBillsPage() {
   );
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
 
-  // Track which tabs have been visited (to clear badge)
-  const [visitedTabs, setVisitedTabs] = useState<{
-    farmer: boolean;
-    agent: boolean;
-  }>({
-    farmer: true,
-    agent: false,
-  });
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  // Badges
+  const [newFarmerCount, setNewFarmerCount] = useState(0);
+  const [newAgentCount, setNewAgentCount] = useState(0);
 
   // Load data
   useEffect(() => {
@@ -81,30 +90,61 @@ export default function VendorBillsPage() {
     Promise.all([fetchFarmerLoadings(), fetchAgentLoadings()])
       .then(([farmers, agents]) => {
         if (!mounted) return;
-
         const tagged: LoadingRecord[] = [
-          ...farmers.map((r: any) => ({ ...r, source: "farmer" as const })),
-          ...agents.map((r: any) => ({ ...r, source: "agent" as const })),
+          ...farmers.map((r: LoadingRecord) => ({
+            ...r,
+            source: "farmer" as const,
+          })),
+          ...agents.map((r: LoadingRecord) => ({
+            ...r,
+            source: "agent" as const,
+          })),
         ];
-
         setRecords(tagged);
       })
-      .catch((err) => {
-        console.error(err);
-        toast.error("Failed to load vendor bills");
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+      .catch(() => toast.error("Failed to load vendor bills"))
+      .finally(() => mounted && setLoading(false));
 
     return () => {
       mounted = false;
     };
   }, []);
 
-  // Filtered items based on active tab
-  const items = useMemo(() => {
-    return records
+  // Badges (safe)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = "vendorBillsLastSeen";
+    const stored = localStorage.getItem(key);
+    const lastSeen = stored ? JSON.parse(stored) : { farmer: 0, agent: 0 };
+
+    const currentFarmer = records.filter((r) => r.source === "farmer").length;
+    const currentAgent = records.filter((r) => r.source === "agent").length;
+
+    setNewFarmerCount(Math.max(0, currentFarmer - (lastSeen.farmer ?? 0)));
+    setNewAgentCount(Math.max(0, currentAgent - (lastSeen.agent ?? 0)));
+  }, [records]);
+
+  const handleTabClick = (tab: "farmer" | "agent") => {
+    setActiveTab(tab);
+    const count =
+      tab === "farmer"
+        ? records.filter((r) => r.source === "farmer").length
+        : records.filter((r) => r.source === "agent").length;
+
+    const stored = localStorage.getItem("vendorBillsLastSeen") || "{}";
+    const lastSeen = JSON.parse(stored);
+    localStorage.setItem(
+      "vendorBillsLastSeen",
+      JSON.stringify({ ...lastSeen, [tab]: count })
+    );
+
+    if (tab === "farmer") setNewFarmerCount(0);
+    else setNewAgentCount(0);
+  };
+
+  // CRITICAL FIX: Use filteredItems, not stale items
+  const filteredItems = useMemo(() => {
+    let result = records
       .filter((rec) =>
         activeTab === "farmer"
           ? rec.source === "farmer"
@@ -117,27 +157,33 @@ export default function VendorBillsPage() {
           source: rec.source,
           billNo: rec.billNo,
           name: rec.source === "farmer" ? rec.FarmerName : rec.agentName,
+          date: rec.date?.split("T")[0] || "",
         }))
-      )
-      .sort((a, b) =>
-        a.loadingId === b.loadingId
-          ? (a.varietyCode || "").localeCompare(b.varietyCode || "")
-          : (a.loadingId || "").localeCompare(b.loadingId || "")
       );
-  }, [records, activeTab]);
 
-  // Count unvisited records
-  const farmerCount = records.filter((r) => r.source === "farmer").length;
-  const agentCount = records.filter((r) => r.source === "agent").length;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(
+        (it) =>
+          it.billNo?.toLowerCase().includes(term) ||
+          it.name?.toLowerCase().includes(term) ||
+          it.varietyCode?.toLowerCase().includes(term)
+      );
+    }
 
-  const farmerBadge = visitedTabs.farmer ? 0 : farmerCount;
-  const agentBadge = visitedTabs.agent ? 0 : agentCount;
+    if (fromDate) result = result.filter((it) => it.date >= fromDate);
+    if (toDate) result = result.filter((it) => it.date <= toDate);
 
-  // Tab click → mark as visited
-  const handleTabClick = (tab: "farmer" | "agent") => {
-    setActiveTab(tab);
-    setVisitedTabs((prev) => ({ ...prev, [tab]: true }));
-  };
+    result.sort((a, b) => {
+      const dateA = a.date || "";
+      const dateB = b.date || "";
+      return sortOrder === "newest"
+        ? dateB.localeCompare(dateA)
+        : dateA.localeCompare(dateB);
+    });
+
+    return result;
+  }, [records, activeTab, searchTerm, sortOrder, fromDate, toDate]);
 
   const startEdit = useCallback((item: VendorItem) => {
     setEditing((prev) => ({
@@ -146,37 +192,33 @@ export default function VendorBillsPage() {
     }));
   }, []);
 
-  const cancelEdit = useCallback((itemId: string) => {
+  const cancelEdit = useCallback((id: string) => {
     setEditing((prev) => {
       const copy = { ...prev };
-      delete copy[itemId];
+      delete copy[id];
       return copy;
     });
   }, []);
 
+  // FIXED: Use filteredItems (always up-to-date)
   const onChangeField = useCallback(
-    (itemId: string, field: "pricePerKg" | "totalPrice", value: string) => {
+    (itemId: string, value: string) => {
       setEditing((prev) => {
         const current = prev[itemId] || {};
         const num = value === "" ? undefined : Number(value);
-
-        const item = items.find((i) => i.id === itemId);
+        const item = filteredItems.find((i) => i.id === itemId);
         if (!item?.totalKgs) return prev;
 
-        let updates: Partial<VendorItem> = { ...current };
-
-        if (field === "pricePerKg" && num !== undefined) {
-          updates.pricePerKg = num;
+        const updates: Partial<VendorItem> = { ...current, pricePerKg: num };
+        if (num !== undefined) {
           const netKgs = item.totalKgs * 0.95;
           updates.totalPrice = Number((netKgs * num).toFixed(2));
-        } else {
-          updates[field] = num;
         }
 
         return { ...prev, [itemId]: updates };
       });
     },
-    [items]
+    [filteredItems]
   );
 
   const saveRow = async (item: VendorItem) => {
@@ -185,30 +227,19 @@ export default function VendorBillsPage() {
 
     setSavingIds((prev) => ({ ...prev, [item.id]: true }));
 
-    const payload: any = {};
+    const payload: Partial<VendorItem> = {};
     if (edits.pricePerKg !== undefined) payload.pricePerKg = edits.pricePerKg;
     if (edits.totalPrice !== undefined) payload.totalPrice = edits.totalPrice;
-
-    // Optimistic update
-    setRecords((prevRecords) =>
-      prevRecords.map((record) => ({
-        ...record,
-        items: record.items.map((it) =>
-          it.id === item.id ? { ...it, ...edits } : it
-        ),
-      }))
-    );
 
     try {
       await patchItemPrice(item.id, payload);
 
-      // Update parent loading total
-      if (item.loadingId && item.source) {
-        await axios.post("/api/vendor-bills/update-loading-total", {
-          loadingId: item.loadingId,
-          source: item.source,
-        });
-      }
+      //   if (item.loadingId && item.source) {
+      //     await axios.post("/api/vendor-bills/update-loading-total", {
+      //       loadingId: item.loadingId,
+      //       source: item.source,
+      //     });
+      //   }
 
       // Refresh data
       const [farmers, agents] = await Promise.all([
@@ -216,157 +247,225 @@ export default function VendorBillsPage() {
         fetchAgentLoadings(),
       ]);
       setRecords([
-        ...farmers.map((r: any) => ({ ...r, source: "farmer" as const })),
-        ...agents.map((r: any) => ({ ...r, source: "agent" as const })),
+        ...farmers.map((r: LoadingRecord) => ({
+          ...r,
+          source: "farmer" as const,
+        })),
+        ...agents.map((r: LoadingRecord) => ({
+          ...r,
+          source: "agent" as const,
+        })),
       ]);
 
-      toast.success("Price saved successfully!");
+      toast.success("Price saved!");
       cancelEdit(item.id);
-    } catch (err) {
-      toast.error("Failed to save price");
-      // Revert optimistic update
-      setRecords((prevRecords) =>
-        prevRecords.map((record) => ({
-          ...record,
-          items: record.items.map((it) =>
-            it.id === item.id
-              ? {
-                  ...it,
-                  pricePerKg: item.pricePerKg,
-                  totalPrice: item.totalPrice,
-                }
-              : it
-          ),
-        }))
-      );
+    } catch (error: any) {
+      console.error("Save error:", error);
+      toast.error(error?.response?.data?.message || "Save failed");
     } finally {
       setSavingIds((prev) => {
-        const copy = { ...prev };
-        delete copy[item.id];
-        return copy;
+        const c = { ...prev };
+        delete c[item.id];
+        return c;
       });
     }
   };
 
-  const handleDeleteItem = async (
-    itemId: string,
-    source: "farmer" | "agent"
-  ) => {
-    if (!confirm("Are you sure you want to delete this item?")) return;
-
+  const handleDeleteItem = async (id: string) => {
+    if (!confirm("Delete this item permanently?")) return;
     try {
-      await axios.delete(`/api/vendor-bills/item/${itemId}`);
-
-      // Refresh data
+      await axios.delete(`/api/vendor-bills/item/${id}`);
       const [farmers, agents] = await Promise.all([
         fetchFarmerLoadings(),
         fetchAgentLoadings(),
       ]);
       setRecords([
-        ...farmers.map((r: any) => ({ ...r, source: "farmer" as const })),
-        ...agents.map((r: any) => ({ ...r, source: "agent" as const })),
+        ...farmers.map((r: LoadingRecord) => ({
+          ...r,
+          source: "farmer" as const,
+        })),
+        ...agents.map((r: LoadingRecord) => ({
+          ...r,
+          source: "agent" as const,
+        })),
       ]);
-
-      toast.success("Item deleted successfully!");
-    } catch (err) {
-      toast.error("Failed to delete item");
+      toast.success("Deleted");
+    } catch (error: any) {
+      console.error("Delete error:", error);
+      toast.error(error?.response?.data?.message || "Delete failed");
     }
   };
 
   const exportData = (type: "farmer" | "agent") => {
-    const filteredRecords = records.filter((r) => r.source === type);
-    const exportData = filteredRecords.flatMap((rec) =>
-      rec.items.map((it) => ({
-        BillNo: rec.billNo,
-        Name: type === "farmer" ? rec.FarmerName : rec.agentName,
-        Date: rec.date,
-        VehicleNo: rec.vehicleNo,
-        village: rec.village,
-        VarietyCode: it.varietyCode,
-        NoTrays: it.noTrays,
-        TrayKgs: it.trayKgs,
-        Loose: it.loose,
-        TotalKgs: it.totalKgs,
-        PricePerKg: it.pricePerKg,
-        TotalPrice: it.totalPrice,
-      }))
-    );
+    const data = records
+      .filter((r) => r.source === type)
+      .flatMap((rec) =>
+        rec.items.map((it) => ({
+          "Bill No": rec.billNo || "",
+          Name: type === "farmer" ? rec.FarmerName || "" : rec.agentName || "",
+          Date: rec.date ? new Date(rec.date).toLocaleDateString("en-IN") : "",
+          "Vehicle No": rec.vehicleNo || "",
+          Village: rec.village || "",
+          Variety: it.varietyCode || "",
+          Trays: it.noTrays || 0,
+          "Tray Kgs": it.trayKgs || 0,
+          Loose: it.loose || 0,
+          "Total Kgs": it.totalKgs || 0,
+          "Price/Kg": it.pricePerKg ?? 0,
+          "Total Price": it.totalPrice ?? 0,
+        }))
+      );
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       wb,
       ws,
-      type.charAt(0).toUpperCase() + type.slice(1)
+      type === "farmer" ? "Farmers" : "Agents"
     );
-    XLSX.writeFile(wb, `${type}-bills.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `${type}-bills-${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
   };
-
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <Card className="p-6 rounded-2xl shadow-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h2 className="text-2xl font-bold">Vendor Bills</h2>
+          {/* Header & Controls */}
+          <div className="space-y-6">
+            {/* Title + Tabs */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <h2 className="text-3xl font-bold text-gray-900">Vendor Bills</h2>
 
-            {/* Tab Switcher with Badges */}
-            <div className="bg-gray-100 rounded-full p-1 flex items-center gap-1">
-              <button
-                onClick={() => handleTabClick("farmer")}
-                className={`relative px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
-                  activeTab === "farmer"
-                    ? "bg-white shadow-md text-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Farmer
-                {farmerBadge > 0 && (
-                  <span className="absolute -top-2 -right-3 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold animate-pulse">
-                    {farmerBadge}
-                  </span>
-                )}
-              </button>
+              {/* Farmer / Agent Tabs */}
+              <div className="bg-gray-100 rounded-full p-1.5 flex items-center gap-2 shadow-sm">
+                <button
+                  onClick={() => handleTabClick("farmer")}
+                  className={`relative px-8 py-3 rounded-full font-medium text-sm transition-all duration-200 ${
+                    activeTab === "farmer"
+                      ? "bg-white text-blue-600 shadow-lg"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Farmer
+                  {newFarmerCount > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse ring-2 ring-white">
+                      {newFarmerCount}
+                    </span>
+                  )}
+                </button>
 
-              <button
-                onClick={() => handleTabClick("agent")}
-                className={`relative px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
-                  activeTab === "agent"
-                    ? "bg-white shadow-md text-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Agent
-                {agentBadge > 0 && (
-                  <span className="absolute -top-2 -right-3 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold animate-pulse">
-                    {agentBadge}
-                  </span>
-                )}
-              </button>
+                <button
+                  onClick={() => handleTabClick("agent")}
+                  className={`relative px-8 py-3 rounded-full font-medium text-sm transition-all duration-200 ${
+                    activeTab === "agent"
+                      ? "bg-white text-blue-600 shadow-lg"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Agent
+                  {newAgentCount > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse ring-2 ring-white">
+                      {newAgentCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+              {/* Export Buttons */}
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => exportData("farmer")}
+                  className="border-green-600 text-green-700 hover:bg-green-50"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Farmers
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => exportData("agent")}
+                  className="border-purple-600 text-purple-700 hover:bg-purple-50"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export Agents
+                </Button>
+              </div>
             </div>
 
-            {/* Export Buttons */}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => exportData("farmer")}>
-                Export Farmers
-              </Button>
-              <Button variant="outline" onClick={() => exportData("agent")}>
-                Export Agents
-              </Button>
+            {/* Filters & Export Row */}
+            <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-5 rounded-xl border border-blue-100">
+              {/* Search + Sort + Date */}
+              <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                <div className="relative">
+                  <Input
+                    placeholder="Search Bill No, Name, Variety..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 w-full sm:w-80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  />
+                  <svg
+                    className="absolute left-3 top-3 h-5 w-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+
+                <Select
+                  value={sortOrder}
+                  onValueChange={(v: any) => setSortOrder(v)}
+                >
+                  <SelectTrigger className="w-full sm:w-52">
+                    <SelectValue placeholder="Sort by date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest First</SelectItem>
+                    <SelectItem value="oldest">Oldest First</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="flex gap-3">
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="w-full sm:w-auto"
+                  />
+                  <span className="self-center text-gray-500 hidden sm:block">
+                    to
+                  </span>
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="w-full sm:w-auto"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Table */}
           {loading ? (
             <div className="text-center py-12 text-gray-500">
-              Loading vendor bills...
+              Loading bills...
             </div>
-          ) : items.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               No records found
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] table-auto">
-                <thead className="bg-gray-50 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                   <tr>
                     <th className="p-4">Bill No / Name</th>
                     <th className="p-4">Variety</th>
@@ -380,7 +479,7 @@ export default function VendorBillsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {items.map((it) => {
+                  {filteredItems.map((it) => {
                     const edit = editing[it.id];
                     const isEditing = !!edit;
                     const isSaving = !!savingIds[it.id];
@@ -388,7 +487,8 @@ export default function VendorBillsPage() {
                     return (
                       <tr key={it.id} className="hover:bg-gray-50">
                         <td className="p-4 font-medium">
-                          {it.billNo} / {it.name}
+                          <div>{it.billNo}</div>
+                          <div className="text-xs text-gray-500">{it.name}</div>
                         </td>
                         <td className="p-4">{it.varietyCode}</td>
                         <td className="p-4 text-right">{it.noTrays ?? "-"}</td>
@@ -402,13 +502,9 @@ export default function VendorBillsPage() {
                             <Input
                               value={edit.pricePerKg ?? ""}
                               onChange={(e) =>
-                                onChangeField(
-                                  it.id,
-                                  "pricePerKg",
-                                  e.target.value
-                                )
+                                onChangeField(it.id, e.target.value)
                               }
-                              className="w-28 text-right"
+                              className="w-24 text-right"
                               type="number"
                               step="0.01"
                               min="0"
@@ -428,9 +524,9 @@ export default function VendorBillsPage() {
                             (it.totalPrice ?? 0).toFixed(2)
                           )}
                         </td>
-                        <td className="p-4 text-center flex justify-center gap-2">
+                        <td className="p-4 text-center">
                           {!isEditing ? (
-                            <>
+                            <div className="flex justify-center gap-2">
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -441,24 +537,22 @@ export default function VendorBillsPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="text-red-600 hover:text-red-800"
-                                onClick={() =>
-                                  handleDeleteItem(it.id, it.source!)
-                                }
+                                className="text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteItem(it.id)}
                               >
-                                <Trash className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </Button>
-                            </>
+                            </div>
                           ) : (
-                            <div className="flex gap-2 justify-center">
+                            <div className="flex justify-center gap-2">
                               <Button
                                 size="sm"
                                 onClick={() => saveRow(it)}
                                 disabled={isSaving}
-                                className="bg-green-600 hover:bg-green-700"
+                                className="bg-green-600 hover:bg-green-700 text-white"
                               >
                                 {isSaving ? (
-                                  "Saving..."
+                                  "..."
                                 ) : (
                                   <Check className="w-4 h-4" />
                                 )}
