@@ -1,10 +1,10 @@
 "use client";
 
+import { AddDriverDialog } from "@/components/helpers/AddDriverDialog";
 import { OwnVehicleTable } from "@/components/helpers/OwnVehicleTable";
 import { RentVehicleTable } from "@/components/helpers/RentVehicleTable";
 import { VehicleDialog } from "@/components/helpers/VehicleDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState } from "react";
 
 export default function Vehicles() {
   return (
@@ -17,7 +17,10 @@ export default function Vehicles() {
           </p>
         </div>
 
-        <VehicleDialog />
+        <div className="flex items-center gap-3">
+          <VehicleDialog />
+          <AddDriverDialog />
+        </div>
       </div>
 
       <Tabs defaultValue="OWN" className="mt-4 flex flex-col h-full">

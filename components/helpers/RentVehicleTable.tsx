@@ -5,6 +5,7 @@ import axios from "axios";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { AddDriverDialog } from "./AddDriverDialog";
+import { AssignDriverDialog } from "./AssignDriverDialog";
 
 export type RentVehicle = {
   id: string;
@@ -30,7 +31,7 @@ const columns: ColumnDef<RentVehicle>[] = [
   {
     id: "actions",
     header: "Action",
-    cell: ({ row }) => <AddDriverDialog vehicleId={row.original.id} />,
+    cell: ({ row }) => <AssignDriverDialog vehicleId={row.original.id} />,
   },
 ];
 

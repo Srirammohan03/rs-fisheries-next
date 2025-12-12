@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,93 +10,120 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
 import axios from "axios";
+import { useState } from "react";
+import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
 
-const driverSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  phone: z.string().optional(),
-  licenseNumber: z.string().optional(),
+const schema = z.object({
+  name: z.string().min(1, "Required"),
+  phone: z
+    .string()
+    .min(1, "Phone number is required")
+    .regex(
+      /^[6789]\d{9}$/,
+      "Invalid phone number format or Must be 10 digits."
+    ),
+  licenseNumber: z
+    .string()
+    .min(1, "License number is required")
+    .regex(
+      /^[A-Z]{2}\s?\d{2}\s?\d{4}\s?\d{7}$/,
+      "Invalid license number format (e.g., MH 12 2010 0123456)"
+    ),
+  address: z.string().min(1, "address is required"),
+  age: z
+    .string()
+    .regex(/^(1[89]|[2-9]\d|100)$/, "Age must be between 18 and 100"),
+  aadharNumber: z
+    .string()
+    .regex(/^[2-9]{1}[0-9]{11}$/, "Invalid Aadhar number format"),
 });
 
-type DriverForm = z.infer<typeof driverSchema>;
+type DriverForm = z.infer<typeof schema>;
 
-export function AddDriverDialog({ vehicleId }: { vehicleId: string }) {
+export function AddDriverDialog() {
   const [open, setOpen] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<DriverForm>({
-    resolver: zodResolver(driverSchema),
+    reset,
+  } = useForm({
+    resolver: zodResolver(schema),
   });
 
-  const mutation = useMutation({
-    mutationFn: async (data: DriverForm) => {
-      const { data: res } = await axios.post("/api/vehicles/add-driver", {
-        ...data,
-        vehicleId,
+  const addMutation = useMutation({
+    mutationFn: async (payload: DriverForm) => {
+      const { data: res } = await axios.post("/api/driver", payload, {
+        withCredentials: true,
       });
       return res;
     },
-    onSuccess: () => {
-      toast.success("Driver added");
+    onSuccess: async (data) => {
+      toast.success(data.message ?? "Driver added successfully");
+      reset();
       setOpen(false);
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message ?? "Error");
+    onError: async (err: any) => {
+      const msg =
+        err?.response?.data?.message || err?.message || "Failed to add driver";
+
+      toast.error(msg);
     },
   });
 
+  const onSubmit = (data: DriverForm) => {
+    const payload = {
+      ...data,
+    };
+
+    addMutation.mutate(payload);
+  };
+
+  const fields: { label: string; name: keyof DriverForm }[] = [
+    { label: "Name", name: "name" },
+    { label: "Phone", name: "phone" },
+    { label: "License Number", name: "licenseNumber" },
+    { label: "Address", name: "address" },
+    { label: "Age", name: "age" },
+    { label: "Aadhar Number", name: "aadharNumber" },
+  ];
+
+  const loading = addMutation.isPending;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          Add Driver
-        </Button>
+        <Button>Add Driver</Button>
       </DialogTrigger>
 
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Add Driver</DialogTitle>
         </DialogHeader>
 
-        <form
-          onSubmit={handleSubmit((d) => mutation.mutate(d))}
-          className="space-y-4"
-        >
-          <div className="space-y-1">
-            <Label>Name *</Label>
-            <Input {...register("name")} />
-            {errors.name && (
-              <p className="text-sm text-red-600">{errors.name.message}</p>
-            )}
-          </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {fields.map(({ label, name }) => (
+            <div key={name} className="space-y-1">
+              <Label>{label}</Label>
 
-          <div className="space-y-1">
-            <Label>Phone</Label>
-            <Input {...register("phone")} />
-          </div>
+              <Input {...register(name)} />
 
-          <div className="space-y-1">
-            <Label>License Number</Label>
-            <Input {...register("licenseNumber")} />
-          </div>
+              {errors[name] && (
+                <p className="text-red-600 text-sm">
+                  {errors[name]?.message?.toString()}
+                </p>
+              )}
+            </div>
+          ))}
 
-          <Button
-            className="w-full"
-            type="submit"
-            disabled={mutation.isPending}
-          >
-            {mutation.isPending && (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            )}
+          <Button className="w-full" type="submit" disabled={loading}>
+            {loading && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
             Save Driver
           </Button>
         </form>
