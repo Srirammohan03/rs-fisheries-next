@@ -1,6 +1,7 @@
 "use client";
 
 import { AddDriverDialog } from "@/components/helpers/AddDriverDialog";
+import { DriverTable } from "@/components/helpers/DriverTable";
 import { OwnVehicleTable } from "@/components/helpers/OwnVehicleTable";
 import { RentVehicleTable } from "@/components/helpers/RentVehicleTable";
 import { VehicleDialog } from "@/components/helpers/VehicleDialog";
@@ -27,6 +28,7 @@ export default function Vehicles() {
         <TabsList>
           <TabsTrigger value="OWN">Own Vehicles</TabsTrigger>
           <TabsTrigger value="RENT">Rent Vehicles</TabsTrigger>
+          <TabsTrigger value="DRIVERS">Drivers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="OWN">
@@ -34,6 +36,9 @@ export default function Vehicles() {
         </TabsContent>
         <TabsContent value="RENT">
           <RentVehicleTable />
+        </TabsContent>
+        <TabsContent value="DRIVERS">
+          <DriverTable />
         </TabsContent>
       </Tabs>
     </div>

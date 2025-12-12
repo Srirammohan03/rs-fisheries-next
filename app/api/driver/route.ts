@@ -43,3 +43,13 @@ export const POST = apiHandler(async (req: Request) => {
     { status: 201 }
   );
 });
+
+export const GET = apiHandler(async () => {
+  const drivers = await prisma.driver.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json(
+    new ApiResponse(200, drivers, "Drivers fetched successfully")
+  );
+});
