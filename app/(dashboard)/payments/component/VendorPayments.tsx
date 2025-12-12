@@ -1,9 +1,10 @@
 // app/(dashboard)/payments/component/VendorPayments.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { Card } from "@/components/ui/card";
+import { CardCustom } from "@/components/ui/card-custom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,307 +15,293 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Field } from "@/components/helpers/Field";
-import { CardCustom } from "@/components/ui/card-custom";
 import { Badge } from "@/components/ui/badge";
-// import { Save, Bank, CreditCard, DollarSign } from "lucide-react";
+import { Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { Save } from "lucide-react";
 
-/* ---------------- Types ---------------- */
 type PaymentMode = "cash" | "ac" | "upi" | "cheque";
 type VendorSource = "farmer" | "agent";
 
-type FormerLoading = {
+type Vendor = {
   id: string;
-  FarmerName?: string | null;
-  grandTotal?: number;
-  totalPrice?: number;
-  // optional fields (if you later add accounts)
-  accountNumber?: string | null;
-  ifsc?: string | null;
-};
-
-type AgentLoading = {
-  id: string;
-  agentName?: string;
-  grandTotal?: number;
-  totalPrice?: number;
-  accountNumber?: string | null;
-  ifsc?: string | null;
-};
-
-type VendorOption = {
-  id: string; // composed id like `${source}:${name}`
   name: string;
   source: VendorSource;
-  totalDue: number; // aggregated
+  totalDue: number;
   accountNumber?: string | null;
   ifsc?: string | null;
-};
-
-/* ---------------- Helpers ---------------- */
-const toNumber = (v: any) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+  bankName?: string | null;
+  bankAddress?: string | null;
 };
 
 const currency = (v: number) =>
-  v.toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+  }).format(v);
+
+export function VendorPayments() {
+  const queryClient = useQueryClient();
+
+  const [vendorId, setVendorId] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
+  const [paymentdetails, setPaymentdetails] = useState(""); // ← renamed from note
+  const [referenceNo, setReferenceNo] = useState("");
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installments, setInstallments] = useState(2);
+  const [installmentNo, setInstallmentNo] = useState(1);
+  const [externalRef, setExternalRef] = useState(""); // UPI ID / Cheque No
+  // Bank fields
+  const [accNo, setAccNo] = useState("");
+  const [ifsc, setIfsc] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAddress, setBankAddress] = useState("");
+
+  const { data: vendorData, isLoading: loadingVendors } = useQuery({
+    queryKey: ["vendors"],
+    queryFn: async () => {
+      const [fRes, aRes] = await Promise.all([
+        axios.get("/api/former-loading"),
+        axios.get("/api/agent-loading"),
+      ]);
+
+      const farmers = (fRes.data?.data || []) as any[];
+      const agents = (aRes.data?.data || []) as any[];
+
+      const map = new Map<string, Vendor>();
+
+      farmers.forEach((item: any) => {
+        const name = (item.FarmerName ?? "").toString().trim();
+        if (!name) return;
+        const key = `farmer:${name}`;
+        const total =
+          item.items?.reduce(
+            (s: number, i: any) => s + Number(i.totalPrice || 0),
+            0
+          ) || Number(item.grandTotal || 0);
+
+        const existing = map.get(key);
+        map.set(key, {
+          id: key,
+          name,
+          source: "farmer",
+          totalDue: (existing?.totalDue || 0) + total,
+          accountNumber: existing?.accountNumber ?? item.accountNumber ?? null,
+          ifsc: existing?.ifsc ?? item.ifsc ?? null,
+          bankName: existing?.bankName ?? item.bankName ?? null,
+          bankAddress: existing?.bankAddress ?? item.bankAddress ?? null,
+        });
+      });
+
+      agents.forEach((item: any) => {
+        const name = (item.agentName ?? "").toString().trim();
+        if (!name) return;
+        const key = `agent:${name}`;
+        const total =
+          item.items?.reduce(
+            (s: number, i: any) => s + Number(i.totalPrice || 0),
+            0
+          ) || Number(item.grandTotal || 0);
+
+        const existing = map.get(key);
+        map.set(key, {
+          id: key,
+          name,
+          source: "agent",
+          totalDue: (existing?.totalDue || 0) + total,
+          accountNumber: existing?.accountNumber ?? item.accountNumber ?? null,
+          ifsc: existing?.ifsc ?? item.ifsc ?? null,
+          bankName: existing?.bankName ?? item.bankName ?? null,
+          bankAddress: existing?.bankAddress ?? item.bankAddress ?? null,
+        });
+      });
+
+      return Array.from(map.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+    },
+    staleTime: 1000 * 60 * 5,
   });
 
-/* ---------------- Component ---------------- */
-export function VendorPayments() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: payments = [] } = useQuery({
+    queryKey: ["vendor-payments"],
+    queryFn: async () => {
+      const res = await axios.get("/api/payments/vendor");
+      return res.data?.data || [];
+    },
+  });
 
-  // data
-  const [formerLoadings, setFormerLoadings] = useState<FormerLoading[]>([]);
-  const [agentLoadings, setAgentLoadings] = useState<AgentLoading[]>([]);
+  const selected = vendorData?.find((v) => v.id === vendorId);
 
-  // form state
-  const [vendorId, setVendorId] = useState<string>(""); // VendorOption.id
-  const [date, setDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
-  );
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
-  const [amount, setAmount] = useState<number | "">("");
-  const [methodNote, setMethodNote] = useState<string>("");
+  const paidAmount = React.useMemo(() => {
+    if (!vendorId) return 0;
+    return payments
+      .filter((p: any) => p.vendorId === vendorId)
+      .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+  }, [payments, vendorId]);
 
-  // installment controls
-  const [isInstallment, setIsInstallment] = useState<boolean>(false);
-  const [installments, setInstallments] = useState<number>(2);
-  const [installmentNumber, setInstallmentNumber] = useState<number>(1);
-
-  // account details (shown when paymentMode === 'ac')
-  const [accountNumber, setAccountNumber] = useState<string>("");
-  const [ifsc, setIfsc] = useState<string>("");
-
-  // small local paid tracker (in real app read from payments table)
-  const [paidMap, setPaidMap] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError(null);
-
-    Promise.all([
-      axios.get("/api/former-loading"),
-      axios.get("/api/agent-loading"),
-    ])
-      .then(([fRes, aRes]) => {
-        if (!mounted) return;
-        // tolerant parsing: the API might wrap in { data: [...] } or return [...]
-        const farmers = (fRes.data?.data ?? fRes.data ?? []) as FormerLoading[];
-        const agents = (aRes.data?.data ?? aRes.data ?? []) as AgentLoading[];
-        setFormerLoadings(farmers);
-        setAgentLoadings(agents);
-      })
-      .catch((err) => {
-        console.error("Failed to load vendor lists:", err);
-        if (!mounted) return;
-        setError("Failed to load vendor names");
-        toast.error("Failed to load vendor names");
-      })
-      .finally(() => mounted && setLoading(false));
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // Build vendor options: unique by name inside source
-  const vendorOptions = useMemo<VendorOption[]>(() => {
-    const map = new Map<string, VendorOption>();
-
-    // farmers
-    formerLoadings.forEach((l) => {
-      const name = (l.FarmerName ?? "Unknown Farmer").trim();
-
-      // calculate total money from items
-      const itemTotal = Array.isArray(l.items)
-        ? l.items.reduce((sum, it) => sum + (Number(it.totalPrice) || 0), 0)
-        : 0;
-
-      const key = `farmer:${name}`;
-      const existing = map.get(key);
-
-      map.set(key, {
-        id: key,
-        name,
-        source: "farmer",
-        totalDue: (existing?.totalDue ?? 0) + itemTotal,
-        accountNumber: existing?.accountNumber ?? l.accountNumber ?? null,
-        ifsc: existing?.ifsc ?? l.ifsc ?? null,
-      });
-    });
-
-    // agents
-    agentLoadings.forEach((l) => {
-      const name = (l.agentName ?? "Unknown Agent").trim();
-
-      const itemTotal = Array.isArray(l.items)
-        ? l.items.reduce((sum, it) => sum + (Number(it.totalPrice) || 0), 0)
-        : 0;
-
-      const key = `agent:${name}`;
-      const existing = map.get(key);
-
-      map.set(key, {
-        id: key,
-        name,
-        source: "agent",
-        totalDue: (existing?.totalDue ?? 0) + itemTotal,
-        accountNumber: existing?.accountNumber ?? l.accountNumber ?? null,
-        ifsc: existing?.ifsc ?? l.ifsc ?? null,
-      });
-    });
-
-    return Array.from(map.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-  }, [formerLoadings, agentLoadings]);
-
-  // selected vendor derived
-  const selectedVendor = useMemo(
-    () => vendorOptions.find((v) => v.id === vendorId) ?? null,
-    [vendorId, vendorOptions]
-  );
-
-  // computed metrics
-  const totalDue = selectedVendor?.totalDue ?? 0;
-  const alreadyPaid = paidMap[vendorId] ?? 0;
-  const remaining = Math.max(0, totalDue - alreadyPaid);
-
-  // computed installment amount if installment mode selected
-  const installmentAmount =
+  const totalDue = selected?.totalDue || 0;
+  const remaining = Math.max(0, totalDue - paidAmount);
+  const installmentAmt =
     isInstallment && installments > 0
-      ? Number((remaining / installments || 0).toFixed(2))
+      ? +(remaining / installments).toFixed(2)
       : 0;
 
-  // prefill account details when vendor changes and vendor has stored details
   useEffect(() => {
-    if (selectedVendor) {
-      setAccountNumber(selectedVendor.accountNumber ?? "");
-      setIfsc(selectedVendor.ifsc ?? "");
+    if (paymentMode === "ac" && selected) {
+      setAccNo(selected.accountNumber || "");
+      setIfsc(selected.ifsc || "");
+      setBankName(selected.bankName || "");
+      setBankAddress(selected.bankAddress || "");
     } else {
-      setAccountNumber("");
+      setAccNo("");
       setIfsc("");
+      setBankName("");
+      setBankAddress("");
     }
-  }, [selectedVendor]);
+  }, [paymentMode, selected]);
 
-  // Input validation
-  const validate = () => {
+  const saveMutation = useMutation({
+    mutationFn: async (data: any) => {
+      await axios.post("/api/payments/vendor", data);
+    },
+    onSuccess: () => {
+      toast.success("Payment saved successfully!");
+      queryClient.invalidateQueries({ queryKey: ["vendor-payments"] });
+      resetForm();
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || "Failed to save payment");
+    },
+  });
+
+  const validateForm = () => {
     if (!vendorId) return "Please select a vendor";
-    if (!date) return "Please select a date";
-    const amt = Number(amount || 0);
-    if (amt <= 0) return "Enter a valid payment amount";
-    if (amt > remaining) return "Payment amount cannot exceed remaining due";
-    if (paymentMode === "ac" && (!accountNumber.trim() || !ifsc.trim()))
-      return "Please provide account details for A/C payments";
-    if (isInstallment) {
-      if (installments <= 0) return "Installments must be at least 1";
-      if (installmentNumber <= 0 || installmentNumber > installments)
-        return "Invalid installment number";
+    if (!amount || Number(amount) <= 0) return "Please enter a valid amount";
+    if (Number(amount) > remaining) return "Amount exceeds remaining balance";
+
+    if (paymentMode !== "ac" && !referenceNo.trim()) {
+      return "Reference No is required";
     }
+
+    if (paymentMode === "upi" || paymentMode === "cheque") {
+      if (!externalRef.trim()) {
+        return `${
+          paymentMode === "upi" ? "UPI Transaction ID" : "Cheque Number"
+        } is required`;
+      }
+    }
+
+    if (paymentMode === "ac") {
+      if (!accNo.trim()) return "Account number required";
+      if (!ifsc.trim()) return "IFSC code required";
+      if (!bankName.trim()) return "Bank name required";
+    }
+
     return null;
   };
 
-  // Save handler
-  const handleSave = useCallback(async () => {
-    const err = validate();
-    if (err) {
-      toast.error(err);
+  const handleSave = () => {
+    const error = validateForm();
+    if (error) {
+      toast.error(error);
       return;
     }
 
-    const payload = {
+    saveMutation.mutate({
       vendorId,
-      vendorName: selectedVendor?.name,
-      source: selectedVendor?.source,
+      vendorName: selected?.name || "Unknown",
+      source: selected?.source || "unknown",
       date,
       amount: Number(amount),
       paymentMode,
-      accountNumber: paymentMode === "ac" ? accountNumber : undefined,
-      ifsc: paymentMode === "ac" ? ifsc : undefined,
+
+      referenceNo: paymentMode !== "ac" ? referenceNo.trim() : null,
+
+      // External Payment Reference (UPI ID / Cheque No / Cash Receipt)
+      paymentRef: paymentMode !== "ac" ? externalRef.trim() || null : null,
+
+      // Bank details — only for A/C Transfer
+      accountNumber: paymentMode === "ac" ? accNo.trim() : null,
+      ifsc: paymentMode === "ac" ? ifsc.trim().toUpperCase() : null,
+      bankName: paymentMode === "ac" ? bankName.trim() : null,
+      bankAddress: paymentMode === "ac" ? bankAddress.trim() : null,
+
+      // Optional note
+      paymentdetails: paymentdetails.trim() || null,
+
+      // Installment fields
       isInstallment,
-      installments: isInstallment ? installments : undefined,
-      installmentNumber: isInstallment ? installmentNumber : undefined,
-      note: methodNote || undefined,
-    };
+      installments: isInstallment ? installments : null,
+      installmentNumber: isInstallment ? installmentNo : null,
+    });
+  };
 
-    try {
-      setSaving(true);
-      // POST to your payments API — create this endpoint to persist in DB
-      await axios.post("/api/payments/vendor", payload);
+  const resetForm = () => {
+    setAmount("");
+    setPaymentdetails("");
+    setReferenceNo("");
+    setIsInstallment(false);
+    setAccNo("");
+    setIfsc("");
+    setBankName("");
+    setBankAddress("");
+  };
 
-      // optimistic update for local paid map
-      setPaidMap((prev) => ({
-        ...prev,
-        [vendorId]: (prev[vendorId] ?? 0) + Number(amount),
-      }));
-
-      toast.success("Payment recorded");
-      // reset amount & notes
-      setAmount("");
-      setMethodNote("");
-    } catch (e: any) {
-      console.error("Save payment failed:", e);
-      toast.error(e?.response?.data?.message ?? "Failed to save payment");
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    vendorId,
-    date,
-    amount,
-    paymentMode,
-    accountNumber,
-    ifsc,
-    isInstallment,
-    installments,
-    installmentNumber,
-    methodNote,
-    selectedVendor,
-  ]);
+  const handleReset = () => {
+    setVendorId("");
+    resetForm();
+    setPaymentMode("cash");
+  };
 
   return (
     <CardCustom
       title="3A. Vendor Payments"
       actions={
-        <Button onClick={handleSave} disabled={saving || loading} size="sm">
-          <Save className="h-4 w-4 mr-2" />
-          {saving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={handleSave}
+            disabled={saveMutation.isPending || loadingVendors}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {saveMutation.isPending ? "Saving..." : "Save Payment"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleReset}
+            disabled={saveMutation.isPending}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </Button>
+        </div>
       }
     >
-      <div className="space-y-6">
-        {/* Vendor selector + totals */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-          <div>
-            <Label className="text-sm">Vendor (Farmer / Agent)</Label>
-            <Select value={vendorId} onValueChange={(v) => setVendorId(v)}>
-              <SelectTrigger className="w-full">
+      <div className="space-y-8 py-6 max-w-6xl mx-auto">
+        {/* Vendor Selection */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+          <div className="space-y-2">
+            <Label>Vendor (Farmer / Agent)</Label>
+            <Select
+              value={vendorId}
+              onValueChange={setVendorId}
+              disabled={loadingVendors}
+            >
+              <SelectTrigger>
                 <SelectValue
-                  placeholder={loading ? "Loading vendors..." : "Select vendor"}
+                  placeholder={loadingVendors ? "Loading..." : "Select vendor"}
                 />
               </SelectTrigger>
               <SelectContent>
-                {vendorOptions.map((v) => (
+                {vendorData?.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
-                    <div className="flex items-center justify-between gap-2 w-full">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">{v.name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {v.source === "farmer" ? "Farmer" : "Agent"}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        ₹{currency(v.totalDue)}
-                      </div>
+                    <div className="flex justify-between items-center w-full gap-3">
+                      <span className="font-medium">{v.name}</span>
+                      <Badge variant="secondary">{v.source}</Badge>
+                      <span className="text-sm font-bold">
+                        {currency(v.totalDue)}
+                      </span>
                     </div>
                   </SelectItem>
                 ))}
@@ -322,25 +309,27 @@ export function VendorPayments() {
             </Select>
           </div>
 
-          <div>
-            <Field label="Total Due">
-              <div className="text-lg font-semibold">₹{currency(totalDue)}</div>
-            </Field>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">Total Due</p>
+            <p className="text-3xl font-bold text-blue-700">
+              {currency(totalDue)}
+            </p>
           </div>
 
-          <div>
-            <Field label="Remaining">
-              <div className="text-lg font-semibold text-emerald-600">
-                ₹{currency(remaining)}
-              </div>
-            </Field>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">Remaining</p>
+            <p className="text-3xl font-bold text-green-600">
+              {currency(remaining)}
+            </p>
           </div>
         </div>
 
-        {/* Payment row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <Label className="text-sm">Date</Label>
+        <hr className="border-gray-300" />
+
+        {/* Payment Details */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-2">
+            <Label>Date</Label>
             <Input
               type="date"
               value={date}
@@ -348,35 +337,35 @@ export function VendorPayments() {
             />
           </div>
 
-          <div>
-            <Field label="Amount">
-              <Input
-                type="number"
-                min={0}
-                value={amount === "" ? "" : String(amount)}
-                onChange={(e) =>
-                  setAmount(e.target.value === "" ? "" : Number(e.target.value))
+          <div className="space-y-2">
+            <Label>Amount</Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                  setAmount(val);
                 }
-                placeholder="Enter amount"
-              />
-            </Field>
+              }}
+              placeholder="100000"
+              className="font-mono text-lg"
+            />
           </div>
 
-          <div>
-            <Label className="text-sm">Payment Mode</Label>
-            <div className="flex gap-2 flex-wrap">
-              {(["cash", "ac", "upi", "cheque"] as PaymentMode[]).map((m) => (
+          <div className="space-y-2">
+            <Label>Payment Mode</Label>
+            <div className="flex flex-wrap gap-3 mt-2">
+              {(["cash", "ac", "upi", "cheque"] as const).map((m) => (
                 <Badge
                   key={m}
-                  className={`cursor-pointer ${
-                    paymentMode === m
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-700"
-                  }`}
+                  variant={paymentMode === m ? "default" : "outline"}
+                  className="cursor-pointer px-5 py-2"
                   onClick={() => setPaymentMode(m)}
                 >
                   {m === "ac"
-                    ? "A/C"
+                    ? "A/C Transfer"
                     : m === "upi"
                     ? "UPI/PhonePe"
                     : m.charAt(0).toUpperCase() + m.slice(1)}
@@ -385,153 +374,185 @@ export function VendorPayments() {
             </div>
           </div>
 
-          <div>
-            <Field label="Payment Note (optional)">
-              <Input
-                value={methodNote}
-                onChange={(e) => setMethodNote(e.target.value)}
-                placeholder="Cheque no / UPI ref"
-              />
-            </Field>
-          </div>
-        </div>
-
-        {/* A/C details if selected */}
-        {paymentMode === "ac" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Field label="Account number">
+          {/* Reference No + UPI/Cheque No - Only for Cash/UPI/Cheque */}
+          {paymentMode !== "ac" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Reference No (Internal Bill No) */}
+              <div className="space-y-2">
+                <Label>
+                  Reference No <span className="text-red-600">*</span>
+                </Label>
                 <Input
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  placeholder="Account number"
+                  placeholder="e.g. PAY2025-001"
+                  value={referenceNo}
+                  onChange={(e) => setReferenceNo(e.target.value)}
+                  className="font-mono"
                 />
-              </Field>
-            </div>
-            <div>
-              <Field label="IFSC">
-                <Input
-                  value={ifsc}
-                  onChange={(e) => setIfsc(e.target.value)}
-                  placeholder="IFSC code"
-                />
-              </Field>
-            </div>
-          </div>
-        )}
-
-        {/* Installment toggle */}
-        <div className="flex items-center gap-4">
-          <div>
-            <Label className="text-sm">Payment Type</Label>
-            <div className="flex gap-2 mt-2">
-              <Badge
-                className={`cursor-pointer ${
-                  !isInstallment
-                    ? "bg-black text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setIsInstallment(false)}
-              >
-                One-time
-              </Badge>
-              <Badge
-                className={`cursor-pointer ${
-                  isInstallment
-                    ? "bg-black text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setIsInstallment(true)}
-              >
-                Installment
-              </Badge>
-            </div>
-          </div>
-
-          {isInstallment && (
-            <div className="flex items-center gap-3">
-              <div>
-                <Label className="text-sm">Installments</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={String(installments)}
-                  onChange={(e) =>
-                    setInstallments(Math.max(1, Number(e.target.value || 1)))
-                  }
-                  className="w-28"
-                />
+                <p className="text-xs text-gray-500">
+                  Your internal payment ID
+                </p>
               </div>
 
-              <div>
-                <Label className="text-sm">This installment #</Label>
+              {/* UPI ID / Cheque No */}
+              <div className="space-y-2">
+                <Label>
+                  {paymentMode === "upi"
+                    ? "UPI Transaction ID"
+                    : paymentMode === "cheque"
+                    ? "Cheque Number"
+                    : "Cash Receipt No"}
+                  {paymentMode !== "cash" && (
+                    <span className="text-red-600">*</span>
+                  )}
+                </Label>
                 <Input
-                  type="number"
-                  min={1}
-                  max={installments}
-                  value={String(installmentNumber)}
-                  onChange={(e) =>
-                    setInstallmentNumber(
-                      Math.min(
-                        Math.max(1, Number(e.target.value || 1)),
-                        installments
-                      )
-                    )
+                  placeholder={
+                    paymentMode === "upi"
+                      ? "e.g. 2025121512345678@ybl"
+                      : paymentMode === "cheque"
+                      ? "e.g. 123456"
+                      : "e.g. CR-001 (optional)"
                   }
-                  className="w-28"
+                  value={externalRef}
+                  onChange={(e) => setExternalRef(e.target.value)}
+                  className="font-mono"
                 />
-              </div>
-
-              <div>
-                <Label className="text-sm">Est. per installment</Label>
-                <div className="text-sm font-semibold">
-                  ₹{currency(installmentAmount)}
-                </div>
+                <p className="text-xs text-gray-500">
+                  {paymentMode === "cash"
+                    ? "Optional"
+                    : "Required for UPI/Cheque"}
+                </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* small summary & action row */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="text-sm text-gray-600">
-            <div>
-              Total Due:{" "}
-              <span className="font-medium">₹{currency(totalDue)}</span>
-            </div>
-            <div>
-              Already Paid:{" "}
-              <span className="font-medium">₹{currency(alreadyPaid)}</span>
-            </div>
-            <div>
-              Remaining:{" "}
-              <span className="font-medium text-emerald-600">
-                ₹{currency(remaining)}
-              </span>
+        {/* Payment Details (Note) */}
+        <div className="space-y-2">
+          <Label>Payment Details (Optional)</Label>
+          <Input
+            placeholder="Any additional note"
+            value={paymentdetails}
+            onChange={(e) => setPaymentdetails(e.target.value)}
+          />
+        </div>
+
+        {/* Bank Details - Only for A/C */}
+        {paymentMode === "ac" && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-8 shadow-lg">
+            <h3 className="text-xl font-bold text-blue-900 mb-6">
+              Bank Transfer Details
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label>Account Number</Label>
+                <Input
+                  type="number"
+                  value={accNo}
+                  onChange={(e) => setAccNo(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+              <div>
+                <Label>IFSC Code</Label>
+                <Input
+                  type="text"
+                  value={ifsc}
+                  onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+                  className="uppercase"
+                />
+              </div>
+              <div>
+                <Label>Bank Name</Label>
+                <Input
+                  type="text"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Branch Address</Label>
+                <Input
+                  type="text"
+                  value={bankAddress}
+                  onChange={(e) => setBankAddress(e.target.value)}
+                />
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-500 mr-2">Mode details</div>
-            <Button onClick={handleSave} disabled={saving || loading} size="sm">
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? "Saving..." : "Save Payment"}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                // quick quick-reset
-                setVendorId("");
-                setAmount("");
-                setIsInstallment(false);
-                setInstallments(2);
-                setInstallmentNumber(1);
-                setMethodNote("");
-              }}
-            >
-              Reset
-            </Button>
+        {/* Installment - Simple Toggle */}
+        <div className="space-y-4">
+          <Label>Payment Type</Label>
+          <div className="flex gap-8 items-center">
+            <div className="flex gap-6">
+              <Badge
+                variant={!isInstallment ? "default" : "outline"}
+                className="cursor-pointer px-8 py-3 text-base"
+                onClick={() => setIsInstallment(false)}
+              >
+                Full Payment
+              </Badge>
+              <Badge
+                variant={isInstallment ? "default" : "outline"}
+                className="cursor-pointer px-8 py-3 text-base"
+                onClick={() => setIsInstallment(true)}
+              >
+                Partial Payment (Installment)
+              </Badge>
+            </div>
+
+            {isInstallment && (
+              <div className="flex items-center gap-3 text-lg">
+                <span className="text-gray-600">You're paying</span>
+                <span className="font-bold text-blue-600">
+                  {currency(Number(amount) || 0)}
+                </span>
+                <span className="text-gray-600">out of</span>
+                <span className="font-bold text-orange-600">
+                  {currency(totalDue)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {isInstallment && (
+            <p className="text-sm text-gray-500 mt-2">
+              This payment will be recorded as a partial installment. Remaining
+              balance:
+              <span className="font-semibold text-red-600 ml-2">
+                {currency(remaining - Number(amount) || 0)}
+              </span>
+            </p>
+          )}
+        </div>
+
+        {/* Summary */}
+        <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-8 rounded-2xl border-2 border-gray-300 shadow-md">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
+            <div>
+              <p className="text-gray-600 text-sm">Total Due</p>
+              <p className="text-2xl font-bold mt-2">{currency(totalDue)}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Paid So Far</p>
+              <p className="text-2xl font-bold text-orange-600 mt-2">
+                {currency(paidAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Remaining</p>
+              <p className="text-2xl font-bold text-green-600 mt-2">
+                {currency(remaining)}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Paying Now</p>
+              <p className="text-2xl font-bold text-blue-600 mt-2">
+                {currency(Number(amount) || 0)}
+              </p>
+            </div>
           </div>
         </div>
       </div>

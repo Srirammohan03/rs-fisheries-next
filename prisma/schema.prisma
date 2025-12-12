@@ -48,6 +48,11 @@ model FormerLoading {
   totalKgs      Float @default(0)
   totalPrice    Float @default(0)
 
+  accountNumber String?
+  ifsc          String?
+  bankName      String?
+  bankAddress   String?
+
   grandTotal Float        @default(0)
   items      FormerItem[]
   createdAt  DateTime     @default(now())
@@ -83,6 +88,11 @@ model AgentLoading {
   totalTrayKgs  Float @default(0)
   totalKgs      Float @default(0)
   totalPrice    Float @default(0)
+
+  accountNumber String?
+  ifsc          String?
+  bankName      String?
+  bankAddress   String?
 
   grandTotal Float @default(0)
 
@@ -126,6 +136,11 @@ model ClientLoading {
   totalPrice    Float @default(0)
   grandTotal    Float @default(0)
 
+  accountNumber String?
+  ifsc          String?
+  bankName      String?
+  bankAddress   String?
+
   items     ClientItem[]
   createdAt DateTime     @default(now())
 }
@@ -157,4 +172,140 @@ model Salaries {
   user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model VendorPayment {
+  id                String   @id @default(uuid())
+  vendorId          String
+  vendorName        String
+  source            String
+  date              DateTime
+  amount            Float
+  paymentMode       String
+  accountNumber     String?
+  ifsc              String?
+  bankName          String?
+  bankAddress       String?
+  paymentdetails    String?
+  paymentRef    String?
+  isInstallment     Boolean  @default(false)
+  installments      Int?
+  installmentNumber Int?
+  createdAt         DateTime @default(now())
+  referenceNo       String?
+
+  @@index([vendorId])
+  @@index([source])
+}
+// ! VEHICLE 
+
+enum VehicleOwnership {
+  OWN
+  RENT
+}
+
+enum FuelType {
+  DIESEL
+  PETROL
+  CNG
+  ELECTRIC
+}
+
+enum VehicleType {
+  OWN
+  RENT
+}
+
+enum PaymentMode {
+  AC
+  UPI
+  CASH
+}
+
+model Driver {
+  id        String  @id @default(cuid())
+  name      String
+  phone     String?
+  licenseNo String? // DL Number
+  address   String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationship: One driver can be assigned to many vehicles
+  vehicles Vehicle[]
+}
+
+model VehicleEntry {
+  id        String  @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  type VehicleType // OWN or RENT
+
+  trip String
+  date DateTime
+
+  // Own vehicle expenses
+  diesel   Float? @default(0)
+  service  Float? @default(0)
+  fastag   Float? @default(0)
+  eChallan Float? @default(0)
+  tyres    Float? @default(0)
+
+  // Rent-specific fields
+  rentAmount  Float?
+  paymentMode PaymentMode?
+
+  totalExpense Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vehicleId])
+}
+
+model Vehicle {
+  id            String           @id @default(cuid())
+  vehicleNumber String           @unique
+  ownership     VehicleOwnership
+
+  // Basic details
+  manufacturer      String?
+  model             String?
+  yearOfManufacture Int?
+  fuelType          FuelType?
+  engineNumber      String?
+  chassisNumber     String?
+
+  // Transport details
+  capacityInTons Float?
+  bodyType       String?
+
+  // Regulatory documents
+  rcValidity      DateTime?
+  insuranceExpiry DateTime?
+  fitnessExpiry   DateTime?
+  pollutionExpiry DateTime?
+  permitExpiry    DateTime?
+  roadTaxExpiry   DateTime?
+
+  // Driver assignment (NEW)
+  assignedDriverId String?
+  assignedDriver   Driver? @relation(fields: [assignedDriverId], references: [id])
+
+  // For rent vehicles
+  rentalAgency     String?
+  rentalRatePerDay Float?
+
+  // Status
+  isActive Boolean @default(true)
+  remarks  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 1 Vehicle → Many Trips
+  trips VehicleEntry[]
 }
