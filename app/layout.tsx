@@ -16,9 +16,7 @@ export const metadata: Metadata = {
   title: "RS Fisheries",
   description: "RS Fisheries Admin Dashboard",
   icons: {
-    icon: [{ url: "/LOGO.jpg", type: "image/jpeg" }],
-    shortcut: "/LOGO.jpg",
-    apple: "/LOGO.jpg",
+    icon: "/favicon.jpg",
   },
 };
 

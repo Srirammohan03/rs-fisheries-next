@@ -127,12 +127,12 @@ export default function SalariesPage() {
                   <TableRow key={sal.id}>
                     <TableCell>{sal.user?.name || sal.user?.email}</TableCell>
                     <TableCell>
-                      {new Date(sal.month).toLocaleDateString("en-US", {
+                      {new Date(sal.month).toLocaleDateString("en-IN", {
                         month: "long",
                         year: "numeric",
                       })}
                     </TableCell>
-                    <TableCell>₹{sal.amount}</TableCell>
+                    <TableCell>₹{sal.amount.toLocaleString("en-IN")}</TableCell>
                     <TableCell>{sal.notes}</TableCell>
 
                     <TableCell className="text-right">
