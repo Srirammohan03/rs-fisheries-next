@@ -34,8 +34,8 @@ export default function FormerLoading() {
   const [FarmerName, setFarmerName] = useState("");
   const [village, setVillage] = useState("");
   const [date, setDate] = useState("");
-  const [vehicleNo, setVehicleNo] = useState("");
   const [fishCode, setFishCode] = useState("");
+  const [vehicleId, setVehicleId] = useState("");
 
   // ---------- FETCH BILL NUMBER ----------
   const fetchNextBillNo = async () => {
@@ -51,6 +51,14 @@ export default function FormerLoading() {
   useEffect(() => {
     fetchNextBillNo();
   }, []);
+
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ["assigned-vehicles"],
+    queryFn: async () => {
+      const res = await axios.get("/api/vehicles/assign-driver");
+      return res.data.data;
+    },
+  });
 
   // ---------- ITEM ROWS ----------
   const [items, setItems] = useState<ItemRow[]>([
@@ -113,7 +121,7 @@ export default function FormerLoading() {
     setFarmerName("");
     setVillage("");
     setDate("");
-    setVehicleNo("");
+    setVehicleId("");
     setFishCode("");
 
     setItems([
@@ -157,7 +165,7 @@ export default function FormerLoading() {
         FarmerName,
         village,
         date,
-        vehicleNo,
+        vehicleId,
 
         totalTrays: totals.totalTrays,
         totalLooseKgs: totals.totalLooseKgs,
@@ -206,7 +214,7 @@ export default function FormerLoading() {
           <FieldLabel>Farmer Bill No</FieldLabel>
           <Input
             readOnly
-            value={billNo} 
+            value={billNo}
             className="bg-gray-100 font-semibold"
           />
         </Field>
@@ -234,11 +242,21 @@ export default function FormerLoading() {
         </Field>
 
         <Field>
-          <FieldLabel>Vehicle No.</FieldLabel>
-          <Input
-            value={vehicleNo}
-            onChange={(e) => setVehicleNo(e.target.value)}
-          />
+          <FieldLabel>Select Vehicle</FieldLabel>
+
+          <Select value={vehicleId} onValueChange={setVehicleId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Vehicle" />
+            </SelectTrigger>
+
+            <SelectContent>
+              {vehicles.map((v: any) => (
+                <SelectItem key={v.id} value={v.id}>
+                  {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
       </div>
 

@@ -51,3 +51,26 @@ export const POST = apiHandler(async (req: Request) => {
     new ApiResponse(200, updatedVehicle, "Driver assigned successfully")
   );
 });
+
+export const GET = apiHandler(async () => {
+  const vehicles = await prisma.vehicle.findMany({
+    where: {
+      assignedDriverId: {
+        not: null,
+      },
+    },
+    select: {
+      id: true,
+      vehicleNumber: true,
+      assignedDriver: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  return Response.json(
+    new ApiResponse(200, vehicles, "Assigned vehicles fetched successfully")
+  );
+});

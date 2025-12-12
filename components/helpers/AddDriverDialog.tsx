@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 const schema = z.object({
@@ -57,6 +57,7 @@ export function AddDriverDialog() {
   } = useForm({
     resolver: zodResolver(schema),
   });
+  const queryClient = useQueryClient();
 
   const addMutation = useMutation({
     mutationFn: async (payload: DriverForm) => {
@@ -67,6 +68,7 @@ export function AddDriverDialog() {
     },
     onSuccess: async (data) => {
       toast.success(data.message ?? "Driver added successfully");
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
       reset();
       setOpen(false);
     },
