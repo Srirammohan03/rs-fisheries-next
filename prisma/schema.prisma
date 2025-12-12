@@ -244,8 +244,6 @@ enum PaymentMode {
   CHEQUE
 }
 
-
-
 model VehicleEntry {
   id        String  @id @default(cuid())
   vehicleId String
@@ -301,7 +299,7 @@ model Vehicle {
   roadTaxExpiry   DateTime?
 
   // Driver assignment (NEW)
-  assignedDriverId String?
+  assignedDriverId String? @unique
   assignedDriver   Driver? @relation(fields: [assignedDriverId], references: [id])
 
   // For rent vehicles
@@ -318,6 +316,7 @@ model Vehicle {
   // 1 Vehicle → Many Trips
   trips VehicleEntry[]
 }
+
 model Driver {
   id            String   @id @default(cuid())
   name          String
@@ -328,5 +327,5 @@ model Driver {
   aadharNumber  String   @unique
   createdAt     DateTime @default(now())
 
-  vehicles Vehicle[]
+  assignedVehicle Vehicle?
 }
