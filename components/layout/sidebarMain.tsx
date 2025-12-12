@@ -35,6 +35,7 @@ const menuItems = [
   { href: "/vendor-bills", label: "Vendor Bills", icon: FileText },
   { href: "/client-bills", label: "Client Bills", icon: Receipt },
   { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/receipts", label: "Receipts", icon: Receipt },
   { href: "/vehicles", label: "Vehicles", icon: Car },
   { href: "/salaries", label: "Salaries", icon: Wallet },
   { href: "/teams-members", label: "Team Members", icon: Users },
