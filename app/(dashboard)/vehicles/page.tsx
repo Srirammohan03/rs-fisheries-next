@@ -1,8 +1,10 @@
 "use client";
 
-import { OwnVehicles } from "@/components/helpers/OwnVehicles";
-import { RentVehicles } from "@/components/helpers/RentVehicles";
+import { OwnVehicleTable } from "@/components/helpers/OwnVehicleTable";
+import { RentVehicleTable } from "@/components/helpers/RentVehicleTable";
 import { VehicleDialog } from "@/components/helpers/VehicleDialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
 
 export default function Vehicles() {
   return (
@@ -18,10 +20,19 @@ export default function Vehicles() {
         <VehicleDialog />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <OwnVehicles />
-        <RentVehicles />
-      </div>
+      <Tabs defaultValue="OWN" className="mt-4 flex flex-col h-full">
+        <TabsList>
+          <TabsTrigger value="OWN">Own Vehicles</TabsTrigger>
+          <TabsTrigger value="RENT">Rent Vehicles</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="OWN">
+          <OwnVehicleTable />
+        </TabsContent>
+        <TabsContent value="RENT">
+          <RentVehicleTable />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

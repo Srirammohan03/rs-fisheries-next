@@ -83,3 +83,14 @@ export const POST = apiHandler(async (req: Request) => {
     new ApiResponse(201, vehicle, "Own vehicle added successfully")
   );
 });
+
+export const GET = apiHandler(async () => {
+  const vehicles = await prisma.vehicle.findMany({
+    where: { ownership: "OWN" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json(
+    new ApiResponse(200, vehicles, "Vehicles OWN fetched successfully")
+  );
+});

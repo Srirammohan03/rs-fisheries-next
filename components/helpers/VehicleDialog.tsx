@@ -20,7 +20,7 @@ export function VehicleDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
+      <DialogTrigger asChild>
         <Button>Add Vehicle</Button>
       </DialogTrigger>
 

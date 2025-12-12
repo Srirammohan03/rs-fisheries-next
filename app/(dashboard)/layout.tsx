@@ -4,6 +4,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { TopNav } from "@/components/layout/top-nav";
 import AppSidebar from "@/components/layout/sidebarMain";
 import QueryProvider from "@/components/providers/query-provider";
+import { Toaster } from "sonner";
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
 }) {
   return (
     <QueryProvider>
+      <Toaster />
       <SidebarProvider>
         <div className="flex h-screen w-screen overflow-hidden">
           {/* Sidebar */}

@@ -47,3 +47,14 @@ export const POST = apiHandler(async (req: Request) => {
     new ApiResponse(201, vehicle, "Rent vehicle added successfully")
   );
 });
+
+export const GET = apiHandler(async () => {
+  const vehicles = await prisma.vehicle.findMany({
+    where: { ownership: "RENT" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json(
+    new ApiResponse(200, vehicles, "Vehicles RENT fetched successfully")
+  );
+});
