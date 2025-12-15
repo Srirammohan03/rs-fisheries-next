@@ -83,24 +83,73 @@ export async function GET() {
     try {
         const records = await prisma.packingAmount.findMany({
             orderBy: { createdAt: "desc" },
-            include: { createdBy: { select: { name: true } } },
         });
 
-        const formatted = records.map((r) => ({
-            id: r.id,
-            date: r.createdAt,
-            amount: r.totalAmount,
-            mode: r.mode,
-            workers: r.workers,
-            temperature: r.temperature,
-            billNo: r.billNo,
-            paymentMode: r.paymentMode,
-            reference: r.reference,
-            createdBy: { name: r.createdBy?.name ?? null },
-        }));
+        const data = await Promise.all(
+            records.map(async (r) => {
+                let partyName: string | null = null;
+                let vehicleNo: string | null = null;
 
-        return NextResponse.json({ data: formatted });
-    } catch (error: any) {
+                if (r.sourceRecordId) {
+                    if (r.mode === "loading") {
+                        const client = await prisma.clientLoading.findUnique({
+                            where: { id: r.sourceRecordId },
+                            select: {
+                                clientName: true,
+                                vehicle: { select: { vehicleNumber: true } },
+                            },
+                        });
+
+                        partyName = client?.clientName || null;
+                        vehicleNo = client?.vehicle?.vehicleNumber || null;
+                    } else {
+                        const farmer = await prisma.formerLoading.findUnique({
+                            where: { id: r.sourceRecordId },
+                            select: {
+                                FarmerName: true,
+                                vehicle: { select: { vehicleNumber: true } },
+                            },
+                        });
+
+                        const agent = await prisma.agentLoading.findUnique({
+                            where: { id: r.sourceRecordId },
+                            select: {
+                                agentName: true,
+                                vehicle: { select: { vehicleNumber: true } },
+                            },
+                        });
+
+                        partyName =
+                            farmer?.FarmerName ||
+                            agent?.agentName ||
+                            null;
+
+                        vehicleNo =
+                            farmer?.vehicle?.vehicleNumber ||
+                            agent?.vehicle?.vehicleNumber ||
+                            null;
+                    }
+                }
+
+                return {
+                    id: r.id,
+                    date: r.createdAt,
+                    amount: r.totalAmount,
+                    mode: r.mode,
+                    workers: r.workers,
+                    temperature: r.temperature,
+                    billNo: r.billNo,
+                    paymentMode: r.paymentMode,
+                    reference: r.reference,
+                    partyName,
+                    vehicleNo, // ✅ IMPORTANT
+                };
+            })
+        );
+
+        return NextResponse.json({ data });
+    } catch (error) {
+        console.error(error);
         return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
     }
 }

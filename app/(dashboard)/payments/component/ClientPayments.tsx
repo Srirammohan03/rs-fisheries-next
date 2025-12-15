@@ -1,3 +1,4 @@
+// app\(dashboard)\payments\component\ClientPayments.tsx
 "use client";
 
 import { useState } from "react";

@@ -5,8 +5,6 @@ import { VendorPayments } from "./component/VendorPayments";
 import { ClientPayments } from "./component/ClientPayments";
 import { EmployeePayments } from "./component/EmployeePayments";
 import { PackingAmount } from "./component/PackingAmount";
-// import PackingAmountClient from "./component/PackingAmount";
-// import { PackingAmount } from "./component/PackingAmount";
 type TabId = "vendor" | "client" | "employee" | "packing";
 
 function TabsRoot({

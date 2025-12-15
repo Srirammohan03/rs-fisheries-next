@@ -7,46 +7,19 @@ import { CardCustom } from "@/components/ui/card-custom";
 import { Button } from "@/components/ui/button";
 import { IndianRupee, Calendar, User, Package, FileText } from "lucide-react";
 import { toast } from "sonner";
-
-type Tab = "vendor" | "client" | "employee" | "packing";
-
-interface BaseReceipt {
-  id: string;
-  date: string | Date | null;
-  createdAt?: string;
-  amount: number;
-  totalAmount?: number;
-  paymentMode?: string;
-  reference?: string | null;
-  imageUrl?: string;
-  billNo?: string;
-}
-
-interface VendorReceipt extends BaseReceipt {
-  vendorName: string;
-  source: string;
-}
-
-interface ClientReceipt extends BaseReceipt {
-  clientName: string;
-}
-
-interface EmployeeReceipt extends BaseReceipt {
-  employeeName: string;
-  user?: { name: string };
-}
-
-interface PackingReceipt extends BaseReceipt {
-  mode: string;
-  workers: number;
-  temperature: number;
-  createdBy?: { name: string | null };
-  paymentMode?: string;
-  reference?: string | null;
-  billNo?: string;
-}
-
-type Receipt = BaseReceipt;
+import type {
+  Tab,
+  Receipt,
+  VendorReceipt,
+  ClientReceipt,
+  EmployeeReceipt,
+  PackingReceipt,
+} from "../../../lib/receipts";
+import { generatePackingPDF } from "@/lib/pdf/packing";
+import { generatePayslipPDF } from "@/lib/pdf/payslip";
+import { generateClientReceiptPDF } from "@/lib/pdf/clientslip";
+// import { generatePackingPDF } from "@/lib/pdf/packing";
+// import { generatePayslipPDF } from "@/lib/pdf/payslip";
 
 const formatCurrency = (amt: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -64,6 +37,7 @@ export default function ReceiptsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("vendor");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
+  const safeText = (value?: string | null) => value ?? "—";
 
   const tabs = [
     { id: "vendor" as const, label: "Vendor Receipt", icon: User },
@@ -103,107 +77,39 @@ export default function ReceiptsPage() {
     }
     fetchData();
   }, [activeTab]);
+  const formatAmount = (value: number) =>
+    value.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
-  const generatePDF = async (receipt: Receipt) => {
-    if (activeTab !== "packing") {
-      toast.error("Custom receipt design available only for Packing");
-      return;
+  const amountToWords = (amount: number) => {
+    const words = require("number-to-words");
+    return (
+      words.toWords(amount).replace(/^\w/, (c: string) => c.toUpperCase()) +
+      " only"
+    );
+  };
+
+  const handleGenerate = (receipt: Receipt) => {
+    switch (activeTab) {
+      case "packing":
+        return generatePackingPDF(receipt as PackingReceipt);
+
+      case "employee":
+        return generatePayslipPDF(receipt as EmployeeReceipt);
+
+      case "client":
+        return generateClientReceiptPDF(receipt as ClientReceipt);
+
+      // case "client":
+      //   return generateClientPDF(receipt);
+
+      default:
+        toast.error("Invalid receipt type");
     }
-
-    try {
-      const doc = new jsPDF("p", "mm", "a4");
-      const pageWidth = doc.internal.pageSize.getWidth();
-
-      // Logo (top-right)
-      try {
-        doc.addImage("/favicon.jpg", "JPEG", pageWidth - 70, 10, 50, 50);
-      } catch (e) {
-        console.warn("Logo failed to load");
-      }
-
-      // Company Header
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(22);
-      doc.text("RS Fisheries", 20, 25);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      doc.text("Fresh & Frozen Seafood Suppliers", 20, 35);
-      doc.text("123 Fishery Road, Coastal Town", 20, 43);
-      doc.text("Hyderabad, India - 500001", 20, 51);
-      doc.text("Phone: +91 98765 43210", 20, 59);
-      doc.text("Email: info@rsfisheries.com", 20, 67);
-
-      // Title
-      doc.setFontSize(20);
-      doc.setFont("helvetica", "bold");
-      doc.text("PACKING AMOUNT RECEIPT", pageWidth / 2, 90, {
-        align: "center",
-      });
-
-      // Bill No & Date
-      doc.setFontSize(12);
-      doc.text(`Bill No: ${receipt.billNo || "N/A"}`, pageWidth - 90, 105);
-      doc.text(`Date: ${formatDate(receipt.date)}`, pageWidth - 90, 115);
-
-      // Separator
-      doc.setLineWidth(0.5);
-      doc.line(20, 125, pageWidth - 20, 125);
-
-      // Details
-      let y = 140;
-      const addRow = (label: string, value: string | number) => {
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "normal");
-        doc.text(`${label}:`, 30, y);
-        doc.setFont("helvetica", "bold");
-        doc.text(String(value), pageWidth - 30, y, { align: "right" });
-        y += 15;
-      };
-
-      const r = receipt as PackingReceipt;
-      addRow("Created By", r.createdBy?.name || "RS Fisheries Admin");
-      addRow("Mode", r.mode === "loading" ? "Loading" : "Unloading");
-      addRow("Number of Workers", r.workers);
-      addRow("Temperature", `${r.temperature}°C`);
-
-      const payMode =
-        r.paymentMode === "CASH"
-          ? "Cash"
-          : r.paymentMode === "AC"
-          ? "A/C Transfer"
-          : r.paymentMode === "UPI"
-          ? "UPI / PhonePe"
-          : r.paymentMode === "CHEQUE"
-          ? "Cheque"
-          : "N/A";
-      addRow("Payment Mode", payMode);
-
-      if (r.reference) addRow("Reference", r.reference);
-
-      // Total
-      doc.setLineWidth(1);
-      doc.line(30, y - 5, pageWidth - 30, y - 5);
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      addRow("Total Amount", formatCurrency(r.amount));
-
-      // Footer
-      y += 40;
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      doc.text("Thank you for your service!", pageWidth / 2, y, {
-        align: "center",
-      });
-      y += 15;
-      doc.text("Authorized Signature ___________________", pageWidth - 80, y);
-
-      doc.save(`packing-receipt-${r.billNo || "draft"}.pdf`);
-      doc.autoPrint();
-      window.open(doc.output("bloburl"), "_blank");
-    } catch (err) {
-      toast.error("Failed to generate receipt");
-    }
+  };
+  const getActionLabel = (): string => {
+    if (activeTab === "vendor") return "Generate Invoice";
+    if (activeTab === "employee") return "Generate Payslip";
+    return "Generate Receipt";
   };
 
   const getTitle = () => {
@@ -226,8 +132,8 @@ export default function ReceiptsPage() {
     if (activeTab === "client") return (r as ClientReceipt).clientName || "—";
     if (activeTab === "employee")
       return (r as EmployeeReceipt).employeeName || "—";
-    if (activeTab === "packing")
-      return (r as PackingReceipt).createdBy?.name || "RS Fisheries Admin";
+    if (activeTab === "packing") return (r as PackingReceipt).partyName || "—";
+
     return "—";
   };
 
@@ -343,10 +249,10 @@ export default function ReceiptsPage() {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={() => generatePDF(r)}
+                        onClick={() => handleGenerate(r)}
                       >
                         <FileText className="w-4 h-4" />
-                        Generate Receipt
+                        {getActionLabel()}
                       </Button>
                     </td>
                   </tr>
