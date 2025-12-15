@@ -378,6 +378,7 @@ model InvoiceCounter {
   count        Int  @default(0) // for general invoices (if used)
   packingCount Int  @default(0) // ← NEW: for packing
   packingYear  Int? // ← NEW: last year used
+  invoiceCount Int  @default(0)
 }
 
 model Invoice {
@@ -392,5 +393,14 @@ model Invoice {
   subtotal      Float
   taxAmount     Float
   total         Float
+  gstPercent   Float  @default(0)
+  hsnCode      String?
+  billTo       String?
+  shipTo       String?
+  pan          String?
+  bankDetails  String?
+  taxInWords   String?
   createdAt     DateTime @default(now())
 }
+
+
