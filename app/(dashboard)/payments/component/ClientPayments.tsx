@@ -340,19 +340,6 @@ export function ClientPayments() {
             )}
           </div>
         </Field>
-
-        {/* Save Button */}
-        <div className="pt-6 border-t">
-          <Button
-            size="lg"
-            className="w-full md:w-auto px-12"
-            onClick={handleSave}
-            disabled={isSubmitting || !selectedClientId || amount <= 0}
-          >
-            <Save className="w-5 h-5 mr-2" />
-            {isSubmitting ? "Recording Payment..." : "Record Payment"}
-          </Button>
-        </div>
       </div>
     </CardCustom>
   );

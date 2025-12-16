@@ -19,18 +19,30 @@ const VendorBillsBadgeContext = createContext<
   VendorBillsBadgeContextType | undefined
 >(undefined);
 
+const STORAGE_KEY = "vendorBillsLastSeenAt";
+
+function getLastSeenAt() {
+  if (typeof window === "undefined") return 0;
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? Number(raw) : 0;
+}
+
+function setLastSeenAt(ts: number) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, String(ts));
+}
+
 export function VendorBillsBadgeProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [newCount, setNewCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-
-  const STORAGE_KEY = "vendorBillsLastSeen";
 
   const refresh = useCallback(async () => {
     try {
+      const lastSeenAt = getLastSeenAt();
+
       const [farmerRes, agentRes] = await Promise.all([
         axios.get("/api/former-loading"),
         axios.get("/api/agent-loading"),
@@ -39,15 +51,18 @@ export function VendorBillsBadgeProvider({
       const farmers = (farmerRes.data?.data ?? []) as any[];
       const agents = (agentRes.data?.data ?? []) as any[];
 
-      const currentTotal = farmers.length + agents.length;
-      setTotalCount(currentTotal);
+      // IMPORTANT: your API must return createdAt for each row
+      const all = [...farmers, ...agents];
 
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const lastSeenTotal = stored ? JSON.parse(stored)?.total ?? 0 : 0;
+      const fresh = all.filter((x) => {
+        const t = x?.createdAt ? new Date(x.createdAt).getTime() : 0;
+        return t > lastSeenAt;
+      });
 
-      setNewCount(Math.max(0, currentTotal - lastSeenTotal));
+      setNewCount(fresh.length);
     } catch (err) {
-      console.error("Failed to refresh vendor bills badge count");
+      console.error("Failed to refresh vendor bills badge count", err);
+      setNewCount(0);
     }
   }, []);
 
@@ -56,13 +71,21 @@ export function VendorBillsBadgeProvider({
 
     const handleFocus = () => refresh();
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+
+    // optional: auto refresh every 15s
+    const interval = window.setInterval(refresh, 15000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.clearInterval(interval);
+    };
   }, [refresh]);
 
   const markVendorBillsAsSeen = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ total: totalCount }));
+    // mark "now" as seen
+    setLastSeenAt(Date.now());
     setNewCount(0);
-  }, [totalCount]);
+  }, []);
 
   return (
     <VendorBillsBadgeContext.Provider

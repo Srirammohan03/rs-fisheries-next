@@ -36,18 +36,45 @@ export async function POST(req: NextRequest) {
     // console.log("Received payload:", body);
 
     const source = body.source;
+    if (!source) {
+      return NextResponse.json(
+        { message: "source is required" },
+        { status: 400 }
+      );
+    }
+
     const sourceRecordId = normalizeString(body.sourceRecordId);
+    const billNo = normalizeString((body as any).billNo);
     const vendorName = normalizeString(body.vendorName) ?? "Unknown";
 
-    if (!source || !sourceRecordId) {
+    let finalSourceRecordId: string | null = sourceRecordId;
+
+    // fallback lookup by billNo
+    if (!finalSourceRecordId && billNo) {
+      if (source === "farmer") {
+        const row = await prisma.formerLoading.findUnique({
+          where: { billNo },
+          select: { id: true },
+        });
+        finalSourceRecordId = row?.id ?? null;
+      } else if (source === "agent") {
+        const row = await prisma.agentLoading.findUnique({
+          where: { billNo },
+          select: { id: true },
+        });
+        finalSourceRecordId = row?.id ?? null;
+      }
+    }
+
+    if (!finalSourceRecordId) {
       return NextResponse.json(
-        { message: "source and sourceRecordId are required" },
+        { message: "sourceRecordId is required (or provide billNo)" },
         { status: 400 }
       );
     }
 
     // 🔥 ALWAYS generate vendorId from loading ID
-    const vendorId = `${source}:${sourceRecordId}`;
+    const vendorId = `${source}:${finalSourceRecordId}`;
 
     const amt =
       typeof body.amount === "string" ? Number(body.amount) : body.amount ?? 0;

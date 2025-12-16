@@ -218,7 +218,8 @@ model ClientPayment {
   createdAt     DateTime    @default(now())
 
   // Relation to ClientLoading (safe even if not migrated yet)
-  client ClientLoading? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  // client ClientLoading? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+client ClientLoading @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([date])

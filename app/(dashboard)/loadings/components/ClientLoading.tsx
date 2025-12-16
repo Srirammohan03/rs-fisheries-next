@@ -196,22 +196,50 @@ export default function AgentLoading() {
   };
 
   return (
-    <Card className="rounded-2xl shadow-md p-6">
+    <Card
+      className="
+    rounded-2xl p-6
+    border border-blue-100/70 bg-white
+    shadow-[0_18px_45px_-30px_rgba(37,99,235,0.35)]
+  "
+    >
+      {/* HEADER */}
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">C. Client Loading</h2>
-        <Button onClick={handleSave} className="rounded-2xl">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-slate-900">
+            Client Loading
+          </h2>
+          <p className="text-sm text-slate-500">
+            Add client details and loading items
+          </p>
+        </div>
+
+        <Button
+          onClick={handleSave}
+          className="
+        rounded-xl px-5
+        bg-blue-600 text-white
+        hover:bg-blue-700
+        shadow-[0_12px_24px_-14px_rgba(37,99,235,0.7)]
+      "
+        >
           <Save className="h-4 w-4 mr-2" /> Save
         </Button>
       </div>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-6">
+        {/* INPUTS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field>
             <FieldLabel>Client Bill No</FieldLabel>
             <Input
               readOnly
               value={billNo}
-              className="bg-gray-100 font-semibold"
+              className="
+            bg-slate-50 font-semibold
+            border-slate-200
+            focus-visible:ring-blue-300
+          "
             />
           </Field>
 
@@ -220,6 +248,7 @@ export default function AgentLoading() {
             <Input
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
+              className="border-slate-200 focus-visible:ring-blue-300"
             />
           </Field>
 
@@ -228,6 +257,7 @@ export default function AgentLoading() {
             <Input
               value={village}
               onChange={(e) => setVillage(e.target.value)}
+              className="border-slate-200 focus-visible:ring-blue-300"
             />
           </Field>
 
@@ -237,6 +267,7 @@ export default function AgentLoading() {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              className="border-slate-200 focus-visible:ring-blue-300"
             />
           </Field>
 
@@ -244,7 +275,7 @@ export default function AgentLoading() {
             <FieldLabel>Select Vehicle</FieldLabel>
 
             <Select value={vehicleNo} onValueChange={setVehicleNo}>
-              <SelectTrigger>
+              <SelectTrigger className="border-slate-200 focus:ring-blue-300">
                 <SelectValue placeholder="Select Vehicle" />
               </SelectTrigger>
 
@@ -260,27 +291,44 @@ export default function AgentLoading() {
         </div>
 
         {/* TABLE */}
-        <div className="mt-4 border rounded-2xl">
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-blue-100/70">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b">
-                <th className="p-2 text-left">S.No</th>
-                <th className="p-2 text-left">Variety</th>
-                <th className="p-2 text-left">Name</th>
-                <th className="p-2 text-left">Trays</th>
-                <th className="p-2 text-left">Loose</th>
-                <th className="p-2 text-left">Total</th>
-                <th className="p-2 text-left">Action</th>
+              <tr className="border-b bg-blue-50/60">
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  S.No
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  Variety
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  Name
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  Trays
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  Loose
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  Total
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                  Action
+                </th>
               </tr>
             </thead>
 
-            <tbody>
+            <tbody className="divide-y">
               {items.map((row, index) => (
-                <tr key={row.id} className="border-b">
-                  <td className="p-2">{index + 1}</td>
+                <tr
+                  key={row.id}
+                  className="hover:bg-blue-50/40 transition-colors"
+                >
+                  <td className="px-3 py-3 text-slate-800">{index + 1}</td>
 
                   {/* Variety */}
-                  <td className="p-2">
+                  <td className="px-3 py-3">
                     <Select
                       value={row.varietyCode}
                       onValueChange={(v) => {
@@ -288,7 +336,7 @@ export default function AgentLoading() {
                         updateRow(row.id, "name", getVarietyName(v));
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="h-10 rounded-xl border-slate-200 focus:ring-blue-300">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
@@ -302,14 +350,15 @@ export default function AgentLoading() {
                   </td>
 
                   {/* Name */}
-                  <td className="p-2">{row.name}</td>
+                  <td className="px-3 py-3 text-slate-700">{row.name}</td>
 
                   {/* Trays */}
-                  <td className="p-2">
+                  <td className="px-3 py-3">
                     <Input
                       type="number"
-                      className="w-20"
+                      className="h-10 w-20 rounded-xl border-slate-200 focus-visible:ring-blue-300"
                       value={row.noTrays}
+                      min={0}
                       onChange={(e) =>
                         updateRow(row.id, "noTrays", Number(e.target.value))
                       }
@@ -317,11 +366,12 @@ export default function AgentLoading() {
                   </td>
 
                   {/* Loose */}
-                  <td className="p-2">
+                  <td className="px-3 py-3">
                     <Input
                       type="number"
-                      className="w-20"
+                      className="h-10 w-20 rounded-xl border-slate-200 focus-visible:ring-blue-300"
                       value={row.loose}
+                      min={0}
                       onChange={(e) =>
                         updateRow(row.id, "loose", Number(e.target.value))
                       }
@@ -329,15 +379,18 @@ export default function AgentLoading() {
                   </td>
 
                   {/* Total */}
-                  <td className="p-2 font-semibold">{row.totalKgs}</td>
+                  <td className="px-3 py-3 font-semibold text-slate-900">
+                    {row.totalKgs}
+                  </td>
 
                   {/* Delete */}
-                  <td className="p-2">
+                  <td className="px-3 py-3">
                     <Button
                       size="icon"
                       variant="ghost"
                       disabled={items.length === 1}
                       onClick={() => deleteRow(row.id)}
+                      className="rounded-xl hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
@@ -350,15 +403,26 @@ export default function AgentLoading() {
           <div className="p-4">
             <Button
               onClick={addRow}
-              className="rounded-2xl flex items-center gap-2"
+              variant="outline"
+              className="
+            rounded-xl border-blue-200
+            text-blue-700 hover:text-blue-800
+            hover:bg-blue-50
+            flex items-center gap-2
+          "
             >
               <PlusCircle className="w-4 h-4" /> Add Row
             </Button>
           </div>
         </div>
 
-        <div className="text-right text-lg font-semibold">
-          Grand Total: {grandTotal} Kgs
+        <div className="flex justify-end">
+          <div className="text-right">
+            <p className="text-sm text-slate-500">Grand Total</p>
+            <p className="text-2xl font-bold text-slate-900">
+              {grandTotal} <span className="text-slate-500">Kgs</span>
+            </p>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -1,7 +1,7 @@
 // app/(dashboard)/payments/component/VendorPayments.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { CardCustom } from "@/components/ui/card-custom";
@@ -21,11 +21,44 @@ import { toast } from "sonner";
 
 type PaymentMode = "cash" | "ac" | "upi" | "cheque";
 
+type VendorRow = {
+  id: string; // vendorId used by backend: `${source}:${loadingId}`
+  name: string;
+  source: "farmer" | "agent";
+  billNos: string[];
+  loadingIds: string[]; // keep all loading ids
+  latestLoadingId: string; // used for saving payment
+  totalDue: number;
+
+  accountNumber?: string;
+  ifsc?: string;
+  bankName?: string;
+  bankAddress?: string;
+};
+
+type VendorPayment = {
+  id: string;
+  vendorId: string; // MUST MATCH vendorRow.id
+  vendorName: string;
+  source: string;
+  date: string;
+  amount: number;
+  paymentMode: string;
+  referenceNo?: string | null;
+  paymentRef?: string | null;
+  accountNumber?: string | null;
+  ifsc?: string | null;
+  bankName?: string | null;
+  bankAddress?: string | null;
+  paymentdetails?: string | null;
+  isInstallment?: boolean;
+  createdAt?: string;
+};
+
 const currency = (v: number) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-  }).format(v);
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
+    v
+  );
 
 export function VendorPayments() {
   const queryClient = useQueryClient();
@@ -35,8 +68,8 @@ export function VendorPayments() {
   const [amount, setAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
   const [paymentdetails, setPaymentdetails] = useState("");
-  const [referenceNo, setReferenceNo] = useState(""); // Internal bill no
-  const [paymentRef, setPaymentRef] = useState(""); // UPI ID / Cheque No
+  const [referenceNo, setReferenceNo] = useState("");
+  const [paymentRef, setPaymentRef] = useState("");
   const [isPartialPayment, setIsPartialPayment] = useState(false);
 
   // Bank fields
@@ -45,8 +78,10 @@ export function VendorPayments() {
   const [bankName, setBankName] = useState("");
   const [bankAddress, setBankAddress] = useState("");
 
-  // Load vendors
-  const { data: vendorData, isLoading: loadingVendors } = useQuery({
+  // ✅ Vendors list
+  const { data: vendorData = [], isLoading: loadingVendors } = useQuery<
+    VendorRow[]
+  >({
     queryKey: ["vendors"],
     queryFn: async () => {
       const [fRes, aRes] = await Promise.all([
@@ -57,13 +92,20 @@ export function VendorPayments() {
       const farmers = (fRes.data?.data || []) as any[];
       const agents = (aRes.data?.data || []) as any[];
 
-      const map = new Map();
+      // group by source+name for display, but keep latestLoadingId for payments
+      const map = new Map<string, VendorRow>();
 
       [...farmers, ...agents].forEach((item: any) => {
         const name = (item.FarmerName || item.agentName || "").trim();
         if (!name) return;
-        const source = item.FarmerName ? "farmer" : "agent";
-        const key = `${source}:${name}`;
+
+        const source: "farmer" | "agent" = item.FarmerName ? "farmer" : "agent";
+
+        // IMPORTANT: loading id exists as item.id
+        const loadingId = String(item.id || "").trim();
+        if (!loadingId) return;
+
+        const billNo = String(item.billNo || "").trim();
 
         const total =
           item.items?.reduce(
@@ -71,11 +113,17 @@ export function VendorPayments() {
             0
           ) || Number(item.grandTotal || 0);
 
-        if (!map.has(key)) {
-          map.set(key, {
-            id: key,
+        const displayKey = `${source}:${name}`; // grouping key (for dropdown)
+        const vendorBackendId = `${source}:${loadingId}`; // backend vendorId format
+
+        if (!map.has(displayKey)) {
+          map.set(displayKey, {
+            id: vendorBackendId, // ✅ this MUST match payments.vendorId
             name,
             source,
+            billNos: billNo ? [billNo] : [],
+            loadingIds: [loadingId],
+            latestLoadingId: loadingId,
             totalDue: total,
             accountNumber: item.accountNumber,
             ifsc: item.ifsc,
@@ -83,29 +131,38 @@ export function VendorPayments() {
             bankAddress: item.bankAddress,
           });
         } else {
-          const existing = map.get(key);
+          const existing = map.get(displayKey)!;
           existing.totalDue += total;
+          if (billNo) existing.billNos.push(billNo);
+          existing.loadingIds.push(loadingId);
+
+          // choose latest as last seen (or use date compare if you want)
+          existing.latestLoadingId = loadingId;
+          existing.id = `${source}:${existing.latestLoadingId}`; // keep backend id aligned
         }
       });
 
-      return Array.from(map.values()).sort((a: any, b: any) =>
+      return Array.from(map.values()).sort((a, b) =>
         a.name.localeCompare(b.name)
       );
     },
   });
 
-  const { data: payments = [] } = useQuery({
+  // ✅ Payments list
+  const { data: payments = [] } = useQuery<VendorPayment[]>({
     queryKey: ["vendor-payments"],
     queryFn: () =>
       axios.get("/api/payments/vendor").then((res) => res.data?.data || []),
   });
 
-  const selected = vendorData?.find((v: any) => v.id === vendorId);
-  const paidAmount = React.useMemo(() => {
+  const selected = vendorData.find((v) => v.id === vendorId);
+
+  // ✅ Paid amount updates immediately because it reads from react-query cache
+  const paidAmount = useMemo(() => {
     if (!vendorId) return 0;
     return payments
-      .filter((p: any) => p.vendorId === vendorId)
-      .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      .filter((p) => p.vendorId === vendorId)
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
   }, [payments, vendorId]);
 
   const totalDue = selected?.totalDue || 0;
@@ -150,36 +207,37 @@ export function VendorPayments() {
     return null;
   };
 
-  const handleSave = () => {
-    const error = validateForm();
-    if (error) return toast.error(error);
-
-    saveMutation.mutate({
-      source: selected.source, // "farmer" | "agent"
-      sourceRecordId: selected.loadingId, // MUST be UUID
-      vendorName: selected.name,
-      date,
-      amount: Number(amount),
-      paymentMode,
-      referenceNo,
-      paymentRef,
-
-      // ✅ FIXED NAMES
-      accountNumber: accNo,
-      ifsc,
-      bankName,
-      bankAddress,
-      paymentdetails,
-
-      // ✅ backend expects isInstallment
-      isInstallment: isPartialPayment,
-    });
-  };
-
+  // ✅ Mutation: optimistic update cache so Paid/Remaining changes instantly
   const saveMutation = useMutation({
-    mutationFn: (data: any) => axios.post("/api/payments/vendor", data),
-    onSuccess: () => {
+    mutationFn: (payload: any) => axios.post("/api/payments/vendor", payload),
+    onSuccess: (res, variables) => {
       toast.success("Payment saved successfully!");
+
+      // 🔥 Optimistically update list cache
+      queryClient.setQueryData(["vendor-payments"], (old: any) => {
+        const prev: VendorPayment[] = Array.isArray(old) ? old : [];
+        const newRow: VendorPayment = {
+          id: res.data?.data?.id || `temp-${Date.now()}`,
+          vendorId: variables.vendorId,
+          vendorName: variables.vendorName,
+          source: variables.source,
+          date: variables.date,
+          amount: Number(variables.amount),
+          paymentMode: variables.paymentMode,
+          referenceNo: variables.referenceNo ?? null,
+          paymentRef: variables.paymentRef ?? null,
+          accountNumber: variables.accountNumber ?? null,
+          ifsc: variables.ifsc ?? null,
+          bankName: variables.bankName ?? null,
+          bankAddress: variables.bankAddress ?? null,
+          paymentdetails: variables.paymentdetails ?? null,
+          isInstallment: Boolean(variables.isInstallment ?? false),
+          createdAt: new Date().toISOString(),
+        };
+        return [newRow, ...prev];
+      });
+
+      // Also refetch to ensure DB truth
       queryClient.invalidateQueries({ queryKey: ["vendor-payments"] });
       resetForm();
     },
@@ -188,6 +246,37 @@ export function VendorPayments() {
       toast.error(err.response?.data?.message || "Failed to save");
     },
   });
+
+  const handleSave = () => {
+    const error = validateForm();
+    if (error) return toast.error(error);
+    if (!selected) return toast.error("Select a vendor");
+
+    const billNoToSend = selected.billNos?.[selected.billNos.length - 1] || "";
+
+    // ✅ If your backend supports billNo fallback, send it.
+    // ✅ Also send vendorId so optimistic UI can match.
+    saveMutation.mutate({
+      vendorId: selected.id, // for cache matching
+      source: selected.source,
+      billNo: billNoToSend, // fallback
+      sourceRecordId: selected.latestLoadingId, // if your backend still expects it, this makes it 100% valid
+      vendorName: selected.name,
+      date,
+      amount: Number(amount),
+      paymentMode,
+      referenceNo,
+      paymentRef,
+
+      accountNumber: accNo,
+      ifsc,
+      bankName,
+      bankAddress,
+      paymentdetails,
+
+      isInstallment: isPartialPayment,
+    });
+  };
 
   const resetForm = () => {
     setAmount("");
@@ -227,7 +316,6 @@ export function VendorPayments() {
       }
     >
       <div className="space-y-8 py-6 max-w-6xl mx-auto">
-        {/* Vendor Selection */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
           <div className="space-y-2">
             <Label>Vendor (Farmer / Agent)</Label>
@@ -242,7 +330,7 @@ export function VendorPayments() {
                 />
               </SelectTrigger>
               <SelectContent>
-                {vendorData?.map((v: any) => (
+                {vendorData.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
                     <div className="flex justify-between items-center w-full gap-4">
                       <span className="font-medium">{v.name}</span>
@@ -274,7 +362,6 @@ export function VendorPayments() {
 
         <hr className="border-gray-300" />
 
-        {/* Main Payment Fields */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="space-y-2">
             <Label>Date</Label>
@@ -293,7 +380,7 @@ export function VendorPayments() {
               onChange={(e) =>
                 /^\d*\.?\d*$/.test(e.target.value) && setAmount(e.target.value)
               }
-              placeholder="100000000"
+              placeholder="100000"
               className="font-mono text-lg"
             />
           </div>
@@ -328,7 +415,6 @@ export function VendorPayments() {
           </div>
         </div>
 
-        {/* Reference No + UPI/Cheque No */}
         {paymentMode !== "ac" && (
           <div className="bg-gray-50 p-6 rounded-xl border">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -343,6 +429,7 @@ export function VendorPayments() {
                   className="font-mono"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>
                   {paymentMode === "upi"
@@ -355,7 +442,9 @@ export function VendorPayments() {
                   )}
                 </Label>
                 <Input
-                  placeholder={paymentMode === "upi" ? "123@ybl" : "123456"}
+                  placeholder={
+                    paymentMode === "upi" ? "UTR / TXN ID" : "123456"
+                  }
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
                   className="font-mono"
@@ -365,18 +454,14 @@ export function VendorPayments() {
           </div>
         )}
 
-        {/* Bank Details */}
         {paymentMode === "ac" && (
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-8">
-            <h3 className="text-xl font-bold text-blue-900 mb-6">
-              Bank Transfer Details
-            </h3>
+          <div className="border rounded-xl p-8">
+            <h3 className="text-xl font-bold mb-6">Bank Transfer Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Account Number</Label>
                 <Input
-                  type="number"
-                  min={0}
+                  type="text"
                   value={accNo}
                   onChange={(e) => setAccNo(e.target.value)}
                   className="font-mono"
@@ -411,8 +496,7 @@ export function VendorPayments() {
           </div>
         )}
 
-        {/* Simple Partial Payment Toggle */}
-        <div className="">
+        <div>
           <Label className="text-lg font-semibold">Payment Type</Label>
           <div className="flex gap-8 items-center mt-4">
             <div className="flex gap-3">
@@ -432,35 +516,30 @@ export function VendorPayments() {
               </Badge>
             </div>
             {isPartialPayment && (
-              <span className="text-lg font-medium text-amber-800">
+              <span className="text-lg font-medium">
                 Paying {currency(Number(amount) || 0)} of {currency(totalDue)}
               </span>
             )}
           </div>
         </div>
 
-        {/* Summary */}
-        <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-8 rounded-2xl border-2 border-gray-300 shadow-md">
+        <div className="p-8 rounded-2xl border">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
             <div>
-              <p className="text-sm text-gray-600">Total Due</p>
+              <p className="text-sm">Total Due</p>
               <p className="text-2xl font-bold">{currency(totalDue)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Paid</p>
-              <p className="text-2xl font-bold text-orange-600">
-                {currency(paidAmount)}
-              </p>
+              <p className="text-sm">Paid</p>
+              <p className="text-2xl font-bold">{currency(paidAmount)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Remaining</p>
-              <p className="text-2xl font-bold text-green-600">
-                {currency(remaining)}
-              </p>
+              <p className="text-sm">Remaining</p>
+              <p className="text-2xl font-bold">{currency(remaining)}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Paying Now</p>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-sm">Paying Now</p>
+              <p className="text-2xl font-bold">
                 {currency(Number(amount) || 0)}
               </p>
             </div>

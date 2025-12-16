@@ -197,12 +197,33 @@ export default function FormerLoading() {
   };
 
   return (
-    <Card className="p-6 rounded-2xl shadow-md space-y-6">
+    <Card
+      className="
+    p-6 rounded-2xl space-y-6
+    border border-blue-100/70 bg-white
+    shadow-[0_18px_45px_-30px_rgba(37,99,235,0.35)]
+  "
+    >
       {/* HEADER */}
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">A. Farmer Loading</h2>
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-slate-900">
+            Farmer Loading
+          </h2>
+          <p className="text-sm text-slate-500">
+            Add farmer details and loading items
+          </p>
+        </div>
 
-        <Button onClick={handleSave}>
+        <Button
+          onClick={handleSave}
+          className="
+        rounded-xl px-5
+        bg-blue-600 text-white
+        hover:bg-blue-700
+        shadow-[0_12px_24px_-14px_rgba(37,99,235,0.7)]
+      "
+        >
           <Save className="h-4 w-4 mr-2" />
           Save
         </Button>
@@ -215,7 +236,11 @@ export default function FormerLoading() {
           <Input
             readOnly
             value={billNo}
-            className="bg-gray-100 font-semibold"
+            className="
+          bg-slate-50 font-semibold
+          border-slate-200
+          focus-visible:ring-blue-300
+        "
           />
         </Field>
 
@@ -224,12 +249,17 @@ export default function FormerLoading() {
           <Input
             value={FarmerName}
             onChange={(e) => setFarmerName(e.target.value)}
+            className="border-slate-200 focus-visible:ring-blue-300"
           />
         </Field>
 
         <Field>
           <FieldLabel>Village</FieldLabel>
-          <Input value={village} onChange={(e) => setVillage(e.target.value)} />
+          <Input
+            value={village}
+            onChange={(e) => setVillage(e.target.value)}
+            className="border-slate-200 focus-visible:ring-blue-300"
+          />
         </Field>
 
         <Field>
@@ -238,6 +268,7 @@ export default function FormerLoading() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            className="border-slate-200 focus-visible:ring-blue-300"
           />
         </Field>
 
@@ -245,7 +276,7 @@ export default function FormerLoading() {
           <FieldLabel>Select Vehicle</FieldLabel>
 
           <Select value={vehicleId} onValueChange={setVehicleId}>
-            <SelectTrigger>
+            <SelectTrigger className="border-slate-200 focus:ring-blue-300">
               <SelectValue placeholder="Select Vehicle" />
             </SelectTrigger>
 
@@ -257,37 +288,53 @@ export default function FormerLoading() {
               ))}
             </SelectContent>
           </Select>
-         
         </Field>
       </div>
 
       {/* TABLE */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-2xl border border-blue-100/70">
         <table className="w-full">
           <thead>
-            <tr className="border-b">
-              <th className="px-2 py-2 text-left">S.No</th>
-              <th className="px-2 py-2 text-left">Variety</th>
-              <th className="px-2 py-2 text-left">Name</th>
-              <th className="px-2 py-2 text-left">Trays</th>
-              <th className="px-2 py-2 text-left">Loose</th>
-              <th className="px-2 py-2 text-left">Total</th>
-              <th className="px-2 py-2 text-left">Action</th>
+            <tr className="border-b bg-blue-50/60">
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                S.No
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                Variety
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                Name
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                Trays
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                Loose
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                Total
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-slate-700">
+                Action
+              </th>
             </tr>
           </thead>
 
-          <tbody>
+          <tbody className="divide-y">
             {items.map((item, i) => (
-              <tr key={item.id} className="border-b">
-                <td className="px-2 py-2">{i + 1}</td>
+              <tr
+                key={item.id}
+                className="hover:bg-blue-50/40 transition-colors"
+              >
+                <td className="px-3 py-3 text-sm text-slate-800">{i + 1}</td>
 
                 {/* Variety Select */}
-                <td className="px-2 py-2">
+                <td className="px-3 py-3">
                   <Select
                     value={item.varietyCode}
                     onValueChange={(v) => updateRow(item.id, "varietyCode", v)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 focus:ring-blue-300">
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
 
@@ -302,15 +349,15 @@ export default function FormerLoading() {
                 </td>
 
                 {/* Name */}
-                <td className="px-2 py-2">
+                <td className="px-3 py-3 text-sm text-slate-700">
                   {getVarietyName(item.varietyCode)}
                 </td>
 
                 {/* Trays */}
-                <td className="px-2 py-2">
+                <td className="px-3 py-3">
                   <Input
                     type="number"
-                    className="w-24"
+                    className="h-10 w-24 rounded-xl border-slate-200 focus-visible:ring-blue-300"
                     value={item.noTrays}
                     min={0}
                     onChange={(e) =>
@@ -320,10 +367,10 @@ export default function FormerLoading() {
                 </td>
 
                 {/* Loose */}
-                <td className="px-2 py-2">
+                <td className="px-3 py-3">
                   <Input
                     type="number"
-                    className="w-24"
+                    className="h-10 w-24 rounded-xl border-slate-200 focus-visible:ring-blue-300"
                     value={item.loose}
                     min={0}
                     onChange={(e) =>
@@ -333,17 +380,18 @@ export default function FormerLoading() {
                 </td>
 
                 {/* Total */}
-                <td className="px-2 py-2 font-semibold">
+                <td className="px-3 py-3 font-semibold text-slate-900">
                   {calculateTotal(item).toFixed(2)}
                 </td>
 
                 {/* Delete */}
-                <td className="px-2 py-2">
+                <td className="px-3 py-3">
                   <Button
                     size="icon"
                     variant="ghost"
                     disabled={items.length === 1}
                     onClick={() => removeRow(item.id)}
+                    className="rounded-xl hover:bg-red-50"
                   >
                     <Trash2 className="h-4 w-4 text-red-500" />
                   </Button>
@@ -356,14 +404,24 @@ export default function FormerLoading() {
 
       {/* FOOTER */}
       <div className="flex justify-between items-center">
-        <Button variant="outline" onClick={addRow}>
+        <Button
+          variant="outline"
+          onClick={addRow}
+          className="
+        rounded-xl border-blue-200
+        text-blue-700 hover:text-blue-800
+        hover:bg-blue-50
+      "
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Row
         </Button>
 
         <div className="text-right">
-          <p className="text-sm text-muted-foreground">Grand Total</p>
-          <p className="text-2xl font-bold">{grandTotal.toFixed(2)} kgs</p>
+          <p className="text-sm text-slate-500">Grand Total</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {grandTotal.toFixed(2)} <span className="text-slate-500">kgs</span>
+          </p>
         </div>
       </div>
     </Card>
