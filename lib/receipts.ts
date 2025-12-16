@@ -1,11 +1,11 @@
-// types/receipts.ts
-
+/* ================= COMMON ================= */
+// lib\receipts.ts
 export type Tab = "vendor" | "client" | "employee" | "packing";
 
 export interface BaseReceipt {
     id: string;
     date: string | Date | null;
-    createdAt?: string;
+    createdAt?: string | Date;
     amount: number;
     totalAmount?: number;
     paymentMode?: string;
@@ -14,45 +14,22 @@ export interface BaseReceipt {
 }
 
 /* ================= VENDOR ================= */
+
 export interface VendorReceipt extends BaseReceipt {
+    vendorId: string;                 // farmer:Sriram3 | agent:Nithish
     vendorName: string;
-    source?: string;
+    source: "farmer" | "agent";
+
+    referenceNo?: string | null;
+    paymentRef?: string | null;
+
+    accountNumber?: string | null;
+    ifsc?: string | null;
+    bankName?: string | null;
+    bankAddress?: string | null;
 }
 
 /* ================= CLIENT ================= */
-export interface ClientReceipt extends BaseReceipt {
-    clientName: string;
-}
-
-/* ================= EMPLOYEE ================= */
-export interface EmployeeReceipt extends BaseReceipt {
-    employeeName: string;
-    paymentMode: "CASH" | "AC" | "UPI" | "CHEQUE";
-    reference?: string | null;
-    user?: {
-        name?: string | null;
-        role?: string | null;
-    };
-}
-
-/* ================= PACKING ================= */
-export interface PackingReceipt extends BaseReceipt {
-    mode: "loading" | "unloading";
-    workers: number;
-    temperature: number;
-    partyName?: string | null;
-    vehicleNo?: string | null;
-    paymentMode?: string;
-    reference?: string | null;
-}
-
-/* ================= UNION ================= */
-export type Receipt =
-    | VendorReceipt
-    | ClientReceipt
-    | EmployeeReceipt
-    | PackingReceipt;
-
 
 export interface ClientReceipt extends BaseReceipt {
     clientId: string;
@@ -65,3 +42,33 @@ export interface ClientReceipt extends BaseReceipt {
         village?: string | null;
     };
 }
+
+/* ================= EMPLOYEE ================= */
+
+export interface EmployeeReceipt extends BaseReceipt {
+    employeeName: string;
+    paymentMode: "CASH" | "AC" | "UPI" | "CHEQUE";
+    reference?: string | null;
+    user?: {
+        name?: string | null;
+        role?: string | null;
+    };
+}
+
+/* ================= PACKING ================= */
+
+export interface PackingReceipt extends BaseReceipt {
+    mode: "loading" | "unloading";
+    workers: number;
+    temperature: number;
+    partyName?: string | null;
+    vehicleNo?: string | null;
+}
+
+/* ================= UNION ================= */
+
+export type Receipt =
+    | VendorReceipt
+    | ClientReceipt
+    | EmployeeReceipt
+    | PackingReceipt;

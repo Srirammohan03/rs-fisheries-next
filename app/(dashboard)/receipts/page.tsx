@@ -18,6 +18,8 @@ import type {
 import { generatePackingPDF } from "@/lib/pdf/packing";
 import { generatePayslipPDF } from "@/lib/pdf/payslip";
 import { generateClientReceiptPDF } from "@/lib/pdf/clientslip";
+import { VendorInvoiceModal } from "./components/invoice/VendorInvoiceModal";
+// import { VendorInvoiceModal } from "./components/invoice/VendorInvoiceModal";
 // import { generatePackingPDF } from "@/lib/pdf/packing";
 // import { generatePayslipPDF } from "@/lib/pdf/payslip";
 
@@ -37,6 +39,16 @@ export default function ReceiptsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("vendor");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openInvoice, setOpenInvoice] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState<VendorReceipt | null>(
+    null
+  );
+  const [invoiceMap, setInvoiceMap] = useState<Record<string, boolean>>({});
+
+  const isVendorReceipt = (r: Receipt): r is VendorReceipt => {
+    return (r as VendorReceipt).vendorId !== undefined;
+  };
+
   const safeText = (value?: string | null) => value ?? "—";
 
   const tabs = [
@@ -56,27 +68,50 @@ export default function ReceiptsPage() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+
       try {
         const res = await fetch(apiMap[activeTab]);
         if (!res.ok) throw new Error("Failed to load");
-        const json = await res.json();
 
+        const json = await res.json();
         const rawData = json.payments || json.records || json.data || [];
+
         const data: Receipt[] = rawData.map((item: any) => ({
           ...item,
           date: item.date || item.createdAt || new Date(),
         }));
 
         setReceipts(data);
+
+        // ✅ ADD THIS BLOCK RIGHT HERE
+        if (activeTab === "vendor") {
+          const map: Record<string, boolean> = {};
+
+          await Promise.all(
+            data.map(async (r: any) => {
+              const res = await fetch(
+                `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+              );
+              map[r.id] = res.ok;
+            })
+          );
+
+          setInvoiceMap(map);
+        } else {
+          setInvoiceMap({});
+        }
       } catch (err) {
         console.error(err);
         setReceipts([]);
+        setInvoiceMap({});
       } finally {
         setLoading(false);
       }
     }
+
     fetchData();
   }, [activeTab]);
+
   const formatAmount = (value: number) =>
     value.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
@@ -87,7 +122,6 @@ export default function ReceiptsPage() {
       " only"
     );
   };
-
   const handleGenerate = (receipt: Receipt) => {
     switch (activeTab) {
       case "packing":
@@ -99,13 +133,15 @@ export default function ReceiptsPage() {
       case "client":
         return generateClientReceiptPDF(receipt as ClientReceipt);
 
-      // case "client":
-      //   return generateClientPDF(receipt);
+      case "vendor":
+        toast.error("Please edit and save invoice before generating PDF");
+        return;
 
       default:
         toast.error("Invalid receipt type");
     }
   };
+
   const getActionLabel = (): string => {
     if (activeTab === "vendor") return "Generate Invoice";
     if (activeTab === "employee") return "Generate Payslip";
@@ -136,6 +172,7 @@ export default function ReceiptsPage() {
 
     return "—";
   };
+  const isVendor = activeTab === "vendor";
 
   return (
     <div className="space-y-6">
@@ -240,20 +277,81 @@ export default function ReceiptsPage() {
                     </td>
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-1 text-lg font-bold text-green-600">
-                        <IndianRupee className="w-5 h-5" />
+                        {/* <IndianRupee className="w-5 h-5" /> */}
                         {formatCurrency(r.amount || r.totalAmount || 0)}
                       </div>
                     </td>
-                    <td className="py-4 px-4 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => handleGenerate(r)}
-                      >
-                        <FileText className="w-4 h-4" />
-                        {getActionLabel()}
-                      </Button>
+                    <td className="py-4 px-4">
+                      {activeTab === "vendor" && isVendorReceipt(r) ? (
+                        <div className="flex justify-end gap-2">
+                          {/* EDIT */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => {
+                              setSelectedVendor(r);
+                              setOpenInvoice(true);
+                            }}
+                          >
+                            <FileText className="w-4 h-4" />
+                            Edit Invoice
+                          </Button>
+
+                          {/* GENERATE */}
+                          <Button
+                            size="sm"
+                            className="gap-2"
+                            disabled={!invoiceMap[r.id]}
+                            onClick={async () => {
+                              const res = await fetch(
+                                `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+                              );
+
+                              if (!res.ok) {
+                                toast.error("Invoice not found");
+                                return;
+                              }
+
+                              const { invoice } = await res.json();
+
+                              const { jsPDF } = await import("jspdf");
+                              await import("jspdf-autotable");
+                              const { generateVendorInvoicePDF } = await import(
+                                "@/lib/pdf/vendor-invoice"
+                              );
+
+                              generateVendorInvoicePDF(jsPDF, {
+                                ...invoice,
+                                // ✅ IMPORTANT: items MUST exist
+                                items: [
+                                  {
+                                    varietyCode: invoice.source,
+                                    billNo: invoice.invoiceNo,
+                                    totalKgs: 1,
+                                    totalPrice: invoice.taxableValue,
+                                  },
+                                ],
+                              });
+                            }}
+                          >
+                            <FileText className="w-4 h-4" />
+                            Generate Invoice
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handleGenerate(r)}
+                          >
+                            <FileText className="w-4 h-4" />
+                            {getActionLabel()}
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -273,6 +371,25 @@ export default function ReceiptsPage() {
           </div>
         )}
       </CardCustom>
+      {openInvoice && selectedVendor && (
+        <VendorInvoiceModal
+          open={openInvoice}
+          vendorId={selectedVendor.vendorId}
+          vendorName={selectedVendor.vendorName}
+          source={selectedVendor.source as "farmer" | "agent"}
+          paymentId={selectedVendor.id}
+          onClose={() => setOpenInvoice(false)}
+          onSaved={() => {
+            setOpenInvoice(false);
+
+            // 🔁 refresh invoice map after save
+            setInvoiceMap((prev) => ({
+              ...prev,
+              [selectedVendor.id]: true,
+            }));
+          }}
+        />
+      )}
     </div>
   );
 }

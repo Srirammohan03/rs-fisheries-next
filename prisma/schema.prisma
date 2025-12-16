@@ -181,7 +181,7 @@ model Salaries {
 }
 
 model VendorPayment {
-  id                String   @id @default(uuid())
+  id                String          @id @default(uuid())
   vendorId          String
   vendorName        String
   source            String
@@ -194,11 +194,12 @@ model VendorPayment {
   bankAddress       String?
   paymentdetails    String?
   paymentRef        String?
-  isInstallment     Boolean  @default(false)
+  isInstallment     Boolean         @default(false)
   installments      Int?
   installmentNumber Int?
-  createdAt         DateTime @default(now())
+  createdAt         DateTime        @default(now())
   referenceNo       String?
+  vendorInvoice     VendorInvoice[]
 
   @@index([vendorId])
   @@index([source])
@@ -393,14 +394,65 @@ model Invoice {
   subtotal      Float
   taxAmount     Float
   total         Float
-  gstPercent   Float  @default(0)
-  hsnCode      String?
-  billTo       String?
-  shipTo       String?
-  pan          String?
-  bankDetails  String?
-  taxInWords   String?
+  gstPercent    Float    @default(0)
+  hsnCode       String?
+  billTo        String?
+  shipTo        String?
+  pan           String?
+  bankDetails   String?
+  taxInWords    String?
   createdAt     DateTime @default(now())
 }
 
+// model VendorInvoice {
+//   id String @id @default(uuid())
 
+//   vendorId       String
+//   vendorName     String
+//   source         String // "farmer" | "agent"
+//   sourceRecordId String
+
+//   invoiceNo   String   @unique
+//   invoiceDate DateTime
+
+//   hsn        String
+//   gstPercent Float  @default(0)
+
+//   taxableValue Float
+//   gstAmount    Float
+//   totalAmount  Float
+
+//   billTo Json
+//   shipTo Json
+//   terms  String?
+
+//   isFinalized Boolean @default(false)
+
+//   createdAt DateTime @default(now())
+
+//   @@index([vendorId, source])
+// }
+model VendorInvoice {
+  id         String @id @default(uuid())
+  paymentId  String @unique
+  vendorId   String
+  vendorName String
+  source     String
+
+  invoiceNo   String   @unique
+  invoiceDate DateTime
+
+  hsn          String
+  gstPercent   Float
+  taxableValue Float
+  gstAmount    Float
+  totalAmount  Float
+
+  billTo String
+  shipTo String
+
+  isFinalized Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  payment VendorPayment @relation(fields: [paymentId], references: [id])
+}

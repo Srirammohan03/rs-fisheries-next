@@ -155,19 +155,23 @@ export function VendorPayments() {
     if (error) return toast.error(error);
 
     saveMutation.mutate({
-      vendorId,
-      vendorName: selected?.name,
-      source: selected?.source,
+      source: selected.source, // "farmer" | "agent"
+      sourceRecordId: selected.loadingId, // MUST be UUID
+      vendorName: selected.name,
       date,
       amount: Number(amount),
       paymentMode,
-      referenceNo: paymentMode !== "ac" ? referenceNo.trim() : null,
-      paymentRef: paymentMode !== "ac" ? paymentRef.trim() : null,
-      accountNumber: paymentMode === "ac" ? accNo.trim() : null,
-      ifsc: paymentMode === "ac" ? ifsc.trim().toUpperCase() : null,
-      bankName: paymentMode === "ac" ? bankName.trim() : null,
-      bankAddress: paymentMode === "ac" ? bankAddress.trim() : null,
-      paymentdetails: paymentdetails.trim() || null,
+      referenceNo,
+      paymentRef,
+
+      // ✅ FIXED NAMES
+      accountNumber: accNo,
+      ifsc,
+      bankName,
+      bankAddress,
+      paymentdetails,
+
+      // ✅ backend expects isInstallment
       isInstallment: isPartialPayment,
     });
   };
