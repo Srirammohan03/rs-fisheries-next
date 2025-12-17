@@ -48,14 +48,26 @@ export async function POST(req: Request) {
         totalKgs: Number(data.totalKgs) || 0,
         grandTotal: Number(data.grandTotal || data.totalKgs || 0),
         items: {
-          create: (data.items || []).map((item: any) => ({
-            varietyCode: item.varietyCode,
-            noTrays: Number(item.noTrays) || 0,
-            trayKgs: (Number(item.noTrays) || 0) * 35,
-            loose: Number(item.loose) || 0,
-            totalKgs: (Number(item.noTrays) || 0) * 35 + (Number(item.loose) || 0),
-          })),
+          create: (data.items || []).map((item: any) => {
+            const trays = Number(item.noTrays) || 0;
+            const loose = Number(item.loose) || 0;
+            const totalKgs = trays * 35 + loose;
+
+            const pricePerKg = Number(item.pricePerKg) || 0;
+            const totalPrice = Number(item.totalPrice) || pricePerKg * totalKgs;
+
+            return {
+              varietyCode: item.varietyCode,
+              noTrays: trays,
+              trayKgs: trays * 35,
+              loose,
+              totalKgs,
+              pricePerKg,
+              totalPrice,
+            };
+          }),
         },
+
       },
       include: { items: true },
     });

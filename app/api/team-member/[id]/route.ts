@@ -1,3 +1,4 @@
+// app\api\team-member\[id]\route.ts  
 import prisma from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { apiHandler } from "@/utils/apiHandler";
@@ -19,6 +20,7 @@ export const GET = apiHandler(async (req: Request, context: any) => {
   );
 });
 
+
 export const PUT = apiHandler(async (req: Request, context: any) => {
   const { id } = await context.params;
   const body = await req.json();
@@ -30,8 +32,10 @@ export const PUT = apiHandler(async (req: Request, context: any) => {
   if (body.email) updateData.email = body.email;
   if (body.name) updateData.name = body.name;
   if (body.role) updateData.role = body.role;
-  if (body.password) {
-    updateData.password = await bcrypt.hash(body.password, 10);
+
+  // ✅ ONLY when password is provided (non-empty)
+  if (typeof body.password === "string" && body.password.trim().length > 0) {
+    updateData.password = await bcrypt.hash(body.password.trim(), 10);
   }
 
   const updatedUser = await prisma.user.update({

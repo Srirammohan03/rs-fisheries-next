@@ -79,25 +79,34 @@ export default function SalaryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {mode === "add" ? "Add Salary" : "Edit Salary"}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[560px] rounded-2xl border border-slate-200 bg-white shadow-xl p-0">
+        {/* Header */}
+        <div className="p-6 border-b border-slate-200">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-extrabold tracking-tight text-slate-900">
+              {mode === "add" ? "Add Salary" : "Edit Salary"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="mt-1 text-sm text-slate-500">
+            {mode === "add"
+              ? "Create a new salary entry for an employee."
+              : "Update salary amount and notes."}
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit(submitHandler)} className="space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit(submitHandler)} className="p-6 space-y-5">
           <Field label="Employee">
             <Select
               value={watch("userId")}
               onValueChange={(v) => setValue("userId", v)}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border-slate-200">
                 {users?.map((u: any) => (
-                  <SelectItem key={u.id} value={u.id}>
+                  <SelectItem key={u.id} value={u.id} className="py-3">
                     {u.name || u.email}
                   </SelectItem>
                 ))}
@@ -105,23 +114,50 @@ export default function SalaryDialog({
             </Select>
           </Field>
 
-          <Field label="Month">
-            <Input type="month" {...register("month")} />
-          </Field>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Month">
+              <Input
+                type="month"
+                {...register("month")}
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
 
-          <Field label="Amount">
-            <Input type="number" {...register("amount")} />
-          </Field>
+            <Field label="Amount">
+              <Input
+                type="number"
+                {...register("amount")}
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                placeholder="0"
+              />
+            </Field>
+          </div>
 
           <Field label="Notes">
-            <Textarea rows={4} {...register("notes")} />
+            <Textarea
+              rows={4}
+              {...register("notes")}
+              className="border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              placeholder="Add any notes (optional)"
+            />
           </Field>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose} type="button">
+          {/* Footer */}
+          <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              type="button"
+              className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
+            >
               {isLoading
                 ? mode === "add"
                   ? "Saving..."

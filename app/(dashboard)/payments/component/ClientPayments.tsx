@@ -204,6 +204,7 @@ export function ClientPayments() {
           disabled={
             isSubmitting || loadingClients || !selectedClientId || amount <= 0
           }
+          className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
         >
           <Save className="w-4 h-4 mr-2" />
           {isSubmitting ? "Saving..." : "Save Payment"}
@@ -212,134 +213,157 @@ export function ClientPayments() {
     >
       <div className="space-y-7">
         {/* Client + Date */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label className="text-base font-medium">
-              Client Name <span className="text-red-500">*</span>
-            </Label>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-base font-medium text-slate-700">
+                Client Name <span className="text-rose-600">*</span>
+              </Label>
 
-            <Select
-              value={selectedClientId}
-              onValueChange={handleClientChange}
-              disabled={loadingClients}
-            >
-              <SelectTrigger className="h-12">
-                <SelectValue
-                  placeholder={
-                    loadingClients ? "Loading..." : "Select a client"
-                  }
-                />
-              </SelectTrigger>
+              <Select
+                value={selectedClientId}
+                onValueChange={handleClientChange}
+                disabled={loadingClients}
+              >
+                <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                  <SelectValue
+                    placeholder={
+                      loadingClients ? "Loading..." : "Select a client"
+                    }
+                  />
+                </SelectTrigger>
 
-              <SelectContent>
-                {clients.length === 0 ? (
-                  <div className="px-6 py-4 text-center text-muted-foreground">
-                    No pending payments
-                  </div>
-                ) : (
-                  clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      <div className="flex justify-between items-center gap-3 w-full py-2">
-                        <span className="font-medium">{client.clientName}</span>
-                        <span className="text-lg font-bold">
-                          {formatCurrency(client.totalDue)}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+                <SelectContent className="border-slate-200">
+                  {clients.length === 0 ? (
+                    <div className="px-6 py-4 text-center text-slate-500">
+                      No pending payments
+                    </div>
+                  ) : (
+                    clients.map((client) => (
+                      <SelectItem
+                        key={client.id}
+                        value={client.id}
+                        className="py-3"
+                      >
+                        <div className="flex justify-between items-center gap-3 w-full">
+                          <span className="font-medium text-slate-800">
+                            {client.clientName}
+                          </span>
+                          <span className="text-sm font-semibold text-[#139BC3]">
+                            {formatCurrency(client.totalDue)}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
 
-            {selectedClient && (
-              <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200">
-                <p className="text-sm text-emerald-700">Total Due Amount:</p>
-                <p className="text-2xl font-bold text-emerald-600">
-                  {formatCurrency(selectedClient.totalDue)}
-                </p>
-              </div>
-            )}
+              {selectedClient && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium text-slate-600">
+                    Total Due Amount
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-600">
+                    {formatCurrency(selectedClient.totalDue)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Field label="Payment Date *">
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
           </div>
-
-          <Field label="Payment Date *">
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-12"
-              required
-            />
-          </Field>
         </div>
 
         {/* Amount */}
-        <Field label="Amount Received (₹) *">
-          <Input
-            type="number"
-            value={amount || ""}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-            placeholder="Enter amount"
-            min="1"
-            className="text-3xl font-bold"
-            required
-          />
-        </Field>
-
-        {/* Payment Mode */}
-        <div className="space-y-3">
-          <Label>Payment Mode</Label>
-          <div className="flex flex-wrap gap-4">
-            {(["cash", "ac", "upi", "cheque"] as PaymentMode[]).map((mode) => (
-              <Badge
-                key={mode}
-                variant={paymentMode === mode ? "default" : "outline"}
-                onClick={() => setPaymentMode(mode)}
-                className="px-6 py-3 text-base cursor-pointer select-none hover:scale-105 transition"
-              >
-                {mode === "cash" && "Cash"}
-                {mode === "ac" && "A/C Transfer"}
-                {mode === "upi" && "UPI / PhonePe"}
-                {mode === "cheque" && "Cheque"}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* Reference */}
-        {showReference && (
-          <Field
-            label={
-              paymentMode === "ac"
-                ? "Bank Reference / UTR No."
-                : paymentMode === "upi"
-                ? "UPI Transaction ID"
-                : "Cheque Number"
-            }
-          >
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <Field label="Amount Received (₹) *">
             <Input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="Enter reference number"
+              type="number"
+              value={amount || ""}
+              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              placeholder="Enter amount"
+              min="1"
+              required
+              className="h-12 border-slate-200 bg-white shadow-sm text-3xl font-bold focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
-        )}
+        </div>
+
+        {/* Payment Mode */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-3">
+          <Label className="text-slate-700">Payment Mode</Label>
+
+          <div className="flex flex-wrap gap-2">
+            {(["cash", "ac", "upi", "cheque"] as PaymentMode[]).map((mode) => {
+              const selected = paymentMode === mode;
+              return (
+                <Badge
+                  key={mode}
+                  onClick={() => setPaymentMode(mode)}
+                  className={[
+                    "cursor-pointer select-none px-4 py-2 rounded-full border transition shadow-sm",
+                    selected
+                      ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  {mode === "cash" && "Cash"}
+                  {mode === "ac" && "A/C Transfer"}
+                  {mode === "upi" && "UPI / PhonePe"}
+                  {mode === "cheque" && "Cheque"}
+                </Badge>
+              );
+            })}
+          </div>
+
+          {/* Reference */}
+          {showReference && (
+            <Field
+              label={
+                paymentMode === "ac"
+                  ? "Bank Reference / UTR No."
+                  : paymentMode === "upi"
+                  ? "UPI Transaction ID"
+                  : "Cheque Number"
+              }
+            >
+              <Input
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Enter reference number"
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
+          )}
+        </div>
 
         {/* Upload */}
-        <Field label="Upload Proof (Optional)">
-          <div className="flex items-center gap-4">
-            <Input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={handleFileChange}
-              className="flex-1"
-            />
-            {image && (
-              <Badge variant="outline" className="text-green-600">
-                {image.name}
-              </Badge>
-            )}
-          </div>
-        </Field>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <Field label="Upload Proof (Optional)">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleFileChange}
+                className="h-11 border-slate-200 bg-white shadow-sm flex-1 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-slate-700 hover:file:bg-slate-200"
+              />
+              {image && (
+                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {image.name}
+                </Badge>
+              )}
+            </div>
+          </Field>
+        </div>
       </div>
     </CardCustom>
   );

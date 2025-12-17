@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { VendorPayments } from "./component/VendorPayments";
 import { ClientPayments } from "./component/ClientPayments";
 import { EmployeePayments } from "./component/EmployeePayments";
 import { PackingAmount } from "./component/PackingAmount";
+
 type TabId = "vendor" | "client" | "employee" | "packing";
 
 function TabsRoot({
@@ -16,14 +17,14 @@ function TabsRoot({
   onValueChange: (v: TabId) => void;
   children: React.ReactNode;
 }) {
-  return <div>{children}</div>;
+  return <div data-value={value}>{children}</div>;
 }
 
 function TabsList({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="inline-flex items-center gap-2 p-1 bg-gray-100 rounded-2xl shadow-sm"
       role="tablist"
+      className="inline-flex items-center gap-1 rounded-2xl border border-slate-100 bg-gray-200 p-1 shadow-sm backdrop-blur "
     >
       {children}
     </div>
@@ -42,17 +43,29 @@ function TabsTrigger({
   children: React.ReactNode;
 }) {
   const isActive = value === activeValue;
+
   return (
     <button
+      type="button"
       role="tab"
       aria-selected={isActive}
       onClick={() => onClick(value)}
-      className={`px-6 py-2 rounded-full text-sm font-medium transition-shadow focus:outline-none ${
+      className={[
+        "relative rounded-xl px-5 py-2 text-sm font-semibold transition",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#139BC3]/35",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
         isActive
-          ? "bg-white shadow-md text-blue-600"
-          : "text-muted-foreground hover:bg-white/40"
-      }`}
+          ? "bg-white text-[#139BC3] shadow-sm border border-slate-200"
+          : "text-slate-600 hover:bg-slate-50",
+      ].join(" ")}
     >
+      {/* subtle active underline */}
+      <span
+        className={[
+          "pointer-events-none absolute inset-x-3 -bottom-[8px] h-[2px] rounded-full transition-opacity",
+          isActive ? "bg-[#139BC3] opacity-100" : "opacity-0",
+        ].join(" ")}
+      />
       {children}
     </button>
   );
@@ -75,38 +88,35 @@ export default function Payments() {
 
   return (
     <div className="space-y-6 p-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
             Payments
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-slate-500">
             Manage all payment transactions
           </p>
         </div>
 
-        {/* Main page tabs (pill style) */}
-        <div>
-          <TabsRoot value={tab} onValueChange={setTab}>
-            <TabsList>
-              <TabsTrigger value="vendor" activeValue={tab} onClick={setTab}>
-                Vendor Payments
-              </TabsTrigger>
-              <TabsTrigger value="client" activeValue={tab} onClick={setTab}>
-                Client Payments
-              </TabsTrigger>
-              <TabsTrigger value="employee" activeValue={tab} onClick={setTab}>
-                Employee Payments
-              </TabsTrigger>
-              <TabsTrigger value="packing" activeValue={tab} onClick={setTab}>
-                Packing Amount
-              </TabsTrigger>
-            </TabsList>
-          </TabsRoot>
-        </div>
+        {/* Tabs */}
+        <TabsRoot value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="vendor" activeValue={tab} onClick={setTab}>
+              Vendor Payments
+            </TabsTrigger>
+            <TabsTrigger value="client" activeValue={tab} onClick={setTab}>
+              Client Payments
+            </TabsTrigger>
+            <TabsTrigger value="employee" activeValue={tab} onClick={setTab}>
+              Employee Payments
+            </TabsTrigger>
+            <TabsTrigger value="packing" activeValue={tab} onClick={setTab}>
+              Packing Amount
+            </TabsTrigger>
+          </TabsList>
+        </TabsRoot>
       </header>
 
-      {/* Tab content */}
       <main className="w-full">
         <TabsContent activeValue={tab} value="vendor">
           <VendorPayments />

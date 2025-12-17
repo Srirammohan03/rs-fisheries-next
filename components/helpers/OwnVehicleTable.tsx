@@ -131,65 +131,16 @@ export function OwnVehicleTable() {
   if (isLoading) return <p>Loading...</p>;
 
   return (
-    <div className="p-4 border rounded-lg bg-white shadow">
-      <h2 className="text-xl font-semibold mb-3">Own Vehicles</h2>
-      <div className="flex flex-wrap gap-4 mb-4">
-        {/* Search */}
-        <Input
-          className="w-60"
-          placeholder="Search vehicle / driver / manufacturer"
-          value={filters.search}
-          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-        />
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between p-6 border-b border-slate-200">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Own Vehicles</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Search, filter and manage your fleet
+          </p>
+        </div>
 
-        {/* Fuel Type */}
-        <Select
-          value={filters.fuelType}
-          onValueChange={(v) => setFilters({ ...filters, fuelType: v })}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Fuel Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All</SelectItem>
-            <SelectItem value="DIESEL">Diesel</SelectItem>
-            <SelectItem value="PETROL">Petrol</SelectItem>
-            <SelectItem value="CNG">CNG</SelectItem>
-            <SelectItem value="ELECTRIC">Electric</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Driver Assignment */}
-        <Select
-          value={filters.assigned}
-          onValueChange={(v) => setFilters({ ...filters, assigned: v })}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Driver" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All</SelectItem>
-            <SelectItem value="ASSIGNED">Assigned</SelectItem>
-            <SelectItem value="AVAILABLE">Available</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Sort By */}
-        <Select
-          value={filters.sortBy}
-          onValueChange={(v) => setFilters((p) => ({ ...p, sortBy: v }))}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="NONE">None</SelectItem>
-            <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
-            <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Clear Filters */}
         <Button
           variant="outline"
           onClick={() =>
@@ -200,11 +151,96 @@ export function OwnVehicleTable() {
               sortBy: "NONE",
             })
           }
+          className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
         >
           Clear Filters
         </Button>
       </div>
-      <DataTable columns={columns} data={filtered} />
+
+      {/* Filters */}
+      <div className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
+          {/* Search */}
+          <div className="lg:col-span-4">
+            <Input
+              className="h-11 w-full border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              placeholder="Search vehicle / driver / manufacturer"
+              value={filters.search}
+              onChange={(e) =>
+                setFilters({ ...filters, search: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Fuel Type */}
+          <div className="lg:col-span-2">
+            <Select
+              value={filters.fuelType}
+              onValueChange={(v) => setFilters({ ...filters, fuelType: v })}
+            >
+              <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                <SelectValue placeholder="Fuel Type" />
+              </SelectTrigger>
+              <SelectContent className="border-slate-200">
+                <SelectItem value="ALL">All</SelectItem>
+                <SelectItem value="DIESEL">Diesel</SelectItem>
+                <SelectItem value="PETROL">Petrol</SelectItem>
+                <SelectItem value="CNG">CNG</SelectItem>
+                <SelectItem value="ELECTRIC">Electric</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Driver Assignment */}
+          <div className="lg:col-span-2">
+            <Select
+              value={filters.assigned}
+              onValueChange={(v) => setFilters({ ...filters, assigned: v })}
+            >
+              <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                <SelectValue placeholder="Driver" />
+              </SelectTrigger>
+              <SelectContent className="border-slate-200">
+                <SelectItem value="ALL">All</SelectItem>
+                <SelectItem value="ASSIGNED">Assigned</SelectItem>
+                <SelectItem value="AVAILABLE">Available</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Sort By */}
+          <div className="lg:col-span-2">
+            <Select
+              value={filters.sortBy}
+              onValueChange={(v) => setFilters((p) => ({ ...p, sortBy: v }))}
+            >
+              <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent className="border-slate-200">
+                <SelectItem value="NONE">None</SelectItem>
+                <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
+                <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Spacer / actions on large */}
+          <div className="lg:col-span-2 flex items-center justify-start lg:justify-end">
+            <div className="text-xs text-slate-500">
+              Showing{" "}
+              <span className="font-semibold text-slate-900">
+                {filtered.length}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
+          <DataTable columns={columns} data={filtered} />
+        </div>
+      </div>
     </div>
   );
 }

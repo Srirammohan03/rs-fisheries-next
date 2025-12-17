@@ -127,152 +127,190 @@ export function PackingAmount() {
     <CardCustom title="Packing Amount">
       <div className="space-y-6">
         {/* Mode Toggle */}
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-3">
           <Button
-            variant={mode === "loading" ? "default" : "outline"}
+            variant="outline"
             onClick={() => setMode("loading")}
             size="sm"
+            className={[
+              "h-9 px-4 rounded-full border transition shadow-sm",
+              mode === "loading"
+                ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+            ].join(" ")}
           >
             Loading
           </Button>
+
           <Button
-            variant={mode === "unloading" ? "default" : "outline"}
+            variant="outline"
             onClick={() => setMode("unloading")}
             size="sm"
+            className={[
+              "h-9 px-4 rounded-full border transition shadow-sm",
+              mode === "unloading"
+                ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+            ].join(" ")}
           >
             Unloading
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Field label={mode === "loading" ? "Client Bill" : "Vendor Bill"}>
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-sm">
-                <Loader2 className="animate-spin h-4 w-4" />
-                Loading...
-              </div>
-            ) : (
-              <Select value={selectedBillId} onValueChange={setSelectedBillId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select bill (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {bills.map((bill) => (
-                    <SelectItem key={bill.id} value={bill.id}>
-                      {bill.billNo} —{" "}
-                      {bill.clientName ||
-                        bill.FarmerName ||
-                        bill.agentName ||
-                        "Unknown"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </Field>
+        {/* Main Form Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Field label={mode === "loading" ? "Client Bill" : "Vendor Bill"}>
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Loader2 className="animate-spin h-4 w-4" />
+                  Loading...
+                </div>
+              ) : (
+                <Select
+                  value={selectedBillId}
+                  onValueChange={setSelectedBillId}
+                >
+                  <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                    <SelectValue placeholder="Select bill (optional)" />
+                  </SelectTrigger>
+                  <SelectContent className="border-slate-200">
+                    {bills.map((bill) => (
+                      <SelectItem
+                        key={bill.id}
+                        value={bill.id}
+                        className="py-3"
+                      >
+                        {bill.billNo} —{" "}
+                        {bill.clientName ||
+                          bill.FarmerName ||
+                          bill.agentName ||
+                          "Unknown"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
 
-          <Field label="Number of Workers">
-            <Input
-              type="number"
-              value={workers}
-              onChange={(e) => setWorkers(e.target.value)}
-              placeholder="e.g. 8"
-              min="1"
-            />
-          </Field>
+            <Field label="Number of Workers">
+              <Input
+                type="number"
+                value={workers}
+                onChange={(e) => setWorkers(e.target.value)}
+                placeholder="e.g. 8"
+                min="1"
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
 
-          <Field label="Temperature (°C)">
-            <Input
-              type="number"
-              step="0.1"
-              value={temperature}
-              onChange={(e) => setTemperature(e.target.value)}
-              placeholder="e.g. 24.5"
-            />
-          </Field>
-        </div>
-
-        <Field label="Total Packing Amount (₹)">
-          <Input
-            type="number"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            placeholder="Enter total amount"
-            className="text-2xl font-bold"
-            min="0"
-            step="100"
-          />
-        </Field>
-
-        {/* Payment Mode */}
-        <div className="space-y-3">
-          <Label>Payment Mode</Label>
-          <div className="flex flex-wrap gap-4">
-            {(["CASH", "AC", "UPI", "CHEQUE"] as const).map((pm) => (
-              <Badge
-                key={pm}
-                variant={paymentMode === pm ? "default" : "outline"}
-                onClick={() => {
-                  setPaymentMode(pm);
-                  if (pm === "CASH") setReference("");
-                }}
-                className="px-6 py-3 text-base font-medium cursor-pointer select-none hover:scale-105 transition"
-              >
-                {pm === "CASH" && "Cash"}
-                {pm === "AC" && "A/C Transfer"}
-                {pm === "UPI" && "UPI / PhonePe"}
-                {pm === "CHEQUE" && "Cheque"}
-              </Badge>
-            ))}
+            <Field label="Temperature (°C)">
+              <Input
+                type="number"
+                step="0.1"
+                value={temperature}
+                onChange={(e) => setTemperature(e.target.value)}
+                placeholder="e.g. 24.5"
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
           </div>
-        </div>
 
-        {/* Reference Field */}
-        {showReference && (
-          <Field
-            label={
-              paymentMode === "AC"
-                ? "Bank Reference / UTR No. *"
-                : paymentMode === "UPI"
-                ? "UPI Transaction ID *"
-                : "Cheque Number *"
-            }
-          >
+          <Field label="Total Packing Amount (₹)">
             <Input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="Enter reference"
-              className="h-12"
+              type="number"
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+              placeholder="Enter total amount"
+              min="0"
+              step="100"
+              className="h-12 border-slate-200 bg-white shadow-sm text-2xl font-bold focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
-        )}
 
-        {/* Buttons */}
-        <div className="flex gap-4 pt-4">
-          <Button onClick={handleSave} disabled={isSaving} size="lg">
-            {isSaving ? (
-              <>Saving...</>
-            ) : (
-              <>
-                <Save className="mr-2 h-5 w-5" />
-                Save Packing Amount
-              </>
-            )}
-          </Button>
+          {/* Payment Mode */}
+          <div className="space-y-3">
+            <Label className="text-slate-700">Payment Mode</Label>
+            <div className="flex flex-wrap gap-2">
+              {(["CASH", "AC", "UPI", "CHEQUE"] as const).map((pm) => {
+                const selected = paymentMode === pm;
+                return (
+                  <Badge
+                    key={pm}
+                    onClick={() => {
+                      setPaymentMode(pm);
+                      if (pm === "CASH") setReference("");
+                    }}
+                    className={[
+                      "cursor-pointer select-none px-4 py-2 rounded-full border transition shadow-sm",
+                      selected
+                        ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    {pm === "CASH" && "Cash"}
+                    {pm === "AC" && "A/C Transfer"}
+                    {pm === "UPI" && "UPI / PhonePe"}
+                    {pm === "CHEQUE" && "Cheque"}
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
 
-          <Button
-            variant="outline"
-            onClick={() => {
-              setWorkers("");
-              setTemperature("");
-              setTotal("0");
-              setSelectedBillId("");
-              setPaymentMode("CASH");
-              setReference("");
-            }}
-          >
-            Reset
-          </Button>
+          {/* Reference Field */}
+          {showReference && (
+            <Field
+              label={
+                paymentMode === "AC"
+                  ? "Bank Reference / UTR No. *"
+                  : paymentMode === "UPI"
+                  ? "UPI Transaction ID *"
+                  : "Cheque Number *"
+              }
+            >
+              <Input
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Enter reference"
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
+          )}
+
+          {/* Buttons */}
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              size="lg"
+              className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
+            >
+              {isSaving ? (
+                <>Saving...</>
+              ) : (
+                <>
+                  <Save className="mr-2 h-5 w-5" />
+                  Save Packing Amount
+                </>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setWorkers("");
+                setTemperature("");
+                setTotal("0");
+                setSelectedBillId("");
+                setPaymentMode("CASH");
+                setReference("");
+              }}
+              className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+            >
+              Reset
+            </Button>
+          </div>
         </div>
       </div>
     </CardCustom>

@@ -300,248 +300,351 @@ export function VendorPayments() {
     <CardCustom
       title="Vendor Payments"
       actions={
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button
             onClick={handleSave}
             disabled={saveMutation.isPending || loadingVendors}
+            className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
           >
             <Save className="w-4 h-4 mr-2" />
             {saveMutation.isPending ? "Saving..." : "Save Payment"}
           </Button>
-          <Button variant="outline" onClick={handleReset}>
+
+          <Button
+            variant="outline"
+            onClick={handleReset}
+            className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+          >
             <RotateCcw className="w-4 h-4 mr-2" />
             Reset
           </Button>
         </div>
       }
     >
-      <div className="space-y-8 py-6 max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
-          <div className="space-y-2">
-            <Label>Vendor (Farmer / Agent)</Label>
-            <Select
-              value={vendorId}
-              onValueChange={setVendorId}
-              disabled={loadingVendors}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={loadingVendors ? "Loading..." : "Select vendor"}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {vendorData.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    <div className="flex justify-between items-center w-full gap-4">
-                      <span className="font-medium">{v.name}</span>
-                      <Badge variant="secondary">{v.source}</Badge>
-                      <span className="text-sm font-bold text-blue-600">
-                        {currency(v.totalDue)}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">Total Due</p>
-            <p className="text-3xl font-bold text-blue-700">
-              {currency(totalDue)}
-            </p>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">Remaining</p>
-            <p className="text-3xl font-bold text-green-600">
-              {currency(remaining)}
-            </p>
-          </div>
-        </div>
-
-        <hr className="border-gray-300" />
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="space-y-2">
-            <Label>Date</Label>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Amount</Label>
-            <Input
-              type="text"
-              value={amount}
-              onChange={(e) =>
-                /^\d*\.?\d*$/.test(e.target.value) && setAmount(e.target.value)
-              }
-              placeholder="100000"
-              className="font-mono text-lg"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Payment Mode</Label>
-            <div className="flex flex-wrap gap-3">
-              {(["cash", "ac", "upi", "cheque"] as const).map((m) => (
-                <Badge
-                  key={m}
-                  variant={paymentMode === m ? "default" : "outline"}
-                  className="cursor-pointer px-5 py-2"
-                  onClick={() => setPaymentMode(m)}
+      <div className="py-6">
+        <div className="max-w-6xl mx-auto space-y-8">
+          {/* Top section */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+              {/* Vendor Select */}
+              <div className="lg:col-span-6 space-y-2">
+                <Label className="text-slate-700">
+                  Vendor (Farmer / Agent)
+                </Label>
+                <Select
+                  value={vendorId}
+                  onValueChange={setVendorId}
+                  disabled={loadingVendors}
                 >
-                  {m === "ac"
-                    ? "A/C Transfer"
-                    : m === "upi"
-                    ? "UPI/PhonePe"
-                    : m.charAt(0).toUpperCase() + m.slice(1)}
-                </Badge>
-              ))}
+                  <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                    <SelectValue
+                      placeholder={
+                        loadingVendors ? "Loading..." : "Select vendor"
+                      }
+                    />
+                  </SelectTrigger>
+
+                  <SelectContent className="border-slate-200">
+                    {vendorData.map((v) => (
+                      <SelectItem key={v.id} value={v.id} className="py-3">
+                        <div className="flex justify-between items-center w-full gap-4">
+                          <div className="min-w-0">
+                            <span className="font-medium text-slate-800 truncate">
+                              {v.name}
+                            </span>
+                          </div>
+
+                          <Badge
+                            variant="secondary"
+                            className="bg-slate-100 text-slate-700 border border-slate-200"
+                          >
+                            {v.source}
+                          </Badge>
+
+                          <span className="text-sm font-semibold text-[#139BC3]">
+                            {currency(v.totalDue)}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Totals */}
+              <div className="lg:col-span-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p className="text-xs font-medium text-slate-600">
+                    Total Due
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-slate-900">
+                    {currency(totalDue)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="lg:col-span-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p className="text-xs font-medium text-slate-600">
+                    Remaining
+                  </p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-600">
+                    {currency(remaining)}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Payment Details (Optional)</Label>
-            <Input
-              placeholder="Any note"
-              value={paymentdetails}
-              onChange={(e) => setPaymentdetails(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {paymentMode !== "ac" && (
-          <div className="bg-gray-50 p-6 rounded-xl border">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Form */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               <div className="space-y-2">
-                <Label>
-                  Reference No <span className="text-red-600">*</span>
-                </Label>
+                <Label className="text-slate-700">Date</Label>
                 <Input
-                  placeholder="e.g. PAY2025-001"
-                  value={referenceNo}
-                  onChange={(e) => setReferenceNo(e.target.value)}
-                  className="font-mono"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>
-                  {paymentMode === "upi"
-                    ? "UPI Transaction ID"
-                    : paymentMode === "cheque"
-                    ? "Cheque Number"
-                    : "Cash Receipt No"}
-                  {paymentMode !== "cash" && (
-                    <span className="text-red-600">*</span>
-                  )}
-                </Label>
+                <Label className="text-slate-700">Amount</Label>
                 <Input
-                  placeholder={
-                    paymentMode === "upi" ? "UTR / TXN ID" : "123456"
+                  type="text"
+                  value={amount}
+                  onChange={(e) =>
+                    /^\d*\.?\d*$/.test(e.target.value) &&
+                    setAmount(e.target.value)
                   }
-                  value={paymentRef}
-                  onChange={(e) => setPaymentRef(e.target.value)}
-                  className="font-mono"
+                  placeholder="100000"
+                  className="h-11 border-slate-200 bg-white shadow-sm font-mono text-lg focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
                 />
               </div>
-            </div>
-          </div>
-        )}
 
-        {paymentMode === "ac" && (
-          <div className="border rounded-xl p-8">
-            <h3 className="text-xl font-bold mb-6">Bank Transfer Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label>Account Number</Label>
-                <Input
-                  type="text"
-                  value={accNo}
-                  onChange={(e) => setAccNo(e.target.value)}
-                  className="font-mono"
-                />
+                <Label className="text-slate-700">Payment Mode</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["cash", "ac", "upi", "cheque"] as const).map((m) => {
+                    const selected = paymentMode === m;
+                    return (
+                      <Badge
+                        key={m}
+                        onClick={() => setPaymentMode(m)}
+                        className={[
+                          "cursor-pointer select-none px-4 py-2 rounded-full border transition",
+                          selected
+                            ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+                        ].join(" ")}
+                      >
+                        {m === "ac"
+                          ? "A/C Transfer"
+                          : m === "upi"
+                          ? "UPI/PhonePe"
+                          : m.charAt(0).toUpperCase() + m.slice(1)}
+                      </Badge>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>IFSC Code</Label>
-                <Input
-                  type="text"
-                  value={ifsc}
-                  onChange={(e) => setIfsc(e.target.value.toUpperCase())}
-                  className="uppercase"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Bank Name</Label>
-                <Input
-                  type="text"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Branch Address</Label>
-                <Input
-                  type="text"
-                  value={bankAddress}
-                  onChange={(e) => setBankAddress(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
-        <div>
-          <Label className="text-lg font-semibold">Payment Type</Label>
-          <div className="flex gap-8 items-center mt-4">
-            <div className="flex gap-3">
-              <Badge
-                variant={!isPartialPayment ? "default" : "outline"}
-                className="cursor-pointer px-8 py-2 text-md"
-                onClick={() => setIsPartialPayment(false)}
-              >
-                Full Payment
-              </Badge>
-              <Badge
-                variant={isPartialPayment ? "default" : "outline"}
-                className="cursor-pointer px-10 py-4 text-md"
-                onClick={() => setIsPartialPayment(true)}
-              >
-                Partial Payment
-              </Badge>
+              <div className="space-y-2">
+                <Label className="text-slate-700">
+                  Payment Details (Optional)
+                </Label>
+                <Input
+                  placeholder="Any note"
+                  value={paymentdetails}
+                  onChange={(e) => setPaymentdetails(e.target.value)}
+                  className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                />
+              </div>
             </div>
-            {isPartialPayment && (
-              <span className="text-lg font-medium">
-                Paying {currency(Number(amount) || 0)} of {currency(totalDue)}
-              </span>
+
+            {/* Conditional fields */}
+            {paymentMode !== "ac" && (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">
+                      Reference No <span className="text-rose-600">*</span>
+                    </Label>
+                    <Input
+                      placeholder="e.g. PAY2025-001"
+                      value={referenceNo}
+                      onChange={(e) => setReferenceNo(e.target.value)}
+                      className="h-11 border-slate-200 bg-white shadow-sm font-mono focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">
+                      {paymentMode === "upi"
+                        ? "UPI Transaction ID"
+                        : paymentMode === "cheque"
+                        ? "Cheque Number"
+                        : "Cash Receipt No"}
+                      {paymentMode !== "cash" && (
+                        <span className="text-rose-600"> *</span>
+                      )}
+                    </Label>
+                    <Input
+                      placeholder={
+                        paymentMode === "upi" ? "UTR / TXN ID" : "123456"
+                      }
+                      value={paymentRef}
+                      onChange={(e) => setPaymentRef(e.target.value)}
+                      className="h-11 border-slate-200 bg-white shadow-sm font-mono focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                    />
+                  </div>
+                </div>
+              </div>
             )}
-          </div>
-        </div>
 
-        <div className="p-8 rounded-2xl border">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
-            <div>
-              <p className="text-sm">Total Due</p>
-              <p className="text-2xl font-bold">{currency(totalDue)}</p>
+            {paymentMode === "ac" && (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Bank Transfer Details
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    Fill only if A/C Transfer selected
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">Account Number</Label>
+                    <Input
+                      type="text"
+                      value={accNo}
+                      onChange={(e) => setAccNo(e.target.value)}
+                      className="h-11 border-slate-200 bg-white shadow-sm font-mono focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">IFSC Code</Label>
+                    <Input
+                      type="text"
+                      value={ifsc}
+                      onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+                      className="h-11 border-slate-200 bg-white shadow-sm uppercase focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">Bank Name</Label>
+                    <Input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">Branch Address</Label>
+                    <Input
+                      type="text"
+                      value={bankAddress}
+                      onChange={(e) => setBankAddress(e.target.value)}
+                      className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment type */}
+            <div className="mt-8">
+              <Label className="text-base font-semibold text-slate-900">
+                Payment Type
+              </Label>
+
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4 mt-3">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPartialPayment(false)}
+                    className={[
+                      "px-5 py-2 rounded-full border text-sm font-semibold transition",
+                      !isPartialPayment
+                        ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    Full Payment
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPartialPayment(true)}
+                    className={[
+                      "px-5 py-2 rounded-full border text-sm font-semibold transition",
+                      isPartialPayment
+                        ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    Partial Payment
+                  </button>
+                </div>
+
+                {isPartialPayment && (
+                  <div className="text-sm text-slate-700">
+                    Paying{" "}
+                    <span className="font-semibold text-slate-900">
+                      {currency(Number(amount) || 0)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-slate-900">
+                      {currency(totalDue)}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-sm">Paid</p>
-              <p className="text-2xl font-bold">{currency(paidAmount)}</p>
-            </div>
-            <div>
-              <p className="text-sm">Remaining</p>
-              <p className="text-2xl font-bold">{currency(remaining)}</p>
-            </div>
-            <div>
-              <p className="text-sm">Paying Now</p>
-              <p className="text-2xl font-bold">
-                {currency(Number(amount) || 0)}
-              </p>
+
+            {/* Summary */}
+            <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                  <p className="text-xs font-medium text-slate-600">
+                    Total Due
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">
+                    {currency(totalDue)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                  <p className="text-xs font-medium text-slate-600">Paid</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">
+                    {currency(paidAmount)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                  <p className="text-xs font-medium text-slate-600">
+                    Remaining
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-emerald-600">
+                    {currency(remaining)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                  <p className="text-xs font-medium text-slate-600">
+                    Paying Now
+                  </p>
+                  <p className="mt-1 text-xl font-bold text-[#139BC3]">
+                    {currency(Number(amount) || 0)}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -18,23 +18,22 @@ import {
 } from "recharts";
 
 function money(n: number) {
-  // ₹ format (simple)
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`;
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
-  return `₹${Math.round(n)}`;
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Number(n || 0));
 }
 
-// Light Blue theme (charts + UI helpers)
 const CHART = {
-  sales: "#2563EB", // blue-600
-  purchase: "#60A5FA", // blue-400
-  accent: "#0EA5E9", // sky-500 (optional)
-  grid: "#E2E8F0", // slate-200
+  sales: "#139BC3",
+  purchase: "#60A5FA",
+  grid: "#E2E8F0",
   tooltipBg: "#FFFFFF",
-  tooltipBorder: "#BFDBFE", // blue-200
-  text: "#0F172A", // slate-900
-  muted: "#64748B", // slate-500
-  pie: ["#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE", "#DBEAFE"],
+  tooltipBorder: "#E2E8F0",
+  text: "#0F172A",
+  muted: "#64748B",
+  pie: ["#139BC3", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE", "#DBEAFE"],
 };
 
 export default function DashboardClient({ data }: { data: DashboardMetrics }) {
@@ -59,17 +58,17 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
       background: CHART.tooltipBg,
       borderColor: CHART.tooltipBorder,
       borderRadius: 12,
+      boxShadow: "0 10px 25px rgba(15, 23, 42, 0.08)",
     } as const,
     labelStyle: { color: CHART.text } as const,
     itemStyle: { color: CHART.text } as const,
-    cursor: { fill: "rgba(96,165,250,0.12)" }, // soft light-blue hover
+    cursor: { fill: "rgba(19,155,195,0.10)" },
   };
 
   return (
     <div className="space-y-6">
-      {/* Today at a glance */}
-      <Card className="rounded-2xl border-blue-100 bg-blue-50/40">
-        <CardHeader>
+      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="pb-2">
           <CardTitle className="text-slate-900">Today at a Glance</CardTitle>
         </CardHeader>
         <CardContent>
@@ -86,9 +85,8 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Weekly Overview (Bar) */}
-        <Card className="rounded-2xl border-blue-100 bg-blue-50/30 lg:col-span-2">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
+          <CardHeader className="pb-2">
             <CardTitle className="text-slate-900">Weekly Overview</CardTitle>
           </CardHeader>
           <CardContent className="h-[320px]">
@@ -122,9 +120,8 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
-        {/* Top Varieties Pie */}
-        <Card className="rounded-2xl border-blue-100 bg-blue-50/30">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-2">
             <CardTitle className="text-slate-900">
               Top Varieties by Qty (This week)
             </CardTitle>
@@ -154,9 +151,8 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
-        {/* Sales vs Stock Movement (Line) */}
-        <Card className="rounded-2xl border-blue-100 bg-blue-50/30 lg:col-span-2">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
+          <CardHeader className="pb-2">
             <CardTitle className="text-slate-900">
               Sales vs Stock Movement
             </CardTitle>
@@ -194,16 +190,15 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
-        {/* Outstanding Ageing */}
-        <Card className="rounded-2xl border-blue-100 bg-blue-50/30">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-2">
             <CardTitle className="text-slate-900">Outstanding Ageing</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {ageingData.map((a) => (
               <div
                 key={a.bucket}
-                className="flex items-center justify-between rounded-xl border border-blue-100 bg-white/70 px-3 py-2"
+                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
               >
                 <div className="text-sm text-slate-600">{a.bucket}</div>
                 <div className="font-semibold text-slate-900">
@@ -214,16 +209,15 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
-        {/* Fish varieties chips */}
-        <Card className="rounded-2xl border-blue-100 bg-blue-50/30 lg:col-span-3">
-          <CardHeader>
+        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-slate-900">Fish Varieties</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {data.fishVarieties.map((v) => (
               <span
                 key={v.code}
-                className="px-3 py-1 rounded-full border border-blue-200 bg-white/70 text-sm text-slate-800"
+                className="px-3 py-1 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-800"
                 title={v.name}
               >
                 {v.code}
@@ -238,9 +232,10 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
 
 function Kpi({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-blue-100 bg-white/70 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div className="text-sm text-slate-600">{title}</div>
-      <div className="text-2xl font-semibold mt-1 text-slate-900">{value}</div>
+      <div className="text-2xl font-extrabold mt-1 text-slate-900">{value}</div>
+      <div className="mt-2 h-1 w-10 rounded-full bg-[#139BC3]" />
     </div>
   );
 }

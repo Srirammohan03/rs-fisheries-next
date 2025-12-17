@@ -101,72 +101,121 @@ export default function UserPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">User Management</h2>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">
+            User Management
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage users, roles and access permissions
+          </p>
+        </div>
+
         <Button
           onClick={() => {
             setMode("add");
             setSelectedUser(null);
             setOpenDialog(true);
           }}
+          className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
         >
           Add User
         </Button>
       </div>
 
-      <div className="border border-gray-300 rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Created At</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
+      {/* Table Card */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="p-4 md:p-6">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/80">
+                  <TableHead className="font-semibold text-slate-700">
+                    Email
+                  </TableHead>
+                  <TableHead className="font-semibold text-slate-700">
+                    Name
+                  </TableHead>
+                  <TableHead className="font-semibold text-slate-700">
+                    Role
+                  </TableHead>
+                  <TableHead className="font-semibold text-slate-700">
+                    Created At
+                  </TableHead>
+                  <TableHead className="text-right font-semibold text-slate-700">
+                    Actions
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
 
-          <TableBody>
-            {users?.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>{user.name}</TableCell>
-                <TableCell className="capitalize">{user.role}</TableCell>
-                <TableCell>
-                  {new Date(user.createdAt).toLocaleDateString()}
-                </TableCell>
-
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => {
-                        setMode("edit");
-                        setSelectedUser(user);
-                        setOpenDialog(true);
-                      }}
+              <TableBody>
+                {users?.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="text-center py-10 text-slate-500"
                     >
-                      <Pencil size={16} />
-                    </Button>
+                      No users found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  users?.map((user) => (
+                    <TableRow key={user.id} className="hover:bg-slate-50/60">
+                      <TableCell className="text-slate-800">
+                        {user.email}
+                      </TableCell>
 
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setOpenDeleteDialog(true);
-                      }}
-                    >
-                      <Trash size={16} />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                      <TableCell className="font-medium text-slate-900">
+                        {user.name || "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 capitalize">
+                          {user.role}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-slate-600">
+                        {new Date(user.createdAt).toLocaleDateString("en-IN")}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+                            onClick={() => {
+                              setMode("edit");
+                              setSelectedUser(user);
+                              setOpenDialog(true);
+                            }}
+                          >
+                            <Pencil size={16} />
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="shadow-sm"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setOpenDeleteDialog(true);
+                            }}
+                          >
+                            <Trash size={16} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
 
       {/* ADD / EDIT USER DIALOG */}

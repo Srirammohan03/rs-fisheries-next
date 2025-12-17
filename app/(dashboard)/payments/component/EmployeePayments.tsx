@@ -173,6 +173,7 @@ export function EmployeePayments() {
             !selectedEmployeeId ||
             amount <= 0
           }
+          className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
         >
           <Save className="w-4 h-4 mr-2" />
           {isSubmitting ? "Saving..." : "Pay Salary"}
@@ -181,134 +182,146 @@ export function EmployeePayments() {
     >
       <div className="space-y-7">
         {/* Employee + Date */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <Label className="text-base font-medium">
-              Employee Name <span className="text-red-500">*</span>
-            </Label>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <Label className="text-base font-medium text-slate-700">
+                Employee Name <span className="text-rose-600">*</span>
+              </Label>
 
-            <Select
-              value={selectedEmployeeId}
-              onValueChange={handleEmployeeChange}
-              disabled={loadingEmployees}
-            >
-              <SelectTrigger className="h-12">
-                <SelectValue
-                  placeholder={
-                    loadingEmployees ? "Loading..." : "Select employee"
-                  }
-                />
-              </SelectTrigger>
+              <Select
+                value={selectedEmployeeId}
+                onValueChange={handleEmployeeChange}
+                disabled={loadingEmployees}
+              >
+                <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                  <SelectValue
+                    placeholder={
+                      loadingEmployees ? "Loading..." : "Select employee"
+                    }
+                  />
+                </SelectTrigger>
 
-              <SelectContent>
-                {employees.length === 0 ? (
-                  <div className="px-6 py-4 text-center text-sm text-muted-foreground">
-                    No pending salaries
-                  </div>
-                ) : (
-                  employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      <div className="flex items-center justify-between w-full gap-3 py-2">
-                        <div className="flex flex-col leading-tight">
-                          <span className="font-medium text-sm">
-                            {emp.name}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground capitalize">
-                            {emp.role}
+                <SelectContent className="border-slate-200">
+                  {employees.length === 0 ? (
+                    <div className="px-6 py-4 text-center text-sm text-slate-500">
+                      No pending salaries
+                    </div>
+                  ) : (
+                    employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id} className="py-3">
+                        <div className="flex items-center justify-between w-full gap-3">
+                          <div className="flex flex-col leading-tight min-w-0">
+                            <span className="font-medium text-sm text-slate-800 truncate">
+                              {emp.name}
+                            </span>
+                            <span className="text-[11px] text-slate-500 capitalize truncate">
+                              {emp.role}
+                            </span>
+                          </div>
+
+                          <span className="text-sm font-semibold text-[#139BC3] whitespace-nowrap">
+                            {formatCurrency(emp.pendingSalary)}
                           </span>
                         </div>
-                        <span className="text-base font-bold  whitespace-nowrap">
-                          {formatCurrency(emp.pendingSalary)}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
 
-            {selectedEmployee && (
-              <div className="mt-5 p-5 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 rounded-xl border border-orange-200">
-                <p className="text-sm font-medium text-orange-700">
-                  Total Pending Salary
-                </p>
-                <p className="text-3xl font-bold text-orange-600 mt-1">
-                  {formatCurrency(selectedEmployee.pendingSalary)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {selectedEmployee.name} ({selectedEmployee.role})
-                </p>
-              </div>
-            )}
+              {selectedEmployee && (
+                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-xs font-medium text-slate-600">
+                    Total Pending Salary
+                  </p>
+                  <p className="mt-1 text-3xl font-bold text-emerald-600">
+                    {formatCurrency(selectedEmployee.pendingSalary)}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {selectedEmployee.name} ({selectedEmployee.role})
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Field label="Payment Date *">
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
           </div>
-
-          <Field label="Payment Date *">
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-12"
-              required
-            />
-          </Field>
         </div>
 
         {/* Amount */}
-        <Field label="Amount Paid (₹) *">
-          <Input
-            type="number"
-            value={amount || ""}
-            onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-            placeholder="0"
-            min="1"
-            className="text-3xl font-bold "
-            required
-          />
-        </Field>
-
-        {/* Payment Mode */}
-        <div className="space-y-3">
-          <Label>Payment Mode</Label>
-          <div className="flex flex-wrap gap-4">
-            {(["cash", "ac", "upi", "cheque"] as const).map((mode) => (
-              <Badge
-                key={mode}
-                variant={paymentMode === mode ? "default" : "outline"}
-                onClick={() => {
-                  setPaymentMode(mode);
-                  if (mode === "cash") setReference(""); // auto clear reference if cash
-                }}
-                className="px-6 py-3 text-base font-medium cursor-pointer select-none hover:scale-105 transition"
-              >
-                {mode === "cash" && "Cash"}
-                {mode === "ac" && "A/C Transfer"}
-                {mode === "upi" && "UPI / PhonePe"}
-                {mode === "cheque" && "Cheque"}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* Reference Number - Only if not Cash */}
-        {showReference && (
-          <Field
-            label={
-              paymentMode === "ac"
-                ? "Bank Reference / UTR No. *"
-                : paymentMode === "upi"
-                ? "UPI Transaction ID *"
-                : "Cheque Number *"
-            }
-          >
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
+          <Field label="Amount Paid (₹) *">
             <Input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="Enter reference number"
-              className="h-12"
+              type="number"
+              value={amount || ""}
+              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              placeholder="0"
+              min="1"
               required
+              className="h-12 border-slate-200 bg-white shadow-sm text-3xl font-bold focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
-        )}
+        </div>
+
+        {/* Payment Mode + Reference */}
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-4">
+          <Label className="text-slate-700">Payment Mode</Label>
+
+          <div className="flex flex-wrap gap-2">
+            {(["cash", "ac", "upi", "cheque"] as const).map((mode) => {
+              const selected = paymentMode === mode;
+              return (
+                <Badge
+                  key={mode}
+                  onClick={() => {
+                    setPaymentMode(mode);
+                    if (mode === "cash") setReference("");
+                  }}
+                  className={[
+                    "cursor-pointer select-none px-4 py-2 rounded-full border transition shadow-sm",
+                    selected
+                      ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  {mode === "cash" && "Cash"}
+                  {mode === "ac" && "A/C Transfer"}
+                  {mode === "upi" && "UPI / PhonePe"}
+                  {mode === "cheque" && "Cheque"}
+                </Badge>
+              );
+            })}
+          </div>
+
+          {showReference && (
+            <Field
+              label={
+                paymentMode === "ac"
+                  ? "Bank Reference / UTR No. *"
+                  : paymentMode === "upi"
+                  ? "UPI Transaction ID *"
+                  : "Cheque Number *"
+              }
+            >
+              <Input
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Enter reference number"
+                required
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
+          )}
+        </div>
       </div>
     </CardCustom>
   );
