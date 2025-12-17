@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+// import { Prisma } from "@prisma/client";
 export async function POST(req: Request) {
   try {
     const data = await req.json();
@@ -75,10 +75,15 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Error creating formerLoading:", error); // Log full error for debugging
 
-    if (error && typeof error === "object" && "code" in error) {
-      const err = error as Prisma.PrismaClientKnownRequestError;
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as any).code === "string"
+    ) {
+      const code = (error as any).code;
 
-      if (err.code === "P2002") {
+      if (code === "P2002") {
         return NextResponse.json(
           {
             success: false,
@@ -88,13 +93,14 @@ export async function POST(req: Request) {
         );
       }
 
-      if (err.code === "P2003") {
+      if (code === "P2003") {
         return NextResponse.json(
           { success: false, message: "Invalid vehicle selected" },
           { status: 400 }
         );
       }
     }
+
 
 
     // Generic fallback
