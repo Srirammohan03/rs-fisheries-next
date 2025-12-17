@@ -17,7 +17,12 @@ export async function POST(request: Request) {
             select: { totalPrice: true },
         });
 
-        const totalPrice = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+        const totalPrice = items.reduce(
+            (sum: number, item: { totalPrice?: number }) =>
+                sum + (item.totalPrice ?? 0),
+            0
+        );
+
 
         // Update the parent record
         await prisma.clientLoading.update({
