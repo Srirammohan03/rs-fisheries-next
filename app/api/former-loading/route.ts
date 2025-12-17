@@ -3,7 +3,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-
 export async function POST(req: Request) {
   try {
     const data = await req.json();
@@ -76,27 +75,27 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Error creating formerLoading:", error); // Log full error for debugging
 
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") {
-        // Unique constraint violation (likely billNo)
-        const target = error.meta?.target || "field";
+    if (error && typeof error === "object" && "code" in error) {
+      const err = error as Prisma.PrismaClientKnownRequestError;
+
+      if (err.code === "P2002") {
         return NextResponse.json(
           {
             success: false,
-            message: `Duplicate ${target}. Bill number already exists. Please refresh.`,
+            message: "Duplicate bill number. Please refresh.",
           },
           { status: 400 }
         );
       }
 
-      if (error.code === "P2003") {
-        // Foreign key failure (e.g., invalid vehicleId)
+      if (err.code === "P2003") {
         return NextResponse.json(
           { success: false, message: "Invalid vehicle selected" },
           { status: 400 }
         );
       }
     }
+
 
     // Generic fallback
     return NextResponse.json(
@@ -131,10 +130,13 @@ export async function GET() {
       },
       orderBy: { createdAt: "desc" },
     });
-    const formatted = loadings.map((l) => ({
+    type FormerLoadingWithVehicle = typeof loadings[number];
+
+    const formatted = loadings.map((l: FormerLoadingWithVehicle) => ({
       ...l,
       vehicleNo: l.vehicle?.vehicleNumber ?? "",
     }));
+
     return NextResponse.json({ data: formatted });
   } catch (error) {
     console.error("Error fetching agent loadings:", error);
