@@ -128,10 +128,13 @@ export async function GET() {
             orderBy: { createdAt: "desc" },
         });
 
-        const formatted = loadings.map((l) => ({
+        type AgentLoadingWithVehicle = typeof loadings[number];
+
+        const formatted = loadings.map((l: AgentLoadingWithVehicle) => ({
             ...l,
             vehicleNo: l.vehicle?.vehicleNumber ?? "",
         }));
+
 
         return NextResponse.json({ data: formatted });
     } catch (error) {
