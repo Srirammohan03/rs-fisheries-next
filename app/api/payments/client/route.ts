@@ -3,8 +3,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMode } from "@prisma/client";
-import fs from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
+
+export const runtime = "nodejs"; // ✅ important (Prisma + Blob)
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,10 +18,13 @@ export async function POST(req: NextRequest) {
     const paymentModeStr = formData.get("paymentMode") as string;
     const reference = (formData.get("reference") as string) || null;
     const image = formData.get("image") as File | null;
-    const isInstallmentStr = formData.get("isInstallment"); // new
+    const isInstallmentStr = formData.get("isInstallment");
 
     if (!clientId || !clientName || !dateStr || !amountStr) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
     const amount = parseFloat(amountStr);
@@ -39,18 +43,15 @@ export async function POST(req: NextRequest) {
     }
 
     let imageUrl: string | undefined;
+
+    // ✅ Upload to Vercel Blob (no filesystem write)
     if (image && image.size > 0) {
-      const uploadDir = path.join(process.cwd(), "public/uploads");
-      await fs.mkdir(uploadDir, { recursive: true });
+      const ext = image.name?.split(".").pop()?.toLowerCase() || "jpg";
+      const safeClient = clientId.replace(/[^a-zA-Z0-9-_]/g, "_");
+      const key = `client-payments/${safeClient}/${Date.now()}.${ext}`;
 
-      const fileExt = path.extname(image.name) || ".jpg";
-      const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${fileExt}`;
-      const filePath = path.join(uploadDir, fileName);
-
-      const buffer = Buffer.from(await image.arrayBuffer());
-      await fs.writeFile(filePath, buffer);
-
-      imageUrl = `/uploads/${fileName}`;
+      const blob = await put(key, image, { access: "public" });
+      imageUrl = blob.url; // store full URL
     }
 
     const payment = await prisma.clientPayment.create({
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
         paymentMode,
         reference: reference || undefined,
         imageUrl,
-        isInstallment: isInstallmentStr === "true", // support installment flag
+        isInstallment: isInstallmentStr === "true",
       },
     });
 
@@ -76,7 +77,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Fixed GET - safe include (won't crash if relation missing)
 export async function GET() {
   try {
     const payments = await prisma.clientPayment.findMany({
@@ -91,7 +91,6 @@ export async function GET() {
         imageUrl: true,
         isInstallment: true,
         createdAt: true,
-        // Only include relation if it exists (safe)
         client: {
           select: {
             clientName: true,
@@ -102,6 +101,7 @@ export async function GET() {
       },
       orderBy: { date: "desc" },
     });
+
     return NextResponse.json({ payments }, { status: 200 });
   } catch (error: any) {
     console.error("ClientPayment GET error:", error);
