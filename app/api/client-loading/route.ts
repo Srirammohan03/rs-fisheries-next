@@ -38,13 +38,27 @@ async function getNetKgsByCodes(codes: string[]) {
       _sum: { totalKgs: true },
     }),
   ]);
+  type GroupedResult = {
+    varietyCode: string;
+    _sum: {
+      totalKgs: number | null;
+    };
+  };
 
   const formerMap = Object.fromEntries(
-    inFormer.map((x) => [x.varietyCode, Number(x._sum.totalKgs || 0)])
+    inFormer.map((x: GroupedResult) => [
+      x.varietyCode,
+      Number(x._sum.totalKgs ?? 0),
+    ])
   );
+
   const agentMap = Object.fromEntries(
-    inAgent.map((x) => [x.varietyCode, Number(x._sum.totalKgs || 0)])
+    inAgent.map((x: GroupedResult) => [
+      x.varietyCode,
+      Number(x._sum.totalKgs ?? 0),
+    ])
   );
+
   const clientMap = Object.fromEntries(
     outClient.map((x) => [x.varietyCode, Number(x._sum.totalKgs || 0)])
   );
