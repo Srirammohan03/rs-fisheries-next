@@ -59,9 +59,13 @@ async function getNetKgsByCodes(codes: string[]) {
     ])
   );
 
-  const clientMap = Object.fromEntries(
-    outClient.map((x) => [x.varietyCode, Number(x._sum.totalKgs || 0)])
-  );
+const clientMap = Object.fromEntries(
+  outClient.map((x: GroupedResult) => [
+    x.varietyCode,
+    Number(x._sum.totalKgs ?? 0),
+  ])
+);
+
 
   const netMap: Record<string, number> = {};
   for (const code of codes) {
