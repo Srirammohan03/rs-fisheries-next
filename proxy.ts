@@ -5,8 +5,8 @@ import jwt from "jsonwebtoken";
 export function proxy(req: NextRequest) {
   const token = req.cookies.get("session")?.value;
   const pathname = req.nextUrl.pathname;
-
-  if (pathname === "/") {
+  console.log("pathname", pathname)
+  if (pathname === "/" || pathname === "/dashboard") {
     if (!token) {
       return NextResponse.redirect(new URL("/login", req.url));
     }
