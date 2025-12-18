@@ -223,6 +223,20 @@ export default function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      {/* FOOTER */}
+      <div className="border-t bg-white px-4 py-3">
+        <p className="text-center text-xs text-slate-500">
+          Powered by{" "}
+          <a
+            href="https://www.outrightcreators.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-[#139BC3] hover:underline"
+          >
+            Outright Creators
+          </a>
+        </p>
+      </div>
     </Sidebar>
   );
 }
