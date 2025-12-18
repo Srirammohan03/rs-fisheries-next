@@ -16,6 +16,17 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 
+function fmtMonth(d: string | Date) {
+  return new Date(d).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function fmtMoney(n: number) {
+  return `₹${Number(n || 0).toLocaleString("en-IN")}`;
+}
+
 export default function SalariesPage() {
   const queryClient = useQueryClient();
 
@@ -25,11 +36,11 @@ export default function SalariesPage() {
   const [mode, setMode] = useState<"add" | "edit">("add");
 
   // Fetch salaries + user details
-  const { data: salaries, isLoading } = useQuery({
+  const { data: salaries = [], isLoading } = useQuery({
     queryKey: ["salaries"],
     queryFn: async () => {
       const { data } = await axios.get("/api/salaries");
-      return data.data;
+      return data.data || [];
     },
   });
 
@@ -70,6 +81,7 @@ export default function SalariesPage() {
   });
 
   const handleCreate = (data: any) => createMutation.mutate(data);
+
   const handleUpdate = (data: any) => {
     if (!selectedSalary) return;
     updateMutation.mutate({ id: selectedSalary.id, payload: data });
@@ -98,7 +110,7 @@ export default function SalariesPage() {
             setSelectedSalary(null);
             setOpenDialog(true);
           }}
-          className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
+          className="w-full md:w-auto bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
         >
           Add Salary
         </Button>
@@ -111,9 +123,71 @@ export default function SalariesPage() {
             <Loader2 className="animate-spin h-4 w-4" />
             Loading salary records...
           </div>
+        ) : salaries.length === 0 ? (
+          <div className="p-8 text-center text-slate-500">
+            No salaries found
+          </div>
         ) : (
           <div className="p-4 md:p-6">
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            {/* ✅ Mobile Cards */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {salaries.map((sal: any) => (
+                <div
+                  key={sal.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-slate-900 truncate">
+                        {sal.user?.name || sal.user?.email || "—"}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {fmtMonth(sal.month)}
+                      </div>
+                      <div className="mt-2 text-xl font-extrabold text-emerald-600">
+                        {fmtMoney(sal.amount)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    <div className="text-xs font-semibold text-slate-500">
+                      Notes
+                    </div>
+                    <div className="mt-1">{sal.notes || "—"}</div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={() => {
+                        setSelectedSalary(sal);
+                        setMode("edit");
+                        setOpenDialog(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        setSelectedSalary(sal);
+                        setOpenDeleteDialog(true);
+                      }}
+                    >
+                      <Trash className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ✅ Desktop Table */}
+            <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/80">
@@ -136,68 +210,54 @@ export default function SalariesPage() {
                 </TableHeader>
 
                 <TableBody>
-                  {salaries.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        className="text-center py-10 text-slate-500"
-                      >
-                        No salaries found
+                  {salaries.map((sal: any) => (
+                    <TableRow key={sal.id} className="hover:bg-slate-50/60">
+                      <TableCell className="font-medium text-slate-900">
+                        {sal.user?.name || sal.user?.email || "—"}
+                      </TableCell>
+
+                      <TableCell className="text-slate-700">
+                        {fmtMonth(sal.month)}
+                      </TableCell>
+
+                      <TableCell className="font-semibold text-emerald-600">
+                        {fmtMoney(sal.amount)}
+                      </TableCell>
+
+                      <TableCell className="text-slate-600">
+                        {sal.notes || "—"}
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+                            onClick={() => {
+                              setSelectedSalary(sal);
+                              setMode("edit");
+                              setOpenDialog(true);
+                            }}
+                          >
+                            <Pencil size={16} />
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="shadow-sm"
+                            onClick={() => {
+                              setSelectedSalary(sal);
+                              setOpenDeleteDialog(true);
+                            }}
+                          >
+                            <Trash size={16} />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    salaries?.map((sal: any) => (
-                      <TableRow key={sal.id} className="hover:bg-slate-50/60">
-                        <TableCell className="font-medium text-slate-900">
-                          {sal.user?.name || sal.user?.email}
-                        </TableCell>
-
-                        <TableCell className="text-slate-700">
-                          {new Date(sal.month).toLocaleDateString("en-IN", {
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </TableCell>
-
-                        <TableCell className="font-semibold text-emerald-600">
-                          ₹{sal.amount.toLocaleString("en-IN")}
-                        </TableCell>
-
-                        <TableCell className="text-slate-600">
-                          {sal.notes || "—"}
-                        </TableCell>
-
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
-                              onClick={() => {
-                                setSelectedSalary(sal);
-                                setMode("edit");
-                                setOpenDialog(true);
-                              }}
-                            >
-                              <Pencil size={16} />
-                            </Button>
-
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              className="shadow-sm"
-                              onClick={() => {
-                                setSelectedSalary(sal);
-                                setOpenDeleteDialog(true);
-                              }}
-                            >
-                              <Trash size={16} />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </div>

@@ -63,7 +63,7 @@ model FormerLoading {
 
 model FormerItem {
   id              String        @id @default(uuid())
-  formerLoadingId String // ← changed from Int to String
+  formerLoadingId String 
   varietyCode     String
   noTrays         Int
   trayKgs         Float
@@ -85,8 +85,6 @@ model AgentLoading {
   date      DateTime
   vehicleId String
   vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
-
-  // SAME TOTALS AS FARMER — REQUIRED
   totalTrays    Int   @default(0)
   totalLooseKgs Float @default(0)
   totalTrayKgs  Float @default(0)
@@ -131,9 +129,6 @@ model ClientLoading {
   vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
   fishCode   String
   village    String
-
-  // SAME TOTALS AS FARMER — REQUIRED
-
   totalTrays    Int   @default(0)
   totalLooseKgs Float @default(0)
   totalTrayKgs  Float @default(0)
@@ -214,18 +209,15 @@ model ClientPayment {
   paymentMode   PaymentMode
   reference     String?
   imageUrl      String?
-  isInstallment Boolean     @default(false) // NEW
+  isInstallment Boolean     @default(false)
   createdAt     DateTime    @default(now())
 
-  // Relation to ClientLoading (safe even if not migrated yet)
-  // client ClientLoading? @relation(fields: [clientId], references: [id], onDelete: Restrict)
   client ClientLoading @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([date])
 }
 
-// ! VEHICLE 
 
 enum VehicleOwnership {
   OWN
@@ -256,19 +248,17 @@ model VehicleEntry {
   vehicleId String
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
-  type VehicleType // OWN or RENT
+  type VehicleType
 
   trip String
   date DateTime
 
-  // Own vehicle expenses
   diesel   Float? @default(0)
   service  Float? @default(0)
   fastag   Float? @default(0)
   eChallan Float? @default(0)
   tyres    Float? @default(0)
 
-  // Rent-specific fields
   rentAmount  Float?
   paymentMode PaymentMode?
 
@@ -284,36 +274,24 @@ model Vehicle {
   id            String           @id @default(cuid())
   vehicleNumber String           @unique
   ownership     VehicleOwnership
-
-  // Basic details
   manufacturer      String?
   model             String?
   yearOfManufacture Int?
   fuelType          FuelType?
   engineNumber      String?   @unique
   chassisNumber     String?   @unique
-
-  // Transport details
   capacityInTons Float?
   bodyType       String?
-
-  // Regulatory documents
   rcValidity      DateTime?
   insuranceExpiry DateTime?
   fitnessExpiry   DateTime?
   pollutionExpiry DateTime?
   permitExpiry    DateTime?
   roadTaxExpiry   DateTime?
-
-  // Driver assignment (NEW)
   assignedDriverId String? @unique
   assignedDriver   Driver? @relation(fields: [assignedDriverId], references: [id])
-
-  // For rent vehicles
   rentalAgency     String?
   rentalRatePerDay Float?
-
-  // Status
   isActive Boolean @default(true)
   remarks  String?
 
@@ -323,8 +301,6 @@ model Vehicle {
   farmerLoadings FormerLoading[]
   agentLoadings  AgentLoading[]
   clientLoadings ClientLoading[]
-
-  // 1 Vehicle → Many Trips
   trips VehicleEntry[]
 }
 
@@ -348,7 +324,7 @@ model EmployeePayment {
   date         DateTime
   amount       Float
   paymentMode  PaymentMode
-  reference    String? // UTR, Cheque No., etc.
+  reference    String?
   createdAt    DateTime    @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -365,8 +341,8 @@ model PackingAmount {
   workers        Int
   temperature    Float
   totalAmount    Float
-  paymentMode    PaymentMode @default(CASH) // ← NEW FIELD
-  reference      String? // ← Optional reference (UTR, Cheque no.)
+  paymentMode    PaymentMode @default(CASH)
+  reference      String? 
   createdAt      DateTime    @default(now())
   createdById    String?
   createdBy      User?       @relation(fields: [createdById], references: [id])
@@ -377,9 +353,9 @@ model PackingAmount {
 
 model InvoiceCounter {
   id           Int  @id @default(1)
-  count        Int  @default(0) // for general invoices (if used)
-  packingCount Int  @default(0) // ← NEW: for packing
-  packingYear  Int? // ← NEW: last year used
+  count        Int  @default(0)
+  packingCount Int  @default(0) 
+  packingYear  Int? 
   invoiceCount Int  @default(0)
 }
 
@@ -391,7 +367,7 @@ model Invoice {
   partyName     String?
   partyAddress  String?
   date          DateTime @default(now())
-  items         Json // array of { description, hsn, qty, rate, amount }
+  items         Json 
   subtotal      Float
   taxAmount     Float
   total         Float
@@ -405,34 +381,6 @@ model Invoice {
   createdAt     DateTime @default(now())
 }
 
-// model VendorInvoice {
-//   id String @id @default(uuid())
-
-//   vendorId       String
-//   vendorName     String
-//   source         String // "farmer" | "agent"
-//   sourceRecordId String
-
-//   invoiceNo   String   @unique
-//   invoiceDate DateTime
-
-//   hsn        String
-//   gstPercent Float  @default(0)
-
-//   taxableValue Float
-//   gstAmount    Float
-//   totalAmount  Float
-
-//   billTo Json
-//   shipTo Json
-//   terms  String?
-
-//   isFinalized Boolean @default(false)
-
-//   createdAt DateTime @default(now())
-
-//   @@index([vendorId, source])
-// }
 model VendorInvoice {
   id         String @id @default(uuid())
   paymentId  String @unique
@@ -440,7 +388,7 @@ model VendorInvoice {
   vendorName String
   source     String
 
-  sourceRecordId String? // ✅ ADD THIS
+  sourceRecordId String?
 
   invoiceNo   String   @unique
   invoiceDate DateTime

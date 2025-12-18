@@ -329,80 +329,86 @@ export default function VendorBillsPage() {
     );
   };
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-3 sm:p-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <Card className="p-6 rounded-2xl shadow-lg">
+        <Card className="p-4 sm:p-6 rounded-2xl shadow-lg">
           {/* Header & Controls */}
-          <div className="space-y-6">
-            {/* Title + Tabs */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h2 className="text-3xl font-bold text-gray-900">Vendor Bills</h2>
+          <div className="space-y-5 sm:space-y-6">
+            {/* Title + Tabs + Export */}
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Vendor Bills
+              </h2>
 
-              {/* Farmer / Agent Tabs */}
-              <div className="bg-gray-100 rounded-full p-1.5 flex items-center gap-2 shadow-sm">
-                <button
-                  onClick={() => handleTabClick("farmer")}
-                  className={`relative px-8 py-3 rounded-full font-medium text-sm transition-all duration-200 ${
-                    activeTab === "farmer"
-                      ? "bg-white text-blue-600 shadow-lg"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Farmer
-                  {newFarmerCount > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse ring-2 ring-white">
-                      {newFarmerCount}
-                    </span>
-                  )}
-                </button>
+              {/* Tabs + Export wrapper */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
+                {/* Farmer / Agent Tabs (scroll-safe) */}
+                <div className="bg-gray-100 rounded-full p-1.5 flex items-center gap-2 shadow-sm w-full sm:w-auto overflow-x-auto no-scrollbar">
+                  <button
+                    onClick={() => handleTabClick("farmer")}
+                    className={`relative shrink-0 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full font-medium text-sm transition-all duration-200 ${
+                      activeTab === "farmer"
+                        ? "bg-white text-blue-600 shadow-lg"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Farmer
+                    {newFarmerCount > 0 && (
+                      <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse ring-2 ring-white">
+                        {newFarmerCount}
+                      </span>
+                    )}
+                  </button>
 
-                <button
-                  onClick={() => handleTabClick("agent")}
-                  className={`relative px-8 py-3 rounded-full font-medium text-sm transition-all duration-200 ${
-                    activeTab === "agent"
-                      ? "bg-white text-blue-600 shadow-lg"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Agent
-                  {newAgentCount > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse ring-2 ring-white">
-                      {newAgentCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-              {/* Export Buttons */}
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => exportData("farmer")}
-                  className="border-green-600 text-green-700 hover:bg-green-50"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export Farmers
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => exportData("agent")}
-                  className="border-purple-600 text-purple-700 hover:bg-purple-50"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export Agents
-                </Button>
+                  <button
+                    onClick={() => handleTabClick("agent")}
+                    className={`relative shrink-0 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full font-medium text-sm transition-all duration-200 ${
+                      activeTab === "agent"
+                        ? "bg-white text-blue-600 shadow-lg"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Agent
+                    {newAgentCount > 0 && (
+                      <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center animate-pulse ring-2 ring-white">
+                        {newAgentCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* Export Buttons (full width on mobile) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    onClick={() => exportData("farmer")}
+                    className="w-full border-green-600 text-green-700 hover:bg-green-50"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Farmers
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => exportData("agent")}
+                    className="w-full border-purple-600 text-purple-700 hover:bg-purple-50"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Agents
+                  </Button>
+                </div>
               </div>
             </div>
 
-            {/* Filters & Export Row */}
-            <div className="flex flex-col lg:flex-row lg:items-center gap-4 p-5 rounded-xl border border-blue-100">
-              {/* Search + Sort + Date */}
-              <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                <div className="relative">
+            {/* Filters */}
+            <div className="flex flex-col gap-4 p-4 sm:p-5 rounded-xl border border-blue-100 bg-white/40">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                {/* Search */}
+                <div className="relative w-full lg:w-[420px]">
                   <Input
                     placeholder="Search Bill No, Name, Variety..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-full sm:w-80 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                   <svg
                     className="absolute left-3 top-3 h-5 w-5 text-gray-400"
@@ -419,6 +425,7 @@ export default function VendorBillsPage() {
                   </svg>
                 </div>
 
+                {/* Sort */}
                 <Select
                   value={sortOrder}
                   onValueChange={(v: any) => setSortOrder(v)}
@@ -432,28 +439,26 @@ export default function VendorBillsPage() {
                   </SelectContent>
                 </Select>
 
-                <div className="flex gap-3">
+                {/* Dates (2 columns on mobile) */}
+                <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
                   <Input
                     type="date"
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="w-full sm:w-auto"
+                    className="w-full"
                   />
-                  <span className="self-center text-gray-500 hidden sm:block">
-                    to
-                  </span>
                   <Input
                     type="date"
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="w-full sm:w-auto"
+                    className="w-full"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Table */}
+          {/* Content */}
           {loading ? (
             <div className="text-center py-12 text-gray-500">
               Loading bills...
@@ -463,116 +468,258 @@ export default function VendorBillsPage() {
               No records found
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] table-auto">
-                <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  <tr>
-                    <th className="p-4">Bill No / Name</th>
-                    <th className="p-4">Variety</th>
-                    <th className="p-4 text-right">Trays</th>
-                    <th className="p-4 text-right">Tray Kgs</th>
-                    <th className="p-4 text-right">Loose</th>
-                    <th className="p-4 text-right">Total Kgs</th>
-                    <th className="p-4 text-right">Price/Kg</th>
-                    <th className="p-4 text-right">Total Price</th>
-                    <th className="p-4 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredItems.map((it) => {
-                    const edit = editing[it.id];
-                    const isEditing = !!edit;
-                    const isSaving = !!savingIds[it.id];
+            <>
+              {/* ✅ Mobile view (cards) */}
+              <div className="mt-5 grid grid-cols-1 gap-3 md:hidden">
+                {filteredItems.map((it) => {
+                  const edit = editing[it.id];
+                  const isEditing = !!edit;
+                  const isSaving = !!savingIds[it.id];
 
-                    return (
-                      <tr key={it.id} className="hover:bg-gray-50">
-                        <td className="p-4 font-medium">
-                          <div>{it.billNo}</div>
-                          <div className="text-xs text-gray-500">{it.name}</div>
-                        </td>
-                        <td className="p-4">{it.varietyCode}</td>
-                        <td className="p-4 text-right">{it.noTrays ?? "-"}</td>
-                        <td className="p-4 text-right">{it.trayKgs ?? "-"}</td>
-                        <td className="p-4 text-right">{it.loose ?? "-"}</td>
-                        <td className="p-4 text-right font-semibold">
-                          {it.totalKgs ?? "-"}
-                        </td>
-                        <td className="p-4 text-right">
+                  return (
+                    <Card
+                      key={it.id}
+                      className="rounded-2xl border border-gray-200 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900">
+                            {it.billNo}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {it.name}
+                          </div>
+                          <div className="mt-2 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                            Variety: {it.varietyCode}
+                          </div>
+                        </div>
+
+                        {!isEditing ? (
+                          <div className="flex gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startEdit(it)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => handleDeleteItem(it.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              onClick={() => saveRow(it)}
+                              disabled={isSaving}
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              {isSaving ? "..." : <Check className="w-4 h-4" />}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => cancelEdit(it.id)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-xl border bg-gray-50 p-3">
+                          <div className="text-xs text-gray-500">Trays</div>
+                          <div className="font-semibold text-gray-900">
+                            {it.noTrays ?? "-"}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border bg-gray-50 p-3">
+                          <div className="text-xs text-gray-500">Tray Kgs</div>
+                          <div className="font-semibold text-gray-900">
+                            {it.trayKgs ?? "-"}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border bg-gray-50 p-3">
+                          <div className="text-xs text-gray-500">Loose</div>
+                          <div className="font-semibold text-gray-900">
+                            {it.loose ?? "-"}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border bg-gray-50 p-3">
+                          <div className="text-xs text-gray-500">Total Kgs</div>
+                          <div className="font-semibold text-gray-900">
+                            {it.totalKgs ?? "-"}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border bg-gray-50 p-3 col-span-2">
+                          <div className="text-xs text-gray-500">Price/Kg</div>
                           {isEditing ? (
                             <Input
                               value={edit.pricePerKg ?? ""}
                               onChange={(e) =>
                                 onChangeField(it.id, e.target.value)
                               }
-                              className="w-24 text-right"
+                              className="mt-2 w-full text-right"
                               type="number"
                               step="0.01"
                               min="0"
                             />
                           ) : (
-                            <span>{(it.pricePerKg ?? 0).toFixed(2)}</span>
+                            <div className="font-semibold text-gray-900">
+                              {(it.pricePerKg ?? 0).toFixed(2)}
+                            </div>
                           )}
-                        </td>
-                        <td className="p-4 text-right font-semibold text-green-600">
+                        </div>
+
+                        <div className="rounded-xl border bg-green-50 p-3 col-span-2">
+                          <div className="text-xs text-gray-500">
+                            Total Price
+                          </div>
                           {isEditing ? (
                             <Input
                               value={edit.totalPrice ?? ""}
                               readOnly
-                              className="w-32 text-right bg-green-50"
+                              className="mt-2 w-full text-right bg-green-50"
                             />
                           ) : (
-                            (it.totalPrice ?? 0).toFixed(2)
-                          )}
-                        </td>
-                        <td className="p-4 text-center">
-                          {!isEditing ? (
-                            <div className="flex justify-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => startEdit(it)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-red-600 hover:bg-red-50"
-                                onClick={() => handleDeleteItem(it.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex justify-center gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => saveRow(it)}
-                                disabled={isSaving}
-                                className="bg-green-600 hover:bg-green-700 text-white"
-                              >
-                                {isSaving ? (
-                                  "..."
-                                ) : (
-                                  <Check className="w-4 h-4" />
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => cancelEdit(it.id)}
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
+                            <div className="font-bold text-green-700">
+                              {(it.totalPrice ?? 0).toFixed(2)}
                             </div>
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              {/* ✅ Desktop view (table) */}
+              <div className="mt-6 hidden md:block overflow-x-auto">
+                <table className="w-full min-w-[1000px] table-auto">
+                  <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                    <tr>
+                      <th className="p-4">Bill No / Name</th>
+                      <th className="p-4">Variety</th>
+                      <th className="p-4 text-right">Trays</th>
+                      <th className="p-4 text-right">Tray Kgs</th>
+                      <th className="p-4 text-right">Loose</th>
+                      <th className="p-4 text-right">Total Kgs</th>
+                      <th className="p-4 text-right">Price/Kg</th>
+                      <th className="p-4 text-right">Total Price</th>
+                      <th className="p-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredItems.map((it) => {
+                      const edit = editing[it.id];
+                      const isEditing = !!edit;
+                      const isSaving = !!savingIds[it.id];
+
+                      return (
+                        <tr key={it.id} className="hover:bg-gray-50">
+                          <td className="p-4 font-medium">
+                            <div>{it.billNo}</div>
+                            <div className="text-xs text-gray-500">
+                              {it.name}
+                            </div>
+                          </td>
+                          <td className="p-4">{it.varietyCode}</td>
+                          <td className="p-4 text-right">
+                            {it.noTrays ?? "-"}
+                          </td>
+                          <td className="p-4 text-right">
+                            {it.trayKgs ?? "-"}
+                          </td>
+                          <td className="p-4 text-right">{it.loose ?? "-"}</td>
+                          <td className="p-4 text-right font-semibold">
+                            {it.totalKgs ?? "-"}
+                          </td>
+                          <td className="p-4 text-right">
+                            {isEditing ? (
+                              <Input
+                                value={edit.pricePerKg ?? ""}
+                                onChange={(e) =>
+                                  onChangeField(it.id, e.target.value)
+                                }
+                                className="w-24 text-right"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                              />
+                            ) : (
+                              <span>{(it.pricePerKg ?? 0).toFixed(2)}</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-right font-semibold text-green-600">
+                            {isEditing ? (
+                              <Input
+                                value={edit.totalPrice ?? ""}
+                                readOnly
+                                className="w-32 text-right bg-green-50"
+                              />
+                            ) : (
+                              (it.totalPrice ?? 0).toFixed(2)
+                            )}
+                          </td>
+                          <td className="p-4 text-center">
+                            {!isEditing ? (
+                              <div className="flex justify-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => startEdit(it)}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-red-600 hover:bg-red-50"
+                                  onClick={() => handleDeleteItem(it.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => saveRow(it)}
+                                  disabled={isSaving}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  {isSaving ? (
+                                    "..."
+                                  ) : (
+                                    <Check className="w-4 h-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => cancelEdit(it.id)}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </Card>
       </div>

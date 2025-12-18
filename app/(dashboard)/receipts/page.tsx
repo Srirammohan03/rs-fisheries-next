@@ -35,11 +35,21 @@ const formatDate = (date: string | Date | null | undefined) => {
 
 type TabId = Tab;
 
+function cn(...classes: Array<string | undefined | false>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+/** ✅ Mobile: 2x2 grid | Desktop: segmented pill */
 function TabsList({ children }: { children: React.ReactNode }) {
   return (
     <div
       role="tablist"
-      className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-gray-100 p-1 shadow-sm backdrop-blur"
+      className={cn(
+        // mobile grid — no overflow, no extra right space
+        "w-full grid grid-cols-2 gap-2",
+        // desktop pill segmented
+        "sm:w-auto sm:inline-flex sm:items-center sm:gap-1 sm:rounded-2xl sm:border sm:border-slate-200 sm:bg-gray-100 sm:p-1 sm:shadow-sm sm:backdrop-blur"
+      )}
     >
       {children}
     </div>
@@ -60,27 +70,54 @@ function TabsTrigger({
   label: string;
 }) {
   const isActive = value === activeValue;
+
+  // ✅ shorter labels for mobile only (prevents ugly wrapping)
+  const mobileLabel =
+    value === "vendor"
+      ? "Vendor"
+      : value === "client"
+      ? "Client"
+      : value === "employee"
+      ? "Employee"
+      : "Packing";
+
   return (
     <button
       type="button"
       role="tab"
       aria-selected={isActive}
       onClick={() => onClick(value)}
-      className={[
-        "relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition",
+      className={cn(
+        // base
+        "relative w-full rounded-xl px-3 py-2 text-sm font-semibold transition",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#139BC3]/35",
+
+        // ✅ mobile: standalone card buttons (no big grey block look)
         isActive
-          ? "bg-white text-[#139BC3] shadow-sm border border-slate-200"
-          : "text-slate-600 hover:bg-slate-50",
-      ].join(" ")}
+          ? "bg-white text-[#139BC3] shadow-sm ring-1 ring-[#139BC3]/25"
+          : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50",
+
+        // ✅ desktop: segmented look
+        "sm:w-auto sm:bg-transparent sm:ring-0 sm:px-4 sm:py-2",
+        isActive
+          ? "sm:bg-white sm:text-[#139BC3] sm:shadow-sm sm:border sm:border-slate-200"
+          : "sm:text-slate-600 sm:hover:bg-slate-50"
+      )}
     >
-      <Icon className="h-4 w-4" />
-      {label}
+      <span className="flex items-center justify-center sm:justify-start gap-2">
+        <Icon className="h-4 w-4 shrink-0" />
+        {/* mobile short label */}
+        <span className="sm:hidden">{mobileLabel}</span>
+        {/* desktop full label */}
+        <span className="hidden sm:inline">{label}</span>
+      </span>
+
+      {/* underline only on desktop */}
       <span
-        className={[
-          "pointer-events-none absolute inset-x-3 -bottom-[8px] h-[2px] rounded-full transition-opacity",
-          isActive ? "bg-[#139BC3] opacity-100" : "opacity-0",
-        ].join(" ")}
+        className={cn(
+          "pointer-events-none absolute inset-x-3 -bottom-[8px] h-[2px] rounded-full transition-opacity hidden sm:block",
+          isActive ? "bg-[#139BC3] opacity-100" : "opacity-0"
+        )}
       />
     </button>
   );
@@ -206,11 +243,11 @@ export default function ReceiptsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
       {/* Header */}
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
             Receipts
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -218,6 +255,7 @@ export default function ReceiptsPage() {
           </p>
         </div>
 
+        {/* Tabs */}
         <TabsList>
           {tabs.map((t) => (
             <TabsTrigger
@@ -241,186 +279,337 @@ export default function ReceiptsPage() {
             No receipts found
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[900px] rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur border-b border-slate-200">
-                  <tr className="text-left">
-                    <th className="py-4 px-4 font-semibold text-slate-700">
-                      Date
-                    </th>
-                    <th className="py-4 px-4 font-semibold text-slate-700">
-                      Party
-                    </th>
-                    <th className="py-4 px-4 font-semibold text-slate-700">
-                      Details
-                    </th>
-                    <th className="py-4 px-4 text-right font-semibold text-slate-700">
-                      Amount
-                    </th>
-                    <th className="py-4 px-4 text-right font-semibold text-slate-700">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {receipts.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/70 transition"
-                    >
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2 text-slate-700">
-                          <Calendar className="w-4 h-4 text-slate-400" />
+          <div className="space-y-5">
+            {/* ✅ MOBILE: Cards */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {receipts.map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <span className="text-sm font-semibold">
                           {formatDate(r.date || r.createdAt)}
-                        </div>
-                      </td>
+                        </span>
+                      </div>
 
-                      <td className="py-4 px-4">
-                        <div className="font-semibold text-slate-900">
-                          {getPartyName(r)}
-                        </div>
+                      <div className="mt-2 font-extrabold text-slate-900 truncate">
+                        {getPartyName(r)}
+                      </div>
 
-                        {activeTab === "packing" && r.billNo && (
-                          <div className="text-xs font-semibold text-[#139BC3] mt-1">
-                            Bill: {r.billNo}
+                      {activeTab === "packing" && r.billNo && (
+                        <div className="text-xs font-semibold text-[#139BC3] mt-1">
+                          Bill: {r.billNo}
+                        </div>
+                      )}
+
+                      {activeTab === "packing" &&
+                        (r as PackingReceipt).mode && (
+                          <div className="text-xs text-slate-500 capitalize mt-1">
+                            {(r as PackingReceipt).mode}
                           </div>
                         )}
+                    </div>
 
-                        {activeTab === "packing" &&
-                          (r as PackingReceipt).mode && (
-                            <div className="text-xs text-slate-500 capitalize mt-1">
-                              {(r as PackingReceipt).mode}
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs text-slate-500">Amount</div>
+                      <div className="text-lg font-extrabold text-emerald-600">
+                        {formatCurrency(r.amount || r.totalAmount || 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    {activeTab === "packing" ? (
+                      <>
+                        <div>
+                          Payment:{" "}
+                          {r.paymentMode === "CASH"
+                            ? "Cash"
+                            : r.paymentMode === "AC"
+                            ? "A/C Transfer"
+                            : r.paymentMode === "UPI"
+                            ? "UPI/PhonePe"
+                            : r.paymentMode === "CHEQUE"
+                            ? "Cheque"
+                            : "N/A"}
+                          {r.reference && (
+                            <span className="text-slate-500">
+                              {" "}
+                              | Ref: {r.reference}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-slate-500">
+                          Workers: {(r as PackingReceipt).workers} | Temp:{" "}
+                          {(r as PackingReceipt).temperature}°C
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>{r.paymentMode || "—"}</div>
+                        {r.reference && (
+                          <div className="mt-1 text-slate-500">
+                            Ref: {r.reference}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4">
+                    {activeTab === "vendor" && isVendorReceipt(r) ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+                          onClick={() => {
+                            setSelectedVendor(r);
+                            setOpenInvoice(true);
+                          }}
+                        >
+                          <FileText className="w-4 h-4" />
+                          Edit
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          className="gap-2 bg-[#139BC3] text-white hover:bg-[#1088AA] disabled:opacity-20"
+                          disabled={!invoiceMap[r.id]}
+                          onClick={async () => {
+                            const res = await fetch(
+                              `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+                            );
+                            if (!res.ok) {
+                              toast.error("Invoice not found");
+                              return;
+                            }
+                            const { invoice } = await res.json();
+                            const { jsPDF } = await import("jspdf");
+                            await import("jspdf-autotable");
+                            const { generateVendorInvoicePDF } = await import(
+                              "@/lib/pdf/vendor-invoice"
+                            );
+
+                            generateVendorInvoicePDF(jsPDF, {
+                              ...invoice,
+                              items: [
+                                {
+                                  varietyCode: invoice.source,
+                                  billNo: invoice.invoiceNo,
+                                  totalKgs: 1,
+                                  totalPrice: invoice.taxableValue,
+                                },
+                              ],
+                            });
+                          }}
+                        >
+                          <FileText className="w-4 h-4" />
+                          Generate
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
+                        onClick={() => handleGenerate(r)}
+                      >
+                        <FileText className="w-4 h-4" />
+                        {getActionLabel()}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ✅ DESKTOP: Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <div className="min-w-[900px] rounded-2xl border border-slate-200 bg-white">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur border-b border-slate-200">
+                    <tr className="text-left">
+                      <th className="py-4 px-4 font-semibold text-slate-700">
+                        Date
+                      </th>
+                      <th className="py-4 px-4 font-semibold text-slate-700">
+                        Party
+                      </th>
+                      <th className="py-4 px-4 font-semibold text-slate-700">
+                        Details
+                      </th>
+                      <th className="py-4 px-4 text-right font-semibold text-slate-700">
+                        Amount
+                      </th>
+                      <th className="py-4 px-4 text-right font-semibold text-slate-700">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {receipts.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="border-b border-slate-100 hover:bg-slate-50/70 transition"
+                      >
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2 text-slate-700">
+                            <Calendar className="w-4 h-4 text-slate-400" />
+                            {formatDate(r.date || r.createdAt)}
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4">
+                          <div className="font-semibold text-slate-900">
+                            {getPartyName(r)}
+                          </div>
+                          {activeTab === "packing" && r.billNo && (
+                            <div className="text-xs font-semibold text-[#139BC3] mt-1">
+                              Bill: {r.billNo}
                             </div>
                           )}
-                      </td>
+                          {activeTab === "packing" &&
+                            (r as PackingReceipt).mode && (
+                              <div className="text-xs text-slate-500 capitalize mt-1">
+                                {(r as PackingReceipt).mode}
+                              </div>
+                            )}
+                        </td>
 
-                      <td className="py-4 px-4">
-                        {activeTab === "packing" ? (
-                          <>
+                        <td className="py-4 px-4">
+                          {activeTab === "packing" ? (
+                            <>
+                              <div className="text-xs text-slate-600">
+                                Payment:{" "}
+                                {r.paymentMode === "CASH"
+                                  ? "Cash"
+                                  : r.paymentMode === "AC"
+                                  ? "A/C Transfer"
+                                  : r.paymentMode === "UPI"
+                                  ? "UPI/PhonePe"
+                                  : r.paymentMode === "CHEQUE"
+                                  ? "Cheque"
+                                  : "N/A"}
+                                {r.reference && (
+                                  <span className="text-slate-500">
+                                    {" "}
+                                    | Ref: {r.reference}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                Workers: {(r as PackingReceipt).workers} | Temp:{" "}
+                                {(r as PackingReceipt).temperature}°C
+                              </div>
+                            </>
+                          ) : (
                             <div className="text-xs text-slate-600">
-                              Payment:{" "}
-                              {r.paymentMode === "CASH"
-                                ? "Cash"
-                                : r.paymentMode === "AC"
-                                ? "A/C Transfer"
-                                : r.paymentMode === "UPI"
-                                ? "UPI/PhonePe"
-                                : r.paymentMode === "CHEQUE"
-                                ? "Cheque"
-                                : "N/A"}
+                              {r.paymentMode || "—"}
                               {r.reference && (
-                                <span className="text-slate-500">
-                                  {" "}
-                                  | Ref: {r.reference}
+                                <span className="block mt-1 text-slate-500">
+                                  Ref: {r.reference}
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-slate-500 mt-1">
-                              Workers: {(r as PackingReceipt).workers} | Temp:{" "}
-                              {(r as PackingReceipt).temperature}°C
+                          )}
+                        </td>
+
+                        <td className="py-4 px-4 text-right">
+                          <div className="text-lg font-extrabold text-emerald-600">
+                            {formatCurrency(r.amount || r.totalAmount || 0)}
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4">
+                          {activeTab === "vendor" && isVendorReceipt(r) ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+                                onClick={() => {
+                                  setSelectedVendor(r);
+                                  setOpenInvoice(true);
+                                }}
+                              >
+                                <FileText className="w-4 h-4" />
+                                Edit Invoice
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                className="gap-2 bg-[#139BC3] text-white hover:bg-[#1088AA] disabled:opacity-20"
+                                disabled={!invoiceMap[r.id]}
+                                onClick={async () => {
+                                  const res = await fetch(
+                                    `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+                                  );
+
+                                  if (!res.ok) {
+                                    toast.error("Invoice not found");
+                                    return;
+                                  }
+
+                                  const { invoice } = await res.json();
+
+                                  const { jsPDF } = await import("jspdf");
+                                  await import("jspdf-autotable");
+                                  const { generateVendorInvoicePDF } =
+                                    await import("@/lib/pdf/vendor-invoice");
+
+                                  generateVendorInvoicePDF(jsPDF, {
+                                    ...invoice,
+                                    items: [
+                                      {
+                                        varietyCode: invoice.source,
+                                        billNo: invoice.invoiceNo,
+                                        totalKgs: 1,
+                                        totalPrice: invoice.taxableValue,
+                                      },
+                                    ],
+                                  });
+                                }}
+                              >
+                                <FileText className="w-4 h-4" />
+                                Generate Invoice
+                              </Button>
                             </div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-slate-600">
-                            {r.paymentMode || "—"}
-                            {r.reference && (
-                              <span className="block mt-1 text-slate-500">
-                                Ref: {r.reference}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="py-4 px-4 text-right">
-                        <div className="text-lg font-extrabold text-emerald-600">
-                          {formatCurrency(r.amount || r.totalAmount || 0)}
-                        </div>
-                      </td>
-
-                      <td className="py-4 px-4">
-                        {activeTab === "vendor" && isVendorReceipt(r) ? (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
-                              onClick={() => {
-                                setSelectedVendor(r);
-                                setOpenInvoice(true);
-                              }}
-                            >
-                              <FileText className="w-4 h-4" />
-                              Edit Invoice
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              className="gap-2 bg-[#139BC3] text-white hover:bg-[#1088AA] disabled:opacity-20"
-                              disabled={!invoiceMap[r.id]}
-                              onClick={async () => {
-                                const res = await fetch(
-                                  `/api/invoices/vendor/by-payment?paymentId=${r.id}`
-                                );
-
-                                if (!res.ok) {
-                                  toast.error("Invoice not found");
-                                  return;
-                                }
-
-                                const { invoice } = await res.json();
-
-                                const { jsPDF } = await import("jspdf");
-                                await import("jspdf-autotable");
-                                const { generateVendorInvoicePDF } =
-                                  await import("@/lib/pdf/vendor-invoice");
-
-                                generateVendorInvoicePDF(jsPDF, {
-                                  ...invoice,
-                                  items: [
-                                    {
-                                      varietyCode: invoice.source,
-                                      billNo: invoice.invoiceNo,
-                                      totalKgs: 1,
-                                      totalPrice: invoice.taxableValue,
-                                    },
-                                  ],
-                                });
-                              }}
-                            >
-                              <FileText className="w-4 h-4" />
-                              Generate Invoice
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2 border-slate-200  bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
-                              onClick={() => handleGenerate(r)}
-                            >
-                              <FileText className="w-4 h-4" />
-                              {getActionLabel()}
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          ) : (
+                            <div className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
+                                onClick={() => handleGenerate(r)}
+                              >
+                                <FileText className="w-4 h-4" />
+                                {getActionLabel()}
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Total */}
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-              <div className="flex justify-between items-center">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                 <p className="text-base font-semibold text-slate-700">
                   Total ({receipts.length} receipts)
                 </p>
-                <p className="text-3xl font-extrabold text-emerald-600">
+                <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600">
                   {formatCurrency(total)}
                 </p>
               </div>

@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DashboardMetrics } from "@/lib/dashboard";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   BarChart,
   Bar,
@@ -37,6 +38,8 @@ const CHART = {
 };
 
 export default function DashboardClient({ data }: { data: DashboardMetrics }) {
+  const isMobile = useIsMobile();
+
   const weeklyData = data.weekly.map((d) => ({
     day: d.label,
     purchase: d.purchase,
@@ -66,13 +69,18 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* KPIs */}
       <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-slate-900">Today at a Glance</CardTitle>
+        <CardHeader className="pb-2 px-4 sm:px-6">
+          <CardTitle className="text-slate-900 text-base sm:text-lg">
+            Today at a Glance
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <CardContent className="px-4 sm:px-6 pb-5">
+          {/* ✅ 2 cols on mobile, 4 on large */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Kpi title="Sales (Today)" value={money(data.today.sales)} />
             <Kpi title="Purchase (Today)" value={money(data.today.purchase)} />
             <Kpi
@@ -84,27 +92,41 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main grid */}
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
+        {/* Weekly Overview */}
         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-slate-900">Weekly Overview</CardTitle>
+          <CardHeader className="pb-2 px-4 sm:px-6">
+            <CardTitle className="text-slate-900 text-base sm:text-lg">
+              Weekly Overview
+            </CardTitle>
           </CardHeader>
-          <CardContent className="h-[320px]">
+
+          {/* ✅ shorter on mobile + tighter horizontal padding */}
+          <CardContent className="px-2 sm:px-6 h-[220px] sm:h-[300px] lg:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyData} barCategoryGap={14}>
+              <BarChart data={weeklyData} barCategoryGap={isMobile ? 10 : 14}>
                 <CartesianGrid stroke={CHART.grid} strokeDasharray="4 6" />
+
                 <XAxis
                   dataKey="day"
-                  tick={{ fill: CHART.muted }}
+                  tick={{ fill: CHART.muted, fontSize: 11 }}
                   axisLine={{ stroke: CHART.grid }}
                   tickLine={{ stroke: CHART.grid }}
+                  interval={isMobile ? 1 : 0} // ✅ reduce labels on mobile
+                  tickMargin={8}
+                  minTickGap={8}
                 />
+
                 <YAxis
-                  tick={{ fill: CHART.muted }}
+                  tick={{ fill: CHART.muted, fontSize: 11 }}
                   axisLine={{ stroke: CHART.grid }}
                   tickLine={{ stroke: CHART.grid }}
+                  width={isMobile ? 26 : 32} // ✅ more space for bars on mobile
                 />
+
                 <Tooltip {...tooltipProps} />
+
                 <Bar
                   dataKey="purchase"
                   fill={CHART.purchase}
@@ -120,13 +142,15 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
+        {/* Pie */}
         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-slate-900">
+          <CardHeader className="pb-2 px-4 sm:px-6">
+            <CardTitle className="text-slate-900 text-base sm:text-lg">
               Top Varieties by Qty (This week)
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[320px]">
+
+          <CardContent className="px-2 sm:px-6 h-[220px] sm:h-[300px] lg:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Tooltip {...tooltipProps} />
@@ -134,10 +158,9 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
                   data={pieData}
                   dataKey="value"
                   nameKey="name"
-                  outerRadius={95}
-                  innerRadius={55}
+                  outerRadius={isMobile ? 76 : 90}
+                  innerRadius={isMobile ? 44 : 54}
                   paddingAngle={2}
-                  label
                 >
                   {pieData.map((_, i) => (
                     <Cell
@@ -151,28 +174,38 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
+        {/* Line chart */}
         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-slate-900">
+          <CardHeader className="pb-2 px-4 sm:px-6">
+            <CardTitle className="text-slate-900 text-base sm:text-lg">
               Sales vs Stock Movement
             </CardTitle>
           </CardHeader>
-          <CardContent className="h-[320px]">
+
+          <CardContent className="px-2 sm:px-6 h-[220px] sm:h-[300px] lg:h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={weeklyData}>
                 <CartesianGrid stroke={CHART.grid} strokeDasharray="4 6" />
+
                 <XAxis
                   dataKey="day"
-                  tick={{ fill: CHART.muted }}
+                  tick={{ fill: CHART.muted, fontSize: 11 }}
                   axisLine={{ stroke: CHART.grid }}
                   tickLine={{ stroke: CHART.grid }}
+                  interval={isMobile ? 1 : 0} // ✅ reduce labels on mobile
+                  tickMargin={8}
+                  minTickGap={8}
                 />
+
                 <YAxis
-                  tick={{ fill: CHART.muted }}
+                  tick={{ fill: CHART.muted, fontSize: 11 }}
                   axisLine={{ stroke: CHART.grid }}
                   tickLine={{ stroke: CHART.grid }}
+                  width={isMobile ? 26 : 32}
                 />
+
                 <Tooltip {...tooltipProps} />
+
                 <Line
                   dataKey="sales"
                   stroke={CHART.sales}
@@ -190,18 +223,22 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
+        {/* Ageing */}
         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-slate-900">Outstanding Ageing</CardTitle>
+          <CardHeader className="pb-2 px-4 sm:px-6">
+            <CardTitle className="text-slate-900 text-base sm:text-lg">
+              Outstanding Ageing
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+
+          <CardContent className="px-4 sm:px-6 space-y-2 sm:space-y-3 pb-5">
             {ageingData.map((a) => (
               <div
                 key={a.bucket}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
               >
                 <div className="text-sm text-slate-600">{a.bucket}</div>
-                <div className="font-semibold text-slate-900">
+                <div className="font-semibold text-slate-900 tabular-nums">
                   {money(a.amount)}
                 </div>
               </div>
@@ -209,15 +246,19 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
           </CardContent>
         </Card>
 
+        {/* Fish Varieties */}
         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-slate-900">Fish Varieties</CardTitle>
+          <CardHeader className="pb-2 px-4 sm:px-6">
+            <CardTitle className="text-slate-900 text-base sm:text-lg">
+              Fish Varieties
+            </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
+
+          <CardContent className="px-4 sm:px-6 flex flex-wrap gap-2 pb-5">
             {data.fishVarieties.map((v) => (
               <span
                 key={v.code}
-                className="px-3 py-1 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-800"
+                className="max-w-full truncate px-3 py-1 rounded-full border border-slate-200 bg-slate-50 text-sm text-slate-800"
                 title={v.name}
               >
                 {v.code}
@@ -232,10 +273,16 @@ export default function DashboardClient({ data }: { data: DashboardMetrics }) {
 
 function Kpi({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="text-sm text-slate-600">{title}</div>
-      <div className="text-2xl font-extrabold mt-1 text-slate-900">{value}</div>
-      <div className="mt-2 h-1 w-10 rounded-full bg-[#139BC3]" />
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+      <div className="text-[12px] sm:text-sm text-slate-600 leading-snug line-clamp-2">
+        {title}
+      </div>
+
+      <div className="mt-2 text-lg sm:text-2xl font-extrabold text-slate-900 tabular-nums break-words">
+        {value}
+      </div>
+
+      <div className="mt-2 h-1 w-8 sm:w-10 rounded-full bg-[#139BC3]" />
     </div>
   );
 }

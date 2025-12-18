@@ -3,10 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { ColumnDef } from "@tanstack/react-table";
-import { AddDriverDialog } from "./AddDriverDialog";
-import { DataTable } from "../ui/data-table";
-import { AssignDriverDialog } from "./AssignDriverDialog";
 import { useMemo, useState } from "react";
+
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,7 +13,10 @@ import {
   SelectContent,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
+
+import { DataTable } from "@/components/ui/data-table";
+import { AssignDriverDialog } from "./AssignDriverDialog";
 import { UnassignDriverDialog } from "./UnassignDriverDialog";
 
 export type OwnVehicle = {
@@ -25,22 +26,17 @@ export type OwnVehicle = {
   fuelType: string;
   capacityInTons: string | null;
   assignedDriver?: { name: string | null };
+  createdAt?: string;
 };
 
 const columns: ColumnDef<OwnVehicle>[] = [
-  {
-    accessorKey: "vehicleNumber",
-    header: "Vehicle No",
-  },
+  { accessorKey: "vehicleNumber", header: "Vehicle No" },
   {
     accessorKey: "manufacturer",
     header: "Manufacturer",
     cell: ({ row }) => row.original.manufacturer || "-",
   },
-  {
-    accessorKey: "fuelType",
-    header: "Fuel",
-  },
+  { accessorKey: "fuelType", header: "Fuel" },
   {
     accessorKey: "capacityInTons",
     header: "Capacity",
@@ -69,7 +65,7 @@ export function OwnVehicleTable() {
     queryKey: ["own-vehicles"],
     queryFn: async () => {
       const { data: res } = await axios.get("/api/vehicles/own");
-      return res.data;
+      return res.data as OwnVehicle[];
     },
   });
 
@@ -82,61 +78,60 @@ export function OwnVehicleTable() {
 
   const filtered = useMemo(() => {
     if (!data) return [];
-
     let list = [...data];
 
-    const s = filters.search.toLowerCase();
+    const s = filters.search.trim().toLowerCase();
 
-    // Search
-    list = list.filter((v: any) => {
-      return (
-        v.vehicleNumber.toLowerCase().includes(s) ||
-        v.manufacturer?.toLowerCase().includes(s) ||
-        v.assignedDriver?.name?.toLowerCase().includes(s)
-      );
-    });
+    if (s) {
+      list = list.filter((v: any) => {
+        return (
+          v.vehicleNumber?.toLowerCase().includes(s) ||
+          v.manufacturer?.toLowerCase().includes(s) ||
+          v.assignedDriver?.name?.toLowerCase().includes(s)
+        );
+      });
+    }
 
-    // Fuel type filter
-    list = list.filter((v: any) => {
-      return filters.fuelType === "ALL"
-        ? true
-        : v.fuelType === filters.fuelType;
-    });
+    list = list.filter((v: any) =>
+      filters.fuelType === "ALL" ? true : v.fuelType === filters.fuelType
+    );
 
-    // Assigned filter
     list = list.filter((v: any) => {
       if (filters.assigned === "ALL") return true;
       if (filters.assigned === "ASSIGNED") return !!v.assignedDriver;
       if (filters.assigned === "AVAILABLE") return !v.assignedDriver;
+      return true;
     });
 
-    // Sort by date
     if (filters.sortBy === "NEWEST") {
       list.sort(
         (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.createdAt ?? 0).getTime() -
+          new Date(a.createdAt ?? 0).getTime()
       );
     }
-
     if (filters.sortBy === "OLDEST") {
       list.sort(
         (a: any, b: any) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          new Date(a.createdAt ?? 0).getTime() -
+          new Date(b.createdAt ?? 0).getTime()
       );
     }
 
     return list;
   }, [data, filters]);
 
-  if (isLoading) return <p>Loading...</p>;
+  if (isLoading) {
+    return <div className="py-10 text-center text-slate-500">Loading...</div>;
+  }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between p-6 border-b border-slate-200">
+    <div className="space-y-4">
+      {/* Header (no extra card wrapper - avoids double card on mobile) */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Own Vehicles</h2>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500">
             Search, filter and manage your fleet
           </p>
         </div>
@@ -151,95 +146,124 @@ export function OwnVehicleTable() {
               sortBy: "NONE",
             })
           }
-          className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+          className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
         >
           Clear Filters
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
-          {/* Search */}
-          <div className="lg:col-span-4">
-            <Input
-              className="h-11 w-full border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
-              placeholder="Search vehicle / driver / manufacturer"
-              value={filters.search}
-              onChange={(e) =>
-                setFilters({ ...filters, search: e.target.value })
-              }
-            />
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+        <div className="lg:col-span-4">
+          <Input
+            className="h-11 w-full border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+            placeholder="Search vehicle / driver / manufacturer"
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          />
+        </div>
 
-          {/* Fuel Type */}
-          <div className="lg:col-span-2">
-            <Select
-              value={filters.fuelType}
-              onValueChange={(v) => setFilters({ ...filters, fuelType: v })}
-            >
-              <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
-                <SelectValue placeholder="Fuel Type" />
-              </SelectTrigger>
-              <SelectContent className="border-slate-200">
-                <SelectItem value="ALL">All</SelectItem>
-                <SelectItem value="DIESEL">Diesel</SelectItem>
-                <SelectItem value="PETROL">Petrol</SelectItem>
-                <SelectItem value="CNG">CNG</SelectItem>
-                <SelectItem value="ELECTRIC">Electric</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="lg:col-span-2">
+          <Select
+            value={filters.fuelType}
+            onValueChange={(v) => setFilters({ ...filters, fuelType: v })}
+          >
+            <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+              <SelectValue placeholder="Fuel Type" />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200">
+              <SelectItem value="ALL">All</SelectItem>
+              <SelectItem value="DIESEL">Diesel</SelectItem>
+              <SelectItem value="PETROL">Petrol</SelectItem>
+              <SelectItem value="CNG">CNG</SelectItem>
+              <SelectItem value="ELECTRIC">Electric</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* Driver Assignment */}
-          <div className="lg:col-span-2">
-            <Select
-              value={filters.assigned}
-              onValueChange={(v) => setFilters({ ...filters, assigned: v })}
-            >
-              <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
-                <SelectValue placeholder="Driver" />
-              </SelectTrigger>
-              <SelectContent className="border-slate-200">
-                <SelectItem value="ALL">All</SelectItem>
-                <SelectItem value="ASSIGNED">Assigned</SelectItem>
-                <SelectItem value="AVAILABLE">Available</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="lg:col-span-2">
+          <Select
+            value={filters.assigned}
+            onValueChange={(v) => setFilters({ ...filters, assigned: v })}
+          >
+            <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+              <SelectValue placeholder="Driver" />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200">
+              <SelectItem value="ALL">All</SelectItem>
+              <SelectItem value="ASSIGNED">Assigned</SelectItem>
+              <SelectItem value="AVAILABLE">Available</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* Sort By */}
-          <div className="lg:col-span-2">
-            <Select
-              value={filters.sortBy}
-              onValueChange={(v) => setFilters((p) => ({ ...p, sortBy: v }))}
-            >
-              <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent className="border-slate-200">
-                <SelectItem value="NONE">None</SelectItem>
-                <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
-                <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="lg:col-span-2">
+          <Select
+            value={filters.sortBy}
+            onValueChange={(v) => setFilters((p) => ({ ...p, sortBy: v }))}
+          >
+            <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200">
+              <SelectItem value="NONE">None</SelectItem>
+              <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
+              <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* Spacer / actions on large */}
-          <div className="lg:col-span-2 flex items-center justify-start lg:justify-end">
-            <div className="text-xs text-slate-500">
-              Showing{" "}
-              <span className="font-semibold text-slate-900">
-                {filtered.length}
-              </span>
+        <div className="lg:col-span-2 flex items-center justify-between sm:justify-end">
+          <div className="text-xs text-slate-500">
+            Showing{" "}
+            <span className="font-semibold text-slate-900">
+              {filtered.length}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ Mobile Cards */}
+      <div className="grid grid-cols-1 gap-3 md:hidden">
+        {filtered.map((v) => (
+          <div
+            key={v.id}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-base font-extrabold text-slate-900">
+                  {v.vehicleNumber}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  {v.manufacturer || "-"} • {v.fuelType}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Capacity: {v.capacityInTons || "-"}
+                </div>
+                <div className="mt-2 text-sm font-semibold text-slate-800">
+                  Driver:{" "}
+                  <span className="font-medium text-slate-600">
+                    {v.assignedDriver?.name ?? "No Driver Assigned"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="shrink-0">
+                {v.assignedDriver ? (
+                  <UnassignDriverDialog vehicleId={v.id} />
+                ) : (
+                  <AssignDriverDialog vehicleId={v.id} />
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        {/* Table */}
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
-          <DataTable columns={columns} data={filtered} />
-        </div>
+      {/* ✅ Desktop Table */}
+      <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200">
+        <DataTable columns={columns} data={filtered} />
       </div>
     </div>
   );

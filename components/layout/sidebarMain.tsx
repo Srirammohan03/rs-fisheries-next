@@ -48,8 +48,10 @@ const menuItems = [
 ];
 
 export default function AppSidebar() {
+  const { state, isMobile, setOpenMobile } = useSidebar();
+
   const pathname = usePathname();
-  const { state } = useSidebar();
+  // const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
   const { newVendorBillsCount, markVendorBillsAsSeen } = useVendorBillsBadge();
@@ -57,6 +59,9 @@ export default function AppSidebar() {
   useEffect(() => {
     if (pathname === "/vendor-bills") markVendorBillsAsSeen();
   }, [pathname, markVendorBillsAsSeen]);
+  useEffect(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [pathname, isMobile, setOpenMobile]);
 
   return (
     <Sidebar
@@ -146,6 +151,9 @@ export default function AppSidebar() {
                     >
                       <Link
                         href={item.href}
+                        onClick={() => {
+                          if (isMobile) setOpenMobile(false);
+                        }}
                         className={[
                           "flex w-full items-center",
                           collapsed ? "justify-center" : "gap-3",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Menu, LogOut, PanelLeft } from "lucide-react";
+import { LogOut, PanelLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
@@ -67,79 +67,103 @@ export function TopNav() {
   }
 
   return (
-    <header className="sticky top-0 z-50 h-16 border-b bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/65">
-      <div className="flex h-full items-center px-4 sm:px-6">
-        {/* Sidebar toggle (NO SidebarTrigger to avoid error) */}
+    <header
+      className="
+        sticky top-0 z-50 w-full
+        border-b bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70
+      "
+    >
+      <div
+        className="
+          h-16 w-full
+          px-3 sm:px-6
+          flex items-center
+          overflow-x-hidden
+        "
+      >
+        {/* Left: Sidebar toggle */}
         <Button
           variant="ghost"
           size="icon"
           onClick={toggleSidebar}
-          className="rounded-xl hover:bg-slate-50"
+          className="shrink-0 rounded-xl hover:bg-slate-50"
           aria-label="Toggle sidebar"
         >
           <PanelLeft className="h-5 w-5 text-slate-700" />
         </Button>
 
-        {/* Right side */}
-        <div className="ml-auto flex items-center gap-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm hover:shadow-md transition"
-                aria-label="Open user menu"
-              >
-                <div
-                  className="h-9 w-9 rounded-2xl grid place-items-center"
-                  style={{
-                    background: `linear-gradient(135deg, ${BRAND} 0%, #0ea5e9 100%)`,
-                    boxShadow: "0 10px 25px rgba(19,155,195,0.22)",
-                  }}
-                >
-                  <Avatar className="h-9 w-9 bg-transparent">
-                    <AvatarFallback className="bg-transparent text-white font-bold">
-                      {userInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
+        {/* Spacer */}
+        <div className="flex-1" />
 
-                <div className="hidden sm:flex flex-col items-start leading-tight pr-1">
-                  <span className="text-sm font-semibold text-slate-900 max-w-[160px] truncate">
-                    {user?.name || "User"}
-                  </span>
-                  <span className="text-xs text-slate-500 max-w-[160px] truncate">
-                    {user?.email || "user@example.com"}
-                  </span>
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              align="end"
-              className="w-64 rounded-2xl border border-slate-200 p-2 shadow-xl"
+        {/* Right: User menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="
+                shrink-0
+                flex items-center gap-2 sm:gap-3
+                rounded-2xl border border-slate-200 bg-white
+                px-2 py-1.5
+                shadow-sm hover:shadow-md transition
+                max-w-[70vw] sm:max-w-none
+              "
+              aria-label="Open user menu"
+              type="button"
             >
-              <DropdownMenuLabel className="rounded-xl px-3 py-2">
-                <div className="flex flex-col">
-                  <span className="font-semibold text-slate-900">
-                    {user?.name || "User"}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {user?.email || "user@example.com"}
-                  </span>
-                </div>
-              </DropdownMenuLabel>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="cursor-pointer rounded-xl px-3 py-2 text-red-600 focus:text-red-600"
+              {/* Avatar */}
+              <div
+                className="h-9 w-9 rounded-2xl grid place-items-center shrink-0"
+                style={{
+                  background: `linear-gradient(135deg, ${BRAND} 0%, #0ea5e9 100%)`,
+                  boxShadow: "0 10px 25px rgba(19,155,195,0.22)",
+                }}
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                <Avatar className="h-9 w-9 bg-transparent">
+                  <AvatarFallback className="bg-transparent text-white font-bold">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+
+              {/* Text (hidden on mobile) */}
+              <div className="hidden sm:flex min-w-0 flex-col items-start leading-tight pr-1">
+                <span className="text-sm font-semibold text-slate-900 max-w-[180px] truncate">
+                  {user?.name || "User"}
+                </span>
+                <span className="text-xs text-slate-500 max-w-[180px] truncate">
+                  {user?.email || "user@example.com"}
+                </span>
+              </div>
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            align="end"
+            sideOffset={10}
+            className="w-72 max-w-[92vw] rounded-2xl border border-slate-200 p-2 shadow-xl"
+          >
+            <DropdownMenuLabel className="rounded-xl px-3 py-2">
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-slate-900 truncate">
+                  {user?.name || "User"}
+                </span>
+                <span className="text-xs text-slate-500 truncate">
+                  {user?.email || "user@example.com"}
+                </span>
+              </div>
+            </DropdownMenuLabel>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="cursor-pointer rounded-xl px-3 py-2 text-red-600 focus:text-red-600"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

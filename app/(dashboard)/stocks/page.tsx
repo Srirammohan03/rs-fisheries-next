@@ -253,23 +253,27 @@ export default function StocksPage() {
   );
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="bg-gray-50 min-h-screen">
+      <div className="mx-auto max-w-7xl p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Stocks</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Stocks
+            </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* ✅ responsive controls */}
+          <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search code or name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full md:w-64 border-gray-300 focus:border-indigo-500"
+              className="w-full sm:w-[320px] md:w-64 border-gray-300 focus:border-indigo-500"
             />
+
             <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-              <SelectTrigger className="w-48 border-gray-300">
+              <SelectTrigger className="w-full sm:w-56 md:w-48 border-gray-300">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -281,38 +285,45 @@ export default function StocksPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <Card className="p-5 rounded-2xl shadow-sm border border-gray-200 bg-white flex items-center gap-4">
-            <div className="rounded-2xl bg-blue-100 p-4">
-              <Fish className="w-8 h-8 text-blue-600" />
+        {/* ✅ 2 columns on mobile, 3/4 on larger */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="p-3 sm:p-5 rounded-2xl shadow-sm border border-gray-200 bg-white flex items-center gap-3 sm:gap-4">
+            <div className="rounded-2xl bg-blue-100 p-3 sm:p-4 shrink-0">
+              <Fish className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Varieties</p>
-              <p className="text-2xl font-bold text-gray-900">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600 truncate">
+                Varieties
+              </p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900">
                 {varieties.length}
               </p>
             </div>
           </Card>
 
-          <Card className="p-5 rounded-2xl shadow-sm border border-gray-200 bg-white flex items-center gap-4">
-            <div className="rounded-2xl bg-green-100 p-4">
-              <ArrowUpRight className="w-8 h-8 text-green-600" />
+          <Card className="p-3 sm:p-5 rounded-2xl shadow-sm border border-gray-200 bg-white flex items-center gap-3 sm:gap-4">
+            <div className="rounded-2xl bg-green-100 p-3 sm:p-4 shrink-0">
+              <ArrowUpRight className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Available Stock (Kgs)</p>
-              <p className="text-2xl font-bold text-green-700">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600 truncate">
+                Available Stock (Kgs)
+              </p>
+              <p className="text-lg sm:text-2xl font-bold text-green-700">
                 {fmt(totals.netKgs)}
               </p>
             </div>
           </Card>
 
-          <Card className="p-5 rounded-2xl shadow-sm border border-gray-200 bg-white flex items-center gap-4">
-            <div className="rounded-2xl bg-red-100 p-4">
-              <ArrowDownRight className="w-8 h-8 text-red-600" />
+          <Card className="p-3 sm:p-5 rounded-2xl shadow-sm border border-gray-200 bg-white flex items-center gap-3 sm:gap-4">
+            <div className="rounded-2xl bg-red-100 p-3 sm:p-4 shrink-0">
+              <ArrowDownRight className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" />
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Client Outgoing (Kgs)</p>
-              <p className="text-2xl font-bold text-red-700">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600 truncate">
+                Client Outgoing (Kgs)
+              </p>
+              <p className="text-lg sm:text-2xl font-bold text-red-700">
                 {fmt(totals.clientOutgoingKgs)}
               </p>
             </div>
@@ -320,11 +331,12 @@ export default function StocksPage() {
         </div>
 
         {/* Variety Pills */}
-        <Card className="p-4 rounded-2xl shadow-sm border border-gray-200 bg-white">
-          <div className="flex flex-wrap gap-3">
+        <Card className="p-3 sm:p-4 rounded-2xl shadow-sm border border-gray-200 bg-white">
+          {/* ✅ horizontal scroll on mobile */}
+          <div className="-mx-1 px-1 flex gap-2 sm:gap-3 overflow-x-auto whitespace-nowrap no-scrollbar">
             <button
               onClick={() => handleVarietyClick("all")}
-              className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`shrink-0 px-4 sm:px-5 py-2 rounded-full text-sm font-semibold transition-all ${
                 activeVariety === "all"
                   ? "bg-gray-900 text-white shadow-md"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300"
@@ -370,7 +382,7 @@ export default function StocksPage() {
                 <button
                   key={v.code}
                   onClick={() => handleVarietyClick(v.code)}
-                  className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
+                  className={`shrink-0 px-4 sm:px-5 py-2 rounded-full text-sm font-semibold transition-all ${
                     activeVariety === v.code
                       ? `${colors.activeBg} text-white shadow-md`
                       : `${colors.bg} ${colors.text} hover:opacity-80`
@@ -383,93 +395,155 @@ export default function StocksPage() {
           </div>
         </Card>
 
-        {/* Table */}
-        <Card className="rounded-2xl shadow-lg border border-gray-200 overflow-hidden bg-white">
-          {loading ? (
-            <div className="py-20 text-center text-gray-500">
+        {/* Loading / Error / Empty */}
+        {loading ? (
+          <Card className="rounded-2xl shadow-sm border border-gray-200 bg-white">
+            <div className="py-16 text-center text-gray-500">
               Loading stocks...
             </div>
-          ) : error ? (
-            <div className="py-20 text-center text-red-600">{error}</div>
-          ) : stockRows.length === 0 ? (
-            <div className="py-20 text-center text-gray-500">
+          </Card>
+        ) : error ? (
+          <Card className="rounded-2xl shadow-sm border border-gray-200 bg-white">
+            <div className="py-16 text-center text-red-600">{error}</div>
+          </Card>
+        ) : stockRows.length === 0 ? (
+          <Card className="rounded-2xl shadow-sm border border-gray-200 bg-white">
+            <div className="py-16 text-center text-gray-500">
               No stock data available.
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-blue-200 text-black uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-4 text-left font-medium">Variety</th>
-                    <th className="px-6 py-4 text-right font-medium">
-                      Farmer Kgs
-                    </th>
-                    <th className="px-6 py-4 text-right font-medium">
-                      Agent Kgs
-                    </th>
-                    <th className="px-6 py-4 text-right font-medium">
-                      Incoming Kgs
-                    </th>
-                    <th className="px-6 py-4 text-right font-medium">
-                      Client Outgoing Kgs
-                    </th>
-                  </tr>
-                </thead>
+          </Card>
+        ) : (
+          <>
+            {/* ✅ Mobile view: cards */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {stockRows.map((r) => (
+                <Card
+                  key={r.code}
+                  className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+                      <Fish className="w-5 h-5 text-gray-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-gray-900">{r.code}</div>
+                      {r.name && (
+                        <div className="text-xs text-gray-600 truncate">
+                          {r.name}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                <tbody className="divide-y divide-gray-200">
-                  {stockRows.map((r) => {
-                    const rowColorMap: Record<string, string> = {
-                      LR: "hover:bg-amber-50",
-                      TN: "hover:bg-purple-50",
-                      SF: "hover:bg-teal-50",
-                      CT: "hover:bg-indigo-50",
-                    };
-
-                    const hoverClass =
-                      rowColorMap[r.code] || "hover:bg-gray-50";
-
-                    return (
-                      <tr
-                        key={r.code}
-                        className={`transition-colors ${hoverClass}`}
-                      >
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                              <Fish className="w-5 h-5 text-gray-600" />
-                            </div>
-                            <div>
-                              <div className="font-bold text-gray-900 text-base">
-                                {r.code}
-                              </div>
-                              {r.name && (
-                                <div className="text-sm text-gray-600">
-                                  {r.name}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-right text-gray-700">
-                          {fmt(r.farmerKgs)}
-                        </td>
-                        <td className="px-6 py-5 text-right text-gray-700">
-                          {fmt(r.agentKgs)}
-                        </td>
-                        <td className="px-6 py-5 text-right font-semibold text-green-700">
-                          {fmt(r.incomingKgs)}
-                        </td>
-                        <td className="px-6 py-5 text-right font-semibold text-red-600">
-                          {fmt(r.clientOutgoingKgs)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-3">
+                      <div className="text-xs text-gray-600">Farmer</div>
+                      <div className="font-semibold text-gray-900">
+                        {fmt(r.farmerKgs)}
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-3">
+                      <div className="text-xs text-gray-600">Agent</div>
+                      <div className="font-semibold text-gray-900">
+                        {fmt(r.agentKgs)}
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-green-50 border border-green-200 p-3">
+                      <div className="text-xs text-gray-600">Incoming</div>
+                      <div className="font-semibold text-green-700">
+                        {fmt(r.incomingKgs)}
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-red-50 border border-red-200 p-3">
+                      <div className="text-xs text-gray-600">Client Out</div>
+                      <div className="font-semibold text-red-600">
+                        {fmt(r.clientOutgoingKgs)}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
-          )}
-        </Card>
+
+            {/* ✅ Desktop/tablet view: table */}
+            <Card className="hidden md:block rounded-2xl shadow-lg border border-gray-200 overflow-hidden bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-blue-200 text-black uppercase tracking-wider">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-medium">
+                        Variety
+                      </th>
+                      <th className="px-6 py-4 text-right font-medium">
+                        Farmer Kgs
+                      </th>
+                      <th className="px-6 py-4 text-right font-medium">
+                        Agent Kgs
+                      </th>
+                      <th className="px-6 py-4 text-right font-medium">
+                        Incoming Kgs
+                      </th>
+                      <th className="px-6 py-4 text-right font-medium">
+                        Client Outgoing Kgs
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-200">
+                    {stockRows.map((r) => {
+                      const rowColorMap: Record<string, string> = {
+                        LR: "hover:bg-amber-50",
+                        TN: "hover:bg-purple-50",
+                        SF: "hover:bg-teal-50",
+                        CT: "hover:bg-indigo-50",
+                      };
+
+                      const hoverClass =
+                        rowColorMap[r.code] || "hover:bg-gray-50";
+
+                      return (
+                        <tr
+                          key={r.code}
+                          className={`transition-colors ${hoverClass}`}
+                        >
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <Fish className="w-5 h-5 text-gray-600" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-gray-900 text-base">
+                                  {r.code}
+                                </div>
+                                {r.name && (
+                                  <div className="text-sm text-gray-600">
+                                    {r.name}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-right text-gray-700">
+                            {fmt(r.farmerKgs)}
+                          </td>
+                          <td className="px-6 py-5 text-right text-gray-700">
+                            {fmt(r.agentKgs)}
+                          </td>
+                          <td className="px-6 py-5 text-right font-semibold text-green-700">
+                            {fmt(r.incomingKgs)}
+                          </td>
+                          <td className="px-6 py-5 text-right font-semibold text-red-600">
+                            {fmt(r.clientOutgoingKgs)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );

@@ -18,14 +18,10 @@ export default function DashboardLayout({
       <SidebarProvider>
         <VendorBillsBadgeProvider>
           {" "}
-          {/* ← Wrap everything inside SidebarProvider */}
           <div className="flex h-screen w-screen overflow-hidden">
-            {/* Sidebar */}
             <div className="shrink-0">
               <AppSidebar />
             </div>
-
-            {/* Right Content */}
             <div className="flex flex-col flex-1 min-w-0">
               <TopNav />
 
