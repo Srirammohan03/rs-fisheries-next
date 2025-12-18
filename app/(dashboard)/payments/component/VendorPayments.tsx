@@ -300,11 +300,11 @@ export function VendorPayments() {
     <CardCustom
       title="Vendor Payments"
       actions={
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 w-full sm:w-auto">
           <Button
             onClick={handleSave}
             disabled={saveMutation.isPending || loadingVendors}
-            className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
+            className="w-full sm:w-auto bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
           >
             <Save className="w-4 h-4 mr-2" />
             {saveMutation.isPending ? "Saving..." : "Save Payment"}
@@ -313,7 +313,7 @@ export function VendorPayments() {
           <Button
             variant="outline"
             onClick={handleReset}
-            className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+            className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
             Reset
@@ -321,22 +321,23 @@ export function VendorPayments() {
         </div>
       }
     >
-      <div className="py-6">
-        <div className="max-w-6xl mx-auto space-y-8">
+      <div className="py-4 sm:py-6">
+        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
           {/* Top section */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 sm:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-end">
               {/* Vendor Select */}
-              <div className="lg:col-span-6 space-y-2">
+              <div className="lg:col-span-6 space-y-2 min-w-0">
                 <Label className="text-slate-700">
                   Vendor (Farmer / Agent)
                 </Label>
+
                 <Select
                   value={vendorId}
                   onValueChange={setVendorId}
                   disabled={loadingVendors}
                 >
-                  <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
+                  <SelectTrigger className="h-11 w-full border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
                     <SelectValue
                       placeholder={
                         loadingVendors ? "Loading..." : "Select vendor"
@@ -347,21 +348,19 @@ export function VendorPayments() {
                   <SelectContent className="border-slate-200">
                     {vendorData.map((v) => (
                       <SelectItem key={v.id} value={v.id} className="py-3">
-                        <div className="flex justify-between items-center w-full gap-4">
-                          <div className="min-w-0">
-                            <span className="font-medium text-slate-800 truncate">
-                              {v.name}
-                            </span>
-                          </div>
+                        <div className="flex items-center justify-between w-full gap-3 min-w-0">
+                          <span className="font-medium text-slate-800 truncate">
+                            {v.name}
+                          </span>
 
                           <Badge
                             variant="secondary"
-                            className="bg-slate-100 text-slate-700 border border-slate-200"
+                            className="shrink-0 bg-slate-100 text-slate-700 border border-slate-200"
                           >
                             {v.source}
                           </Badge>
 
-                          <span className="text-sm font-semibold text-[#139BC3]">
+                          <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-[#139BC3]">
                             {currency(v.totalDue)}
                           </span>
                         </div>
@@ -373,22 +372,22 @@ export function VendorPayments() {
 
               {/* Totals */}
               <div className="lg:col-span-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center overflow-hidden">
                   <p className="text-xs font-medium text-slate-600">
                     Total Due
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-slate-900">
+                  <p className="mt-1 font-bold text-slate-900 tabular-nums text-xl sm:text-2xl truncate">
                     {currency(totalDue)}
                   </p>
                 </div>
               </div>
 
               <div className="lg:col-span-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center overflow-hidden">
                   <p className="text-xs font-medium text-slate-600">
                     Remaining
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-emerald-600">
+                  <p className="mt-1 font-bold text-emerald-600 tabular-nums text-xl sm:text-2xl truncate">
                     {currency(remaining)}
                   </p>
                 </div>
@@ -397,8 +396,8 @@ export function VendorPayments() {
           </div>
 
           {/* Form */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 sm:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
               <div className="space-y-2">
                 <Label className="text-slate-700">Date</Label>
                 <Input
@@ -465,8 +464,8 @@ export function VendorPayments() {
 
             {/* Conditional fields */}
             {paymentMode !== "ac" && (
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <Label className="text-slate-700">
                       Reference No <span className="text-rose-600">*</span>
@@ -504,8 +503,8 @@ export function VendorPayments() {
             )}
 
             {paymentMode === "ac" && (
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                   <h3 className="text-lg font-semibold text-slate-900">
                     Bank Transfer Details
                   </h3>
@@ -514,7 +513,7 @@ export function VendorPayments() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <Label className="text-slate-700">Account Number</Label>
                     <Input
@@ -564,13 +563,13 @@ export function VendorPayments() {
                 Payment Type
               </Label>
 
-              <div className="flex flex-col lg:flex-row lg:items-center gap-4 mt-3">
-                <div className="flex gap-2">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-3 sm:gap-4 mt-3">
+                <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
                   <button
                     type="button"
                     onClick={() => setIsPartialPayment(false)}
                     className={[
-                      "px-5 py-2 rounded-full border text-sm font-semibold transition",
+                      "w-full sm:w-auto px-5 py-2 rounded-full border text-sm font-semibold transition",
                       !isPartialPayment
                         ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
@@ -583,7 +582,7 @@ export function VendorPayments() {
                     type="button"
                     onClick={() => setIsPartialPayment(true)}
                     className={[
-                      "px-5 py-2 rounded-full border text-sm font-semibold transition",
+                      "w-full sm:w-auto px-5 py-2 rounded-full border text-sm font-semibold transition",
                       isPartialPayment
                         ? "bg-[#139BC3] text-white border-[#139BC3] hover:bg-[#1088AA]"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50",
@@ -608,39 +607,39 @@ export function VendorPayments() {
               </div>
             </div>
 
-            {/* Summary */}
-            <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-center">
-                <div className="rounded-xl bg-white border border-slate-200 p-4">
+            {/* Summary (✅ 1 by 1 on mobile) */}
+            <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 text-center">
+                <div className="rounded-xl bg-white border border-slate-200 p-4 overflow-hidden">
                   <p className="text-xs font-medium text-slate-600">
                     Total Due
                   </p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
+                  <p className="mt-1 font-bold text-slate-900 tabular-nums text-lg sm:text-xl truncate">
                     {currency(totalDue)}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                <div className="rounded-xl bg-white border border-slate-200 p-4 overflow-hidden">
                   <p className="text-xs font-medium text-slate-600">Paid</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
+                  <p className="mt-1 font-bold text-slate-900 tabular-nums text-lg sm:text-xl truncate">
                     {currency(paidAmount)}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                <div className="rounded-xl bg-white border border-slate-200 p-4 overflow-hidden">
                   <p className="text-xs font-medium text-slate-600">
                     Remaining
                   </p>
-                  <p className="mt-1 text-xl font-bold text-emerald-600">
+                  <p className="mt-1 font-bold text-emerald-600 tabular-nums text-lg sm:text-xl truncate">
                     {currency(remaining)}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-white border border-slate-200 p-4">
+                <div className="rounded-xl bg-white border border-slate-200 p-4 overflow-hidden">
                   <p className="text-xs font-medium text-slate-600">
                     Paying Now
                   </p>
-                  <p className="mt-1 text-xl font-bold text-[#139BC3]">
+                  <p className="mt-1 font-bold text-[#139BC3] tabular-nums text-lg sm:text-xl truncate">
                     {currency(Number(amount) || 0)}
                   </p>
                 </div>

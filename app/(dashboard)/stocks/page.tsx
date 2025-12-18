@@ -19,6 +19,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
 } from "lucide-react";
+import AddFishButton from "../dashboard/components/AddFishButton";
 
 /* ---------------- Types ---------------- */
 type FishVariety = { id?: string; code: string; name?: string };
@@ -282,6 +283,8 @@ export default function StocksPage() {
               </SelectContent>
             </Select>
           </div>
+
+          <AddFishButton />
         </div>
 
         {/* Summary Cards */}

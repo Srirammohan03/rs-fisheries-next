@@ -28,7 +28,7 @@ const data = await fetchDashboardMetrics();
   return (
     <div className="p-6 space-y-6">
       
-      <AddFishButton />
+      {/* <AddFishButton /> */}
       <DashboardClient data={data} />
     </div>
   );
