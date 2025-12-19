@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,28 +30,34 @@ interface ItemRow {
 
 export default function FormerLoading() {
   // ---------- HEADER FIELDS ----------
-  const [billNo, setBillNo] = useState("");
   const [FarmerName, setFarmerName] = useState("");
   const [village, setVillage] = useState("");
   const [date, setDate] = useState("");
   const [fishCode, setFishCode] = useState("");
   const [vehicleId, setVehicleId] = useState("");
 
-  // ---------- FETCH BILL NUMBER ----------
-  const fetchNextBillNo = async () => {
-    try {
-      const res = await fetch("/api/former-loading/next-bill-no");
-      const data = await res.json();
-      setBillNo(data.billNo);
-    } catch {
-      toast.error("Failed to load bill number");
-    }
-  };
+  const queryClient = useQueryClient();
+
+  // ---------- FETCH NEXT BILL NO WITH TANSTACK QUERY ----------
+  const {
+    data: billNoData,
+    isLoading: isLoadingBillNo,
+    isError: isErrorBillNo,
+  } = useQuery({
+    queryKey: ["next-bill-no"],
+    queryFn: async () => {
+      const res = await axios.get("/api/former-loading/next-bill-no");
+      return res.data;
+    },
+  });
 
   useEffect(() => {
-    fetchNextBillNo();
-  }, []);
+    if (isErrorBillNo) {
+      toast.error("Failed to load bill number");
+    }
+  }, [isErrorBillNo]);
 
+  // ---------- FETCH VEHICLES ----------
   const { data: vehicles = [] } = useQuery({
     queryKey: ["assigned-vehicles"],
     queryFn: async () => {
@@ -132,13 +138,23 @@ export default function FormerLoading() {
         loose: 0,
       },
     ]);
-
-    fetchNextBillNo();
   };
 
   // ---------- SAVE ----------
   const handleSave = async () => {
-    if (!billNo.trim()) return toast.error("Bill No missing");
+    if (isLoadingBillNo) {
+      return toast.error("Waiting for bill number to load");
+    }
+
+    if (isErrorBillNo) {
+      return toast.error("Bill number failed to load");
+    }
+
+    const currentBillNo = billNoData?.billNo;
+    if (!currentBillNo?.trim()) {
+      return toast.error("Bill No missing");
+    }
+
     if (!FarmerName.trim()) return toast.error("Enter Farmer Name");
     if (!date.trim()) return toast.error("Select Date");
 
@@ -160,7 +176,7 @@ export default function FormerLoading() {
 
     try {
       await axios.post("/api/former-loading", {
-        billNo,
+        billNo: currentBillNo,
         fishCode: fishCodeValue,
         FarmerName,
         village,
@@ -184,6 +200,7 @@ export default function FormerLoading() {
 
       toast.success("Former loading saved successfully!");
       resetForm();
+      queryClient.invalidateQueries({ queryKey: ["next-bill-no"] });
     } catch (err) {
       console.log(err);
       toast.error("Failed to save");
@@ -195,6 +212,12 @@ export default function FormerLoading() {
     const v = varieties.find((x: any) => x.code === code);
     return v?.name || "-";
   };
+
+  const displayBillNo = isLoadingBillNo
+    ? "Loading..."
+    : isErrorBillNo
+    ? "Failed to load"
+    : billNoData?.billNo ?? "";
 
   return (
     <Card className="p-4 sm:p-6 rounded-2xl space-y-6 border border-[#139BC3]/15 bg-white shadow-[0_18px_45px_-30px_rgba(19,155,195,0.35)]">
@@ -224,7 +247,7 @@ export default function FormerLoading() {
           <FieldLabel>Farmer Bill No</FieldLabel>
           <Input
             readOnly
-            value={billNo}
+            value={displayBillNo}
             className="bg-slate-50 font-semibold border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
           />
         </Field>

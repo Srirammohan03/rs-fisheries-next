@@ -54,11 +54,11 @@ export default function AppSidebar() {
   // const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
-  const { newVendorBillsCount, markVendorBillsAsSeen } = useVendorBillsBadge();
+  // const { newVendorBillsCount, markVendorBillsAsSeen } = useVendorBillsBadge();
 
-  useEffect(() => {
-    if (pathname === "/vendor-bills") markVendorBillsAsSeen();
-  }, [pathname, markVendorBillsAsSeen]);
+  // useEffect(() => {
+  //   if (pathname === "/vendor-bills") markVendorBillsAsSeen();
+  // }, [pathname, markVendorBillsAsSeen]);
   useEffect(() => {
     if (isMobile) setOpenMobile(false);
   }, [pathname, isMobile, setOpenMobile]);
@@ -124,8 +124,8 @@ export default function AppSidebar() {
                   pathname === item.href ||
                   pathname.startsWith(item.href + "/");
 
-                const showBadge =
-                  item.href === "/vendor-bills" && newVendorBillsCount > 0;
+                // const showBadge =
+                //   item.href === "/vendor-bills" && newVendorBillsCount > 0;
 
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -189,7 +189,7 @@ export default function AppSidebar() {
                         )}
 
                         {/* Badge (expanded) */}
-                        {showBadge && !collapsed && (
+                        {/* {showBadge && !collapsed && (
                           <Badge
                             className="ml-auto rounded-full px-2 py-0.5 text-[11px]"
                             style={{
@@ -202,10 +202,10 @@ export default function AppSidebar() {
                               ? "99+"
                               : newVendorBillsCount}
                           </Badge>
-                        )}
+                        )} */}
 
                         {/* small dot indicator when collapsed */}
-                        {showBadge && collapsed && (
+                        {/* {showBadge && collapsed && (
                           <span
                             className="absolute right-2 top-2 h-2 w-2 rounded-full"
                             style={{
@@ -213,7 +213,7 @@ export default function AppSidebar() {
                               boxShadow: "0 0 0 3px rgba(239,68,68,0.15)",
                             }}
                           />
-                        )}
+                        )} */}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

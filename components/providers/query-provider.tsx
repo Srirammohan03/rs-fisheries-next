@@ -12,7 +12,7 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
             staleTime: 2 * 60 * 1000,
             refetchOnWindowFocus: false,
             refetchOnReconnect: false,
-            refetchOnMount: "always",
+            refetchOnMount: false,
             refetchInterval: false,
           },
         },
