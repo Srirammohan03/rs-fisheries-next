@@ -5,6 +5,7 @@ import { TopNav } from "@/components/layout/top-nav";
 import AppSidebar from "@/components/layout/sidebarMain";
 import QueryProvider from "@/components/providers/query-provider";
 import { Toaster } from "sonner";
+import { VendorBillsBadgeProvider } from "@/components/providers/VendorBillsBadgeProvider";
 
 export default function DashboardLayout({
   children,
@@ -15,18 +16,20 @@ export default function DashboardLayout({
     <QueryProvider>
       <Toaster />
       <SidebarProvider>
-        <div className="flex h-screen w-screen overflow-hidden">
-          <div className="shrink-0">
-            <AppSidebar />
-          </div>
-          <div className="flex flex-col flex-1 min-w-0">
-            <TopNav />
+        <VendorBillsBadgeProvider>
+          <div className="flex h-screen w-screen overflow-hidden">
+            <div className="shrink-0">
+              <AppSidebar />
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <TopNav />
 
-            <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
-              {children}
-            </main>
+              <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+                {children}
+              </main>
+            </div>
           </div>
-        </div>
+        </VendorBillsBadgeProvider>
       </SidebarProvider>
     </QueryProvider>
   );
