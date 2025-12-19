@@ -312,9 +312,7 @@ model Driver {
   age           Int
   aadharNumber  String @unique
 
-  identityProofBytes Bytes?
-  identityProofType  String?
-  identityProofName  String?
+  identityProof String?
 
   createdAt DateTime @default(now())
 
