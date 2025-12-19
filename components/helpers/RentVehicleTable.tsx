@@ -140,7 +140,7 @@ export function RentVehicleTable() {
         <div className="lg:col-span-5">
           <Input
             placeholder="Search vehicle / driver / agency"
-            className="h-11 w-full border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+            className="w-full border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             value={filters.search}
             onChange={(e) =>
               setFilters((p) => ({ ...p, search: e.target.value }))
@@ -179,54 +179,52 @@ export function RentVehicleTable() {
             </SelectContent>
           </Select>
         </div>
-
-        <div className="lg:col-span-1 flex items-center justify-between sm:justify-end">
-          <div className="text-xs text-slate-500">
-            <span className="font-semibold text-slate-900">
-              {filtered.length}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* ✅ Mobile Cards */}
       <div className="grid grid-cols-1 gap-3 md:hidden">
-        {filtered.map((v) => (
-          <div
-            key={v.id}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-base font-extrabold text-slate-900">
-                  {v.vehicleNumber}
+        {filtered.length === 0 ? (
+          <div className="text-center py-10 text-slate-500">
+            No vehicles found
+          </div>
+        ) : (
+          filtered.map((v) => (
+            <div
+              key={v.id}
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-base font-extrabold text-slate-900">
+                    {v.vehicleNumber}
+                  </div>
+
+                  <div className="mt-1 text-sm text-slate-600">
+                    Agency: {v.rentalAgency || "-"}
+                  </div>
+
+                  <div className="mt-1 text-sm text-slate-600">
+                    Rate/Day:{" "}
+                    <span className="font-semibold text-slate-900">
+                      {v.rentalRatePerDay}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 text-sm font-semibold text-slate-800">
+                    Driver:{" "}
+                    <span className="font-medium text-slate-600">
+                      {v.assignedDriver?.name ?? "No Driver Assigned"}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="mt-1 text-sm text-slate-600">
-                  Agency: {v.rentalAgency || "-"}
+                <div className="shrink-0">
+                  <AssignDriverDialog vehicleId={v.id} />
                 </div>
-
-                <div className="mt-1 text-sm text-slate-600">
-                  Rate/Day:{" "}
-                  <span className="font-semibold text-slate-900">
-                    {v.rentalRatePerDay}
-                  </span>
-                </div>
-
-                <div className="mt-2 text-sm font-semibold text-slate-800">
-                  Driver:{" "}
-                  <span className="font-medium text-slate-600">
-                    {v.assignedDriver?.name ?? "No Driver Assigned"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="shrink-0">
-                <AssignDriverDialog vehicleId={v.id} />
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* ✅ Desktop Table */}
