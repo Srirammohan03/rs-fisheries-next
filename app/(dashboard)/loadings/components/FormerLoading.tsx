@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -20,6 +20,15 @@ import { Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 const TRAY_WEIGHT = 35;
+const DEDUCTION_PERCENT = 5;
+
+const todayYMD = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 interface ItemRow {
   id: string;
@@ -32,13 +41,15 @@ export default function FormerLoading() {
   // ---------- HEADER FIELDS ----------
   const [FarmerName, setFarmerName] = useState("");
   const [village, setVillage] = useState("");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(todayYMD()); // ✅ default today (editable)
   const [fishCode, setFishCode] = useState("");
+
   const [vehicleId, setVehicleId] = useState("");
+  const [otherVehicleNo, setOtherVehicleNo] = useState(""); // ✅ NEW
 
   const queryClient = useQueryClient();
 
-  // ---------- FETCH NEXT BILL NO WITH TANSTACK QUERY ----------
+  // ---------- FETCH NEXT BILL NO ----------
   const {
     data: billNoData,
     isLoading: isLoadingBillNo,
@@ -52,9 +63,7 @@ export default function FormerLoading() {
   });
 
   useEffect(() => {
-    if (isErrorBillNo) {
-      toast.error("Failed to load bill number");
-    }
+    if (isErrorBillNo) toast.error("Failed to load bill number");
   }, [isErrorBillNo]);
 
   // ---------- FETCH VEHICLES ----------
@@ -68,12 +77,7 @@ export default function FormerLoading() {
 
   // ---------- ITEM ROWS ----------
   const [items, setItems] = useState<ItemRow[]>([
-    {
-      id: crypto.randomUUID(),
-      varietyCode: "",
-      noTrays: 0,
-      loose: 0,
-    },
+    { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
   ]);
 
   // ---------- FETCH VARIETIES ----------
@@ -89,12 +93,7 @@ export default function FormerLoading() {
   const addRow = () => {
     setItems((prev) => [
       ...prev,
-      {
-        id: crypto.randomUUID(),
-        varietyCode: "",
-        noTrays: 0,
-        loose: 0,
-      },
+      { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
     ]);
   };
 
@@ -116,47 +115,64 @@ export default function FormerLoading() {
     );
   };
 
-  const calculateTotal = (item: ItemRow) => {
+  const calculateRowTotal = (item: ItemRow) => {
     return item.noTrays * TRAY_WEIGHT + item.loose;
   };
 
-  const grandTotal = items.reduce((sum, item) => sum + calculateTotal(item), 0);
+  const totalKgs = useMemo(
+    () => items.reduce((sum, item) => sum + calculateRowTotal(item), 0),
+    [items]
+  );
+
+  // ✅ Grand total after 5% deduction
+  const grandTotal = useMemo(() => {
+    const afterDeduction = totalKgs * (1 - DEDUCTION_PERCENT / 100);
+    return Number(afterDeduction.toFixed(2));
+  }, [totalKgs]);
 
   // ---------- RESET FORM ----------
   const resetForm = () => {
     setFarmerName("");
     setVillage("");
-    setDate("");
+    setDate(todayYMD()); // ✅ reset to today
     setVehicleId("");
+    setOtherVehicleNo("");
     setFishCode("");
 
     setItems([
-      {
-        id: crypto.randomUUID(),
-        varietyCode: "",
-        noTrays: 0,
-        loose: 0,
-      },
+      { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
     ]);
   };
 
+  // ---------- GET VARIETY NAME ----------
+  const getVarietyName = (code: string) => {
+    const v = varieties.find((x: any) => x.code === code);
+    return v?.name || "-";
+  };
+
+  const displayBillNo = isLoadingBillNo
+    ? "Loading..."
+    : isErrorBillNo
+    ? "Failed to load"
+    : billNoData?.billNo ?? "";
+
+  const isOtherVehicle = vehicleId === "__OTHER__";
+
   // ---------- SAVE ----------
   const handleSave = async () => {
-    if (isLoadingBillNo) {
-      return toast.error("Waiting for bill number to load");
-    }
-
-    if (isErrorBillNo) {
-      return toast.error("Bill number failed to load");
-    }
+    if (isLoadingBillNo) return toast.error("Waiting for bill number to load");
+    if (isErrorBillNo) return toast.error("Bill number failed to load");
 
     const currentBillNo = billNoData?.billNo;
-    if (!currentBillNo?.trim()) {
-      return toast.error("Bill No missing");
-    }
+    if (!currentBillNo?.trim()) return toast.error("Bill No missing");
 
     if (!FarmerName.trim()) return toast.error("Enter Farmer Name");
     if (!date.trim()) return toast.error("Select Date");
+
+    // ✅ vehicle validation
+    if (!vehicleId.trim()) return toast.error("Select Vehicle");
+    if (isOtherVehicle && !otherVehicleNo.trim())
+      return toast.error("Enter Vehicle Number");
 
     const validRows = items.filter((i) => i.noTrays > 0 || i.loose > 0);
     if (validRows.length === 0) return toast.error("Enter at least one row");
@@ -172,8 +188,6 @@ export default function FormerLoading() {
       totalTrayKgs: items.reduce((a, b) => a + b.noTrays * TRAY_WEIGHT, 0),
     };
 
-    const totalKgs = totals.totalTrayKgs + totals.totalLooseKgs;
-
     try {
       await axios.post("/api/former-loading", {
         billNo: currentBillNo,
@@ -181,13 +195,16 @@ export default function FormerLoading() {
         FarmerName,
         village,
         date,
-        vehicleId,
+
+        // ✅ If other: vehicleId = null and send vehicleNo
+        vehicleId: isOtherVehicle ? null : vehicleId,
+        vehicleNo: isOtherVehicle ? otherVehicleNo.trim() : null,
 
         totalTrays: totals.totalTrays,
         totalLooseKgs: totals.totalLooseKgs,
         totalTrayKgs: totals.totalTrayKgs,
         totalKgs,
-        grandTotal,
+        grandTotal, // ✅ already after 5% deduction
 
         items: items.map((i) => ({
           varietyCode: i.varietyCode,
@@ -206,18 +223,6 @@ export default function FormerLoading() {
       toast.error("Failed to save");
     }
   };
-
-  // ---------- GET VARIETY NAME ----------
-  const getVarietyName = (code: string) => {
-    const v = varieties.find((x: any) => x.code === code);
-    return v?.name || "-";
-  };
-
-  const displayBillNo = isLoadingBillNo
-    ? "Loading..."
-    : isErrorBillNo
-    ? "Failed to load"
-    : billNoData?.billNo ?? "";
 
   return (
     <Card className="p-4 sm:p-6 rounded-2xl space-y-6 border border-[#139BC3]/15 bg-white shadow-[0_18px_45px_-30px_rgba(19,155,195,0.35)]">
@@ -283,7 +288,13 @@ export default function FormerLoading() {
         <Field className="sm:col-span-2 md:col-span-1">
           <FieldLabel>Select Vehicle</FieldLabel>
 
-          <Select value={vehicleId} onValueChange={setVehicleId}>
+          <Select
+            value={vehicleId}
+            onValueChange={(v) => {
+              setVehicleId(v);
+              if (v !== "__OTHER__") setOtherVehicleNo("");
+            }}
+          >
             <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
               <SelectValue placeholder="Select Vehicle" />
             </SelectTrigger>
@@ -294,12 +305,28 @@ export default function FormerLoading() {
                   {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
                 </SelectItem>
               ))}
+
+              {/* ✅ NEW OPTION */}
+              <SelectItem value="__OTHER__">Other</SelectItem>
             </SelectContent>
           </Select>
         </Field>
+
+        {/* ✅ Show only when Other selected */}
+        {isOtherVehicle && (
+          <Field className="sm:col-span-2 md:col-span-1">
+            <FieldLabel>Other Vehicle Number</FieldLabel>
+            <Input
+              value={otherVehicleNo}
+              onChange={(e) => setOtherVehicleNo(e.target.value)}
+              className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              placeholder="Enter vehicle number"
+            />
+          </Field>
+        )}
       </div>
 
-      {/* ✅ MOBILE CARDS (no scroll) */}
+      {/* ✅ MOBILE CARDS */}
       <div className="grid grid-cols-1 gap-3 md:hidden">
         {items.map((item, i) => (
           <div
@@ -383,7 +410,7 @@ export default function FormerLoading() {
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
                 <div className="text-sm text-slate-600">Total</div>
                 <div className="text-lg font-extrabold text-slate-900">
-                  {calculateTotal(item).toFixed(2)}
+                  {calculateRowTotal(item).toFixed(2)}
                 </div>
               </div>
             </div>
@@ -391,7 +418,7 @@ export default function FormerLoading() {
         ))}
       </div>
 
-      {/* ✅ DESKTOP TABLE (md+) */}
+      {/* ✅ DESKTOP TABLE */}
       <div className="hidden md:block overflow-x-auto rounded-2xl border border-[#139BC3]/15">
         <table className="w-full min-w-[900px]">
           <thead>
@@ -475,7 +502,7 @@ export default function FormerLoading() {
                 </td>
 
                 <td className="px-3 py-3 font-semibold text-slate-900">
-                  {calculateTotal(item).toFixed(2)}
+                  {calculateRowTotal(item).toFixed(2)}
                 </td>
 
                 <td className="px-3 py-3">
@@ -506,8 +533,10 @@ export default function FormerLoading() {
           Add Row
         </Button>
 
-        <div className="text-left sm:text-right">
-          <p className="text-sm text-slate-500">Grand Total</p>
+        <div className="text-left sm:text-right space-y-1">
+          <p className="text-sm text-slate-500">
+            Grand Total (after 5% deduction)
+          </p>
           <p className="text-2xl font-bold text-slate-900">
             {grandTotal.toFixed(2)} <span className="text-slate-500">kgs</span>
           </p>

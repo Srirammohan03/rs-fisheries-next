@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +16,17 @@ import {
 } from "@/components/ui/select";
 import { PlusCircle, Save, Trash2 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
+
+const TRAY_WEIGHT = 35;
+const DEDUCTION_PERCENT = 5;
+
+const todayYMD = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 interface ItemRow {
   id: string;
@@ -31,10 +42,13 @@ export default function AgentLoading() {
   const [billNo, setBillNo] = useState("");
   const [agentName, setAgentName] = useState("");
   const [village, setVillage] = useState("");
-  const [date, setDate] = useState("");
-  const [vehicleNo, setVehicleNo] = useState("");
+  const [date, setDate] = useState(todayYMD()); // ✅ default today
   const [fishCode, setFishCode] = useState("");
-  // const [vehicleId, setVehicleId] = useState("");
+
+  const [vehicleId, setVehicleId] = useState(""); // ✅ dropdown id
+  const [otherVehicleNo, setOtherVehicleNo] = useState(""); // ✅ other input
+
+  const isOtherVehicle = vehicleId === "__OTHER__";
 
   const [items, setItems] = useState<ItemRow[]>([
     {
@@ -48,9 +62,6 @@ export default function AgentLoading() {
     },
   ]);
 
-  const [grandTotal, setGrandTotal] = useState(0);
-  // if (!vehicleNo) return toast.error("Select a vehicle");
-
   const { data: varieties = [] } = useQuery({
     queryKey: ["varieties"],
     queryFn: async () => {
@@ -58,6 +69,7 @@ export default function AgentLoading() {
       return res.data.data || [];
     },
   });
+
   const { data: vehicles = [] } = useQuery({
     queryKey: ["assigned-vehicles"],
     queryFn: async () => {
@@ -65,10 +77,11 @@ export default function AgentLoading() {
       return res.data.data;
     },
   });
-  // Helper to get fish name
+
   const getVarietyName = (code: string) => {
     return varieties.find((v: any) => v.code === code)?.name || "";
   };
+
   const { data: billData, refetch: refetchBillNo } = useQuery({
     queryKey: ["agent-bill-no"],
     queryFn: async () => {
@@ -89,10 +102,13 @@ export default function AgentLoading() {
           ? {
               ...row,
               [field]: value,
-              trayKgs: field === "noTrays" ? value * 35 : row.trayKgs,
+              trayKgs:
+                field === "noTrays" ? Number(value) * TRAY_WEIGHT : row.trayKgs,
               totalKgs:
-                (field === "noTrays" ? value * 35 : row.trayKgs) +
-                (field === "loose" ? value : row.loose),
+                (field === "noTrays"
+                  ? Number(value) * TRAY_WEIGHT
+                  : row.trayKgs) +
+                (field === "loose" ? Number(value) : row.loose),
             }
           : row
       )
@@ -119,16 +135,23 @@ export default function AgentLoading() {
     setItems((prev) => prev.filter((row) => row.id !== id));
   };
 
-  useEffect(() => {
-    const total = items.reduce((sum, r) => sum + r.totalKgs, 0);
-    setGrandTotal(total);
-  }, [items]);
+  const totalKgs = useMemo(
+    () => items.reduce((sum, r) => sum + (Number(r.totalKgs) || 0), 0),
+    [items]
+  );
+
+  // ✅ 5% deduction
+  const grandTotal = useMemo(() => {
+    const after = totalKgs * (1 - DEDUCTION_PERCENT / 100);
+    return Number(after.toFixed(2));
+  }, [totalKgs]);
 
   const resetForm = () => {
     setAgentName("");
     setVillage("");
-    setDate("");
-    setVehicleNo("");
+    setDate(todayYMD());
+    setVehicleId("");
+    setOtherVehicleNo("");
 
     setItems([
       {
@@ -142,25 +165,31 @@ export default function AgentLoading() {
       },
     ]);
 
-    setGrandTotal(0);
-
-    // Reload bill number
     refetchBillNo();
   };
 
   const handleSave = async () => {
     if (!billNo) return toast.error("Bill number missing");
     if (!agentName.trim()) return toast.error("Enter Agent Name");
+    if (!date.trim()) return toast.error("Select Date");
+
+    if (!vehicleId.trim()) return toast.error("Select Vehicle");
+    if (isOtherVehicle && !otherVehicleNo.trim())
+      return toast.error("Enter Vehicle Number");
+
     const firstVariety = items[0]?.varietyCode;
     if (!firstVariety) return toast.error("Select at least one variety");
+
     const fishCodeValue = firstVariety.toUpperCase();
+
     const totals = {
-      totalTrays: items.reduce((a, b) => a + b.noTrays, 0),
-      totalLooseKgs: items.reduce((a, b) => a + b.loose, 0),
-      totalTrayKgs: items.reduce((a, b) => a + b.noTrays * 35, 0),
-      totalKgs:
-        items.reduce((a, b) => a + b.noTrays * 35, 0) +
-        items.reduce((a, b) => a + b.loose, 0),
+      totalTrays: items.reduce((a, b) => a + (Number(b.noTrays) || 0), 0),
+      totalLooseKgs: items.reduce((a, b) => a + (Number(b.loose) || 0), 0),
+      totalTrayKgs: items.reduce(
+        (a, b) => a + (Number(b.noTrays) || 0) * TRAY_WEIGHT,
+        0
+      ),
+      totalKgs: totalKgs,
     };
 
     try {
@@ -170,16 +199,20 @@ export default function AgentLoading() {
         billNo,
         village,
         date,
-        vehicleNo,
+
+        // ✅ match API
+        vehicleId: isOtherVehicle ? null : vehicleId,
+        vehicleNo: isOtherVehicle ? otherVehicleNo.trim() : null,
+
         ...totals,
         grandTotal,
 
         items: items.map((r) => ({
           varietyCode: r.varietyCode,
           noTrays: r.noTrays,
-          trayKgs: r.noTrays * 35,
-          loose: r.loose,
-          totalKgs: r.totalKgs,
+          trayKgs: (Number(r.noTrays) || 0) * TRAY_WEIGHT,
+          loose: Number(r.loose) || 0,
+          totalKgs: Number(r.totalKgs) || 0,
         })),
       });
 
@@ -189,6 +222,7 @@ export default function AgentLoading() {
       toast.error("Failed to save agent loading");
     }
   };
+
   return (
     <Card className="rounded-2xl p-4 sm:p-6 border border-[#139BC3]/15 bg-white shadow-[0_18px_45px_-30px_rgba(19,155,195,0.35)]">
       {/* HEADER */}
@@ -253,20 +287,41 @@ export default function AgentLoading() {
 
           <Field className="sm:col-span-2 md:col-span-1">
             <FieldLabel>Select Vehicle</FieldLabel>
-            <Select value={vehicleNo} onValueChange={setVehicleNo}>
+
+            <Select
+              value={vehicleId}
+              onValueChange={(v) => {
+                setVehicleId(v);
+                if (v !== "__OTHER__") setOtherVehicleNo("");
+              }}
+            >
               <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
                 <SelectValue placeholder="Select Vehicle" />
               </SelectTrigger>
 
               <SelectContent>
                 {vehicles.map((v: any) => (
-                  <SelectItem key={v.id} value={v.vehicleNumber}>
+                  <SelectItem key={v.id} value={v.id}>
                     {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
                   </SelectItem>
                 ))}
+
+                <SelectItem value="__OTHER__">Other</SelectItem>
               </SelectContent>
             </Select>
           </Field>
+
+          {isOtherVehicle && (
+            <Field className="sm:col-span-2 md:col-span-1">
+              <FieldLabel>Other Vehicle Number</FieldLabel>
+              <Input
+                value={otherVehicleNo}
+                onChange={(e) => setOtherVehicleNo(e.target.value)}
+                className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                placeholder="Enter vehicle number"
+              />
+            </Field>
+          )}
         </div>
 
         {/* ✅ MOBILE CARDS (no horizontal scroll) */}
@@ -501,7 +556,9 @@ export default function AgentLoading() {
         {/* GRAND TOTAL */}
         <div className="flex justify-end">
           <div className="text-right">
-            <p className="text-sm text-slate-500">Grand Total</p>
+            <p className="text-sm text-slate-500">
+              Grand Total (after 5% deduction)
+            </p>
             <p className="text-2xl font-bold text-slate-900">
               {grandTotal} <span className="text-slate-500">Kgs</span>
             </p>

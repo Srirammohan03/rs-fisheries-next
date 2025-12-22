@@ -42,19 +42,17 @@ model FormerLoading {
   FarmerName String?
   village    String
   date       DateTime
-  vehicleId  String
-  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  vehicleId String? // ✅ optional
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  vehicleNo String? // ✅ store when Other selected
 
   totalTrays    Int   @default(0)
   totalLooseKgs Float @default(0)
   totalTrayKgs  Float @default(0)
   totalKgs      Float @default(0)
   totalPrice    Float @default(0)
-
-  accountNumber String?
-  ifsc          String?
-  bankName      String?
-  bankAddress   String?
 
   grandTotal Float        @default(0)
   items      FormerItem[]
@@ -77,26 +75,24 @@ model FormerItem {
 }
 
 model AgentLoading {
-  id            String   @id @default(uuid())
-  fishCode      String
-  agentName     String
-  billNo        String   @unique
-  village       String
-  date          DateTime
-  vehicleId     String
-  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id])
-  totalTrays    Int      @default(0)
-  totalLooseKgs Float    @default(0)
-  totalTrayKgs  Float    @default(0)
-  totalKgs      Float    @default(0)
-  totalPrice    Float    @default(0)
+  id        String   @id @default(uuid())
+  fishCode  String
+  agentName String
+  billNo    String   @unique
+  village   String
+  date      DateTime
 
-  accountNumber String?
-  ifsc          String?
-  bankName      String?
-  bankAddress   String?
+  vehicleId String? // ✅ make optional
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
 
-  grandTotal Float @default(0)
+  vehicleNo String? // ✅ store typed vehicle no when "Other"
+
+  totalTrays    Int   @default(0)
+  totalLooseKgs Float @default(0)
+  totalTrayKgs  Float @default(0)
+  totalKgs      Float @default(0)
+  totalPrice    Float @default(0)
+  grandTotal    Float @default(0)
 
   createdAt DateTime    @default(now())
   items     AgentItem[]
@@ -121,20 +117,24 @@ model AgentItem {
 }
 
 model ClientLoading {
-  id            String   @id @default(uuid())
-  clientName    String
-  billNo        String   @unique
-  date          DateTime
-  vehicleId     String
-  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id])
+  id         String   @id @default(uuid())
+  clientName String
+  billNo     String   @unique
+  date       DateTime
+
+  vehicleId String? // ✅ optional now
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  vehicleNo String? // ✅ store when Other selected
+
   fishCode      String
   village       String
-  totalTrays    Int      @default(0)
-  totalLooseKgs Float    @default(0)
-  totalTrayKgs  Float    @default(0)
-  totalKgs      Float    @default(0)
-  totalPrice    Float    @default(0)
-  grandTotal    Float    @default(0)
+  totalTrays    Int    @default(0)
+  totalLooseKgs Float  @default(0)
+  totalTrayKgs  Float  @default(0)
+  totalKgs      Float  @default(0)
+  totalPrice    Float  @default(0)
+  grandTotal    Float  @default(0)
 
   accountNumber String?
   ifsc          String?

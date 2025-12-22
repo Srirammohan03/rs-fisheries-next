@@ -1,20 +1,15 @@
 // app/api/former-loading/route.ts
-
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-// import { Prisma } from "@prisma/client";
+
+const TRAY_WEIGHT = 35;
+const DEDUCTION_PERCENT = 5;
+
 export async function POST(req: Request) {
   try {
     const data = await req.json();
 
-    // Basic validation
-    if (!data.vehicleId) {
-      return NextResponse.json(
-        { success: false, message: "Vehicle selection is required" },
-        { status: 400 }
-      );
-    }
-
+    // BillNo required
     if (!data.billNo) {
       return NextResponse.json(
         { success: false, message: "Bill number is required" },
@@ -22,7 +17,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Ensure date is a valid Date object
+    // Date validation
     const loadingDate = data.date ? new Date(data.date) : new Date();
     if (isNaN(loadingDate.getTime())) {
       return NextResponse.json(
@@ -31,49 +26,94 @@ export async function POST(req: Request) {
       );
     }
 
+    // Vehicle validation (Either vehicleId OR vehicleNo)
+    const vehicleId: string | null =
+      typeof data.vehicleId === "string" && data.vehicleId.trim()
+        ? data.vehicleId.trim()
+        : null;
+
+    const vehicleNo: string | null =
+      typeof data.vehicleNo === "string" && data.vehicleNo.trim()
+        ? data.vehicleNo.trim()
+        : null;
+
+    if (!vehicleId && !vehicleNo) {
+      return NextResponse.json(
+        { success: false, message: "Vehicle selection is required" },
+        { status: 400 }
+      );
+    }
+
+    // Compute totals from items (authoritative)
+    const items = (data.items || []).map((item: any) => {
+      const trays = Number(item.noTrays) || 0;
+      const loose = Number(item.loose) || 0;
+
+      const totalKgs = trays * TRAY_WEIGHT + loose;
+
+      const pricePerKg = Number(item.pricePerKg) || 0;
+      const totalPrice =
+        Number(item.totalPrice) || (pricePerKg ? pricePerKg * totalKgs : 0);
+
+      return {
+        varietyCode: item.varietyCode,
+        noTrays: trays,
+        trayKgs: trays * TRAY_WEIGHT,
+        loose,
+        totalKgs,
+        pricePerKg,
+        totalPrice,
+      };
+    });
+
+    const totalTrays = items.reduce((sum: number, i: any) => sum + i.noTrays, 0);
+    const totalLooseKgs = items.reduce((sum: number, i: any) => sum + i.loose, 0);
+    const totalTrayKgs = items.reduce((sum: number, i: any) => sum + i.trayKgs, 0);
+    const totalKgs = items.reduce((sum: number, i: any) => sum + i.totalKgs, 0);
+
+    // ✅ 5% deduction on total
+    const grandTotal = Number(
+      (totalKgs * (1 - DEDUCTION_PERCENT / 100)).toFixed(2)
+    );
+
+    // ✅ Build create payload conditionally (THIS FIXES your error)
+    const createData: any = {
+      fishCode: data.fishCode || "NA",
+      billNo: data.billNo,
+      FarmerName: data.FarmerName || null,
+      village: data.village || null,
+      date: loadingDate,
+
+      totalTrays,
+      totalLooseKgs,
+      totalTrayKgs,
+      totalKgs,
+      grandTotal,
+
+      items: { create: items },
+    };
+
+    if (vehicleId) {
+      // ✅ Connect existing vehicle
+      createData.vehicle = { connect: { id: vehicleId } };
+      createData.vehicleNo = null;
+    } else {
+      // ✅ Store custom vehicle number
+      createData.vehicleNo = vehicleNo;
+      // IMPORTANT: don't send vehicleId or vehicle relation at all
+    }
+
     const loading = await prisma.formerLoading.create({
-      data: {
-        fishCode: data.fishCode || "NA",
-        billNo: data.billNo,
-        FarmerName: data.FarmerName || null,
-        village: data.village || null,
-        date: loadingDate,
-        vehicle: {
-          connect: { id: data.vehicleId }, // Keep as string (UUID)
-        },
-        totalTrays: Number(data.totalTrays) || 0,
-        totalLooseKgs: Number(data.totalLooseKgs) || 0,
-        totalTrayKgs: Number(data.totalTrayKgs) || 0,
-        totalKgs: Number(data.totalKgs) || 0,
-        grandTotal: Number(data.grandTotal || data.totalKgs || 0),
-        items: {
-          create: (data.items || []).map((item: any) => {
-            const trays = Number(item.noTrays) || 0;
-            const loose = Number(item.loose) || 0;
-            const totalKgs = trays * 35 + loose;
-
-            const pricePerKg = Number(item.pricePerKg) || 0;
-            const totalPrice = Number(item.totalPrice) || pricePerKg * totalKgs;
-
-            return {
-              varietyCode: item.varietyCode,
-              noTrays: trays,
-              trayKgs: trays * 35,
-              loose,
-              totalKgs,
-              pricePerKg,
-              totalPrice,
-            };
-          }),
-        },
-
+      data: createData,
+      include: {
+        items: true,
+        vehicle: { select: { vehicleNumber: true } },
       },
-      include: { items: true },
     });
 
     return NextResponse.json({ success: true, loading });
   } catch (error: any) {
-    console.error("Error creating formerLoading:", error); // Log full error for debugging
+    console.error("Error creating formerLoading:", error);
 
     if (
       error &&
@@ -85,10 +125,7 @@ export async function POST(req: Request) {
 
       if (code === "P2002") {
         return NextResponse.json(
-          {
-            success: false,
-            message: "Duplicate bill number. Please refresh.",
-          },
+          { success: false, message: "Duplicate bill number. Please refresh." },
           { status: 400 }
         );
       }
@@ -101,9 +138,6 @@ export async function POST(req: Request) {
       }
     }
 
-
-
-    // Generic fallback
     return NextResponse.json(
       { success: false, message: "Save failed. Check server logs for details." },
       { status: 500 }
@@ -111,7 +145,6 @@ export async function POST(req: Request) {
   }
 }
 
-// GET remains unchanged (it's fine)
 export async function GET() {
   try {
     const loadings = await prisma.formerLoading.findMany({
@@ -129,25 +162,22 @@ export async function GET() {
           },
         },
         vehicle: {
-          select: {
-            vehicleNumber: true,  // ← ADD THIS
-          },
+          select: { vehicleNumber: true },
         },
       },
       orderBy: { createdAt: "desc" },
     });
-    type FormerLoadingWithVehicle = typeof loadings[number];
 
-    const formatted = loadings.map((l: FormerLoadingWithVehicle) => ({
+    const formatted = loadings.map((l) => ({
       ...l,
-      vehicleNo: l.vehicle?.vehicleNumber ?? "",
+      vehicleNo: l.vehicle?.vehicleNumber ?? l.vehicleNo ?? "",
     }));
 
     return NextResponse.json({ data: formatted });
   } catch (error) {
-    console.error("Error fetching agent loadings:", error);
+    console.error("Error fetching former loadings:", error);
     return NextResponse.json(
-      { message: "Failed to fetch agent loadings" },
+      { message: "Failed to fetch former loadings" },
       { status: 500 }
     );
   }

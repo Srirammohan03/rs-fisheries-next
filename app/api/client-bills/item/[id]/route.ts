@@ -1,5 +1,4 @@
 // app/api/client-bills/item/[id]/route.ts
-
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -46,10 +45,7 @@ export async function DELETE(
     }
 
     try {
-        await prisma.clientItem.delete({
-            where: { id },
-        });
-
+        await prisma.clientItem.delete({ where: { id } });
         return NextResponse.json({ success: true, message: "Item deleted" });
     } catch (error: any) {
         console.error("DELETE failed:", error);
