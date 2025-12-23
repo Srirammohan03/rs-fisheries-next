@@ -1,6 +1,7 @@
+// app/(dashboard)/loadings/components/ClientLoading.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +21,8 @@ import { PlusCircle, Save, Trash2 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
 
 const TRAY_KG = 35;
+const DEDUCTION_PERCENT = 5;
+const OTHER_VEHICLE_VALUE = "__OTHER__";
 
 type AvailableVariety = {
   code: string;
@@ -38,14 +41,25 @@ interface ItemRow {
   totalKgs: number;
 }
 
+const todayYMD = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export default function ClientLoadingForm() {
   const [village, setVillage] = useState("");
-  const [date, setDate] = useState("");
-  const [vehicleNo, setVehicleNo] = useState("");
+  const [date, setDate] = useState(""); // will default to today in useEffect
+  const [vehicleId, setVehicleId] = useState("");
+  const [otherVehicleNo, setOtherVehicleNo] = useState("");
 
   const [billNo, setBillNo] = useState("");
   const [clientName, setClientName] = useState("");
   const [grandTotal, setGrandTotal] = useState(0);
+
+  const isOtherVehicle = vehicleId === OTHER_VEHICLE_VALUE;
 
   const [items, setItems] = useState<ItemRow[]>([
     {
@@ -58,6 +72,12 @@ export default function ClientLoadingForm() {
       totalKgs: 0,
     },
   ]);
+
+  // ✅ default today's date (editable)
+  useEffect(() => {
+    if (!date) setDate(todayYMD());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ✅ Available varieties (net stock)
   const { data: availableVarieties = [] } = useQuery<AvailableVariety[]>({
@@ -147,9 +167,11 @@ export default function ClientLoadingForm() {
     return { trays, loose };
   };
 
-  // Grand total
+  // ✅ Grand total with 5% deduction
   useMemo(() => {
-    setGrandTotal(items.reduce((a, b) => a + (Number(b.totalKgs) || 0), 0));
+    const total = items.reduce((a, b) => a + (Number(b.totalKgs) || 0), 0);
+    const after = total * (1 - DEDUCTION_PERCENT / 100);
+    setGrandTotal(Number(after.toFixed(2)));
   }, [items]);
 
   const addRow = () => {
@@ -175,8 +197,9 @@ export default function ClientLoadingForm() {
   const resetForm = () => {
     setClientName("");
     setVillage("");
-    setDate("");
-    setVehicleNo("");
+    setDate(todayYMD());
+    setVehicleId("");
+    setOtherVehicleNo("");
 
     setItems([
       {
@@ -197,7 +220,11 @@ export default function ClientLoadingForm() {
   const handleSave = async () => {
     if (!billNo) return toast.error("Bill number missing");
     if (!clientName.trim()) return toast.error("Enter Client Name");
-    if (!vehicleNo.trim()) return toast.error("Select Vehicle");
+    if (!date.trim()) return toast.error("Select Date");
+
+    if (!vehicleId.trim()) return toast.error("Select Vehicle");
+    if (isOtherVehicle && !otherVehicleNo.trim())
+      return toast.error("Enter Vehicle Number");
 
     const firstCode = items[0].varietyCode;
     if (!firstCode) return toast.error("Select at least one variety");
@@ -208,7 +235,11 @@ export default function ClientLoadingForm() {
         clientName,
         village,
         date,
-        vehicleNo,
+
+        // ✅ Either connect by id OR store typed vehicle number
+        vehicleId: isOtherVehicle ? null : vehicleId,
+        vehicleNo: isOtherVehicle ? otherVehicleNo.trim() : null,
+
         fishCode: firstCode,
         items: items.map((r) => ({
           varietyCode: r.varietyCode,
@@ -290,19 +321,38 @@ export default function ClientLoadingForm() {
 
           <Field className="sm:col-span-2 md:col-span-1">
             <FieldLabel>Select Vehicle</FieldLabel>
-            <Select value={vehicleNo} onValueChange={setVehicleNo}>
+            <Select
+              value={vehicleId}
+              onValueChange={(v) => {
+                setVehicleId(v);
+                if (v !== OTHER_VEHICLE_VALUE) setOtherVehicleNo("");
+              }}
+            >
               <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
                 <SelectValue placeholder="Select Vehicle" />
               </SelectTrigger>
               <SelectContent>
                 {vehicles.map((v: any) => (
-                  <SelectItem key={v.id} value={v.vehicleNumber}>
+                  <SelectItem key={v.id} value={v.id}>
                     {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
                   </SelectItem>
                 ))}
+                <SelectItem value={OTHER_VEHICLE_VALUE}>Other</SelectItem>
               </SelectContent>
             </Select>
           </Field>
+
+          {isOtherVehicle && (
+            <Field className="sm:col-span-2 md:col-span-1">
+              <FieldLabel>Other Vehicle Number</FieldLabel>
+              <Input
+                value={otherVehicleNo}
+                onChange={(e) => setOtherVehicleNo(e.target.value)}
+                className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+                placeholder="Enter vehicle number"
+              />
+            </Field>
+          )}
         </div>
 
         {/* ✅ MOBILE CARDS */}

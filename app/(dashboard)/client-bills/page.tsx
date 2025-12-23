@@ -20,12 +20,16 @@ import * as XLSX from "xlsx";
 interface ClientItem {
   id: string;
   varietyCode?: string;
+
+  // stored in backend (do NOT show in UI)
   noTrays?: number;
   trayKgs?: number;
   loose?: number;
   totalKgs?: number;
+
   pricePerKg?: number;
   totalPrice?: number;
+
   loadingId?: string;
   billNo?: string;
   clientName?: string;
@@ -41,14 +45,25 @@ interface ClientRecord {
   village?: string;
   items: ClientItem[];
   createdAt?: string;
+
+  // IMPORTANT: backend totals
+  totalKgs?: number; // original total (before -5%)
+  grandTotal?: number; // net total after -5% (already computed by backend)
+  totalPrice?: number;
 }
 
-const fetchClientLoadings = async () => {
-  const res = await axios.get("/api/client-loading");
-  return res.data?.data ?? [];
+type UIItem = ClientItem & {
+  recordTotalKgs: number;
+  recordGrandTotal: number;
+  netKgsForThisItem: number; // derived using record.grandTotal
 };
 
-const patchItemPrice = async (itemId: string, body: any) => {
+const fetchClientLoadings = async (): Promise<ClientRecord[]> => {
+  const res = await axios.get("/api/client-loading");
+  return (res.data?.data ?? []) as ClientRecord[];
+};
+
+const patchItemPrice = async (itemId: string, body: Partial<ClientItem>) => {
   const res = await axios.patch(`/api/client-bills/item/${itemId}`, body);
   return res.data;
 };
@@ -70,22 +85,23 @@ export default function ClientBillsPage() {
   // New entries badge
   const [newCount, setNewCount] = useState(0);
 
+  const refreshRecords = useCallback(async () => {
+    const data = await fetchClientLoadings();
+    setRecords(data);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
 
-    fetchClientLoadings()
-      .then((data) => {
-        if (!mounted) return;
-        setRecords(data);
-      })
+    refreshRecords()
       .catch(() => toast.error("Failed to load client bills"))
       .finally(() => mounted && setLoading(false));
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [refreshRecords]);
 
   // Calculate new entries badge
   useEffect(() => {
@@ -96,26 +112,48 @@ export default function ClientBillsPage() {
     setNewCount(Math.max(0, current - last));
   }, [records]);
 
-  const handlePageVisit = () => {
+  const handlePageVisit = useCallback(() => {
+    if (typeof window === "undefined") return;
     localStorage.setItem("clientBillsLastSeen", records.length.toString());
     setNewCount(0);
-  };
-
-  useEffect(() => {
-    handlePageVisit(); // Mark as seen on mount
   }, [records.length]);
 
-  // Filtered & sorted items
-  const items = useMemo(() => {
-    let result = records.flatMap((rec) =>
-      rec.items.map((it) => ({
-        ...it,
-        loadingId: rec.id,
-        billNo: rec.billNo,
-        clientName: rec.clientName,
-        date: rec.date?.split("T")[0] || "",
-      }))
-    );
+  useEffect(() => {
+    handlePageVisit();
+  }, [records.length, handlePageVisit]);
+
+  /**
+   * ✅ Key Fix:
+   * DO NOT do `*0.95` here.
+   * Use record.grandTotal (already net after -5%) and allocate per item proportionally.
+   */
+  const items: UIItem[] = useMemo(() => {
+    let result: UIItem[] = records.flatMap((rec) => {
+      const recordTotalKgs = Number(rec.totalKgs || 0); // original total
+      const recordGrandTotal = Number(rec.grandTotal || 0); // net after -5%
+
+      return rec.items.map((it) => {
+        const itemTotalKgs = Number(it.totalKgs || 0);
+
+        const netKgsForThisItem =
+          recordTotalKgs > 0 && recordGrandTotal > 0
+            ? Number(
+                ((itemTotalKgs / recordTotalKgs) * recordGrandTotal).toFixed(3)
+              )
+            : itemTotalKgs;
+
+        return {
+          ...it,
+          loadingId: rec.id,
+          billNo: rec.billNo,
+          clientName: rec.clientName,
+          date: rec.date?.split("T")[0] || "",
+          recordTotalKgs,
+          recordGrandTotal,
+          netKgsForThisItem,
+        };
+      });
+    });
 
     // Search
     if (searchTerm) {
@@ -129,8 +167,8 @@ export default function ClientBillsPage() {
     }
 
     // Date range
-    if (fromDate) result = result.filter((it) => it.date >= fromDate);
-    if (toDate) result = result.filter((it) => it.date <= toDate);
+    if (fromDate) result = result.filter((it) => (it.date || "") >= fromDate);
+    if (toDate) result = result.filter((it) => (it.date || "") <= toDate);
 
     // Sort
     result.sort((a, b) =>
@@ -142,59 +180,71 @@ export default function ClientBillsPage() {
     return result;
   }, [records, searchTerm, sortOrder, fromDate, toDate]);
 
-  const startEdit = (item: ClientItem) => {
+  const startEdit = useCallback((item: ClientItem) => {
     setEditing((prev) => ({
       ...prev,
       [item.id]: { pricePerKg: item.pricePerKg, totalPrice: item.totalPrice },
     }));
-  };
+  }, []);
 
-  const cancelEdit = (id: string) => {
+  const cancelEdit = useCallback((id: string) => {
     setEditing((prev) => {
       const copy = { ...prev };
       delete copy[id];
       return copy;
     });
-  };
+  }, []);
 
-  const onPriceChange = (id: string, value: string) => {
-    setEditing((prev) => {
-      const current = prev[id] || {};
-      const num = value === "" ? undefined : Number(value);
-      const item = items.find((i) => i.id === id);
+  /**
+   * ✅ totalPrice = itemNetKgs * pricePerKg (netKgs already derived from grandTotal)
+   * ✅ No `0.95` anywhere
+   */
+  const onPriceChange = useCallback(
+    (id: string, value: string) => {
+      setEditing((prev) => {
+        const current = prev[id] || {};
+        const num = value === "" ? undefined : Number(value);
+        const item = items.find((i) => i.id === id);
+        if (!item) return prev;
 
-      if (!item?.totalKgs) return prev;
+        const updates: Partial<ClientItem> = { ...current, pricePerKg: num };
 
-      const updates: Partial<ClientItem> = { ...current, pricePerKg: num };
-      if (num !== undefined) {
-        const netKgs = item.totalKgs * 0.95; // <-- 5% loss here
-        updates.totalPrice = Number((netKgs * num).toFixed(2));
-      }
+        if (num !== undefined) {
+          const netKgs = Number(item.netKgsForThisItem || 0);
+          updates.totalPrice = Number((netKgs * num).toFixed(2));
+        } else {
+          updates.totalPrice = undefined;
+        }
 
-      return { ...prev, [id]: updates };
-    });
-  };
+        return { ...prev, [id]: updates };
+      });
+    },
+    [items]
+  );
 
   const saveRow = async (item: ClientItem) => {
     const edits = editing[item.id];
-    if (!edits) return;
+    if (!edits || savingIds[item.id]) return;
 
     setSavingIds((prev) => ({ ...prev, [item.id]: true }));
 
+    const payload: Partial<ClientItem> = {};
+    if (edits.pricePerKg !== undefined) payload.pricePerKg = edits.pricePerKg;
+    if (edits.totalPrice !== undefined) payload.totalPrice = edits.totalPrice;
+
     try {
-      await patchItemPrice(item.id, edits);
+      await patchItemPrice(item.id, payload);
 
       // Update parent total
       await axios.post("/api/client-bills/update-total", {
         loadingId: item.loadingId,
       });
 
-      // Refresh
-      const data = await fetchClientLoadings();
-      setRecords(data);
+      await refreshRecords();
       toast.success("Price updated!");
       cancelEdit(item.id);
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast.error("Save failed");
     } finally {
       setSavingIds((prev) => {
@@ -209,27 +259,27 @@ export default function ClientBillsPage() {
     if (!confirm("Delete this item?")) return;
     try {
       await axios.delete(`/api/client-bills/item/${id}`);
-      const data = await fetchClientLoadings();
-      setRecords(data);
+      await refreshRecords();
       toast.success("Deleted");
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast.error("Delete failed");
     }
   };
 
+  /**
+   * ✅ Export without KGS columns (only trays + pricing)
+   */
   const exportToExcel = () => {
     const data = records.flatMap((rec) =>
       rec.items.map((it) => ({
-        "Bill No": rec.billNo,
-        "Client Name": rec.clientName,
-        Date: rec.date?.split("T")[0],
-        "Vehicle No": rec.vehicleNo,
-        Village: rec.village,
-        Variety: it.varietyCode,
-        Trays: it.noTrays,
-        "Tray Kgs": it.trayKgs,
-        Loose: it.loose,
-        "Total Kgs": it.totalKgs,
+        "Bill No": rec.billNo || "",
+        "Client Name": rec.clientName || "",
+        Date: rec.date ? new Date(rec.date).toLocaleDateString("en-IN") : "",
+        "Vehicle No": rec.vehicleNo || "",
+        Village: rec.village || "",
+        Variety: it.varietyCode || "",
+        Trays: it.noTrays ?? 0,
         "Price/Kg": it.pricePerKg ?? 0,
         "Total Price": it.totalPrice ?? 0,
       }))
@@ -305,7 +355,7 @@ export default function ClientBillsPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Dates (2 columns on mobile) */}
+                {/* Dates */}
                 <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
                   <Input
                     type="date"
@@ -399,29 +449,12 @@ export default function ClientBillsPage() {
                         )}
                       </div>
 
+                      {/* ✅ ONLY TRAYS + PRICE */}
                       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-xl border bg-gray-50 p-3">
+                        <div className="rounded-xl border bg-gray-50 p-3 col-span-2">
                           <div className="text-xs text-gray-500">Trays</div>
                           <div className="font-semibold text-gray-900">
                             {it.noTrays ?? "-"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border bg-gray-50 p-3">
-                          <div className="text-xs text-gray-500">Tray Kgs</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.trayKgs ?? "-"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border bg-gray-50 p-3">
-                          <div className="text-xs text-gray-500">Loose</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.loose ?? "-"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border bg-gray-50 p-3">
-                          <div className="text-xs text-gray-500">Total Kgs</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.totalKgs ?? "-"}
                           </div>
                         </div>
 
@@ -468,15 +501,12 @@ export default function ClientBillsPage() {
 
               {/* ✅ Desktop view (table) */}
               <div className="mt-6 hidden md:block overflow-x-auto">
-                <table className="w-full min-w-[1000px] table-auto">
+                <table className="w-full min-w-[900px] table-auto">
                   <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                     <tr>
                       <th className="p-4">Bill No / Client</th>
                       <th className="p-4">Variety</th>
                       <th className="p-4 text-right">Trays</th>
-                      <th className="p-4 text-right">Tray Kgs</th>
-                      <th className="p-4 text-right">Loose</th>
-                      <th className="p-4 text-right">Total Kgs</th>
                       <th className="p-4 text-right">Price/Kg</th>
                       <th className="p-4 text-right">Total Price</th>
                       <th className="p-4 text-center">Actions</th>
@@ -499,16 +529,12 @@ export default function ClientBillsPage() {
                               {it.clientName}
                             </div>
                           </td>
+
                           <td className="p-4">{it.varietyCode || "-"}</td>
-                          <td className="p-4 text-right">
+
+                          {/* ✅ ONLY TRAYS */}
+                          <td className="p-4 text-right font-semibold">
                             {it.noTrays ?? "-"}
-                          </td>
-                          <td className="p-4 text-right">
-                            {it.trayKgs ?? "-"}
-                          </td>
-                          <td className="p-4 text-right">{it.loose ?? "-"}</td>
-                          <td className="p-4 text-right font-bold">
-                            {it.totalKgs ?? "-"}
                           </td>
 
                           <td className="p-4 text-right">

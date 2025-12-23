@@ -20,12 +20,16 @@ import * as XLSX from "xlsx";
 interface VendorItem {
   id: string;
   varietyCode?: string;
+
+  // backend values (keep stored, but DO NOT show)
   noTrays?: number;
   trayKgs?: number;
   loose?: number;
   totalKgs?: number;
+
   pricePerKg?: number;
   totalPrice?: number;
+
   loadingId?: string;
   source?: "farmer" | "agent";
   billNo?: string;
@@ -40,13 +44,24 @@ interface LoadingRecord {
   items: VendorItem[];
   source?: "farmer" | "agent";
   createdAt?: string;
+
   FarmerName?: string;
   agentName?: string;
+
   vehicleNo?: string;
   village?: string;
+
+  totalKgs?: number; // original total (example: 700)
+  grandTotal?: number; // net after -5% (example: 665)
   totalPrice?: number;
-  grandTotal?: number;
 }
+
+type UIItem = VendorItem & {
+  // derived fields for UI/calculation
+  recordTotalKgs: number;
+  recordGrandTotal: number;
+  netKgsForThisItem: number; // computed using record grandTotal (already net)
+};
 
 const fetchFarmerLoadings = async (): Promise<LoadingRecord[]> => {
   const res = await axios.get("/api/former-loading");
@@ -82,33 +97,33 @@ export default function VendorBillsPage() {
   const [newFarmerCount, setNewFarmerCount] = useState(0);
   const [newAgentCount, setNewAgentCount] = useState(0);
 
+  const refreshRecords = useCallback(async () => {
+    const [farmers, agents] = await Promise.all([
+      fetchFarmerLoadings(),
+      fetchAgentLoadings(),
+    ]);
+
+    const tagged: LoadingRecord[] = [
+      ...farmers.map((r) => ({ ...r, source: "farmer" as const })),
+      ...agents.map((r) => ({ ...r, source: "agent" as const })),
+    ];
+
+    setRecords(tagged);
+  }, []);
+
   // Load data
   useEffect(() => {
     let mounted = true;
     setLoading(true);
 
-    Promise.all([fetchFarmerLoadings(), fetchAgentLoadings()])
-      .then(([farmers, agents]) => {
-        if (!mounted) return;
-        const tagged: LoadingRecord[] = [
-          ...farmers.map((r: LoadingRecord) => ({
-            ...r,
-            source: "farmer" as const,
-          })),
-          ...agents.map((r: LoadingRecord) => ({
-            ...r,
-            source: "agent" as const,
-          })),
-        ];
-        setRecords(tagged);
-      })
+    refreshRecords()
       .catch(() => toast.error("Failed to load vendor bills"))
       .finally(() => mounted && setLoading(false));
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [refreshRecords]);
 
   // Badges (safe)
   useEffect(() => {
@@ -126,6 +141,7 @@ export default function VendorBillsPage() {
 
   const handleTabClick = (tab: "farmer" | "agent") => {
     setActiveTab(tab);
+
     const count =
       tab === "farmer"
         ? records.filter((r) => r.source === "farmer").length
@@ -133,6 +149,7 @@ export default function VendorBillsPage() {
 
     const stored = localStorage.getItem("vendorBillsLastSeen") || "{}";
     const lastSeen = JSON.parse(stored);
+
     localStorage.setItem(
       "vendorBillsLastSeen",
       JSON.stringify({ ...lastSeen, [tab]: count })
@@ -142,24 +159,54 @@ export default function VendorBillsPage() {
     else setNewAgentCount(0);
   };
 
-  // CRITICAL FIX: Use filteredItems, not stale items
-  const filteredItems = useMemo(() => {
-    let result = records
+  /**
+   * ✅ Key Fix:
+   * items[].totalKgs is still original.
+   * record.grandTotal is already after -5%.
+   *
+   * So for price calculations we derive itemNetKgs via proportion:
+   * itemNetKgs = (item.totalKgs / record.totalKgs) * record.grandTotal
+   *
+   * ✅ No hardcoded 0.95 anywhere.
+   */
+  const filteredItems: UIItem[] = useMemo(() => {
+    let result: UIItem[] = records
       .filter((rec) =>
         activeTab === "farmer"
           ? rec.source === "farmer"
           : rec.source === "agent"
       )
-      .flatMap((rec) =>
-        rec.items.map((it) => ({
-          ...it,
-          loadingId: rec.id,
-          source: rec.source,
-          billNo: rec.billNo,
-          name: rec.source === "farmer" ? rec.FarmerName : rec.agentName,
-          date: rec.date?.split("T")[0] || "",
-        }))
-      );
+      .flatMap((rec) => {
+        const recordTotalKgs = Number(rec.totalKgs || 0); // original total
+        const recordGrandTotal = Number(rec.grandTotal || 0); // net total after -5%
+
+        return rec.items.map((it) => {
+          const itemTotalKgs = Number(it.totalKgs || 0);
+
+          // If backend provides proper totals, allocate net proportionally.
+          // If not, fallback to itemTotalKgs (safe).
+          const netKgsForThisItem =
+            recordTotalKgs > 0 && recordGrandTotal > 0
+              ? Number(
+                  ((itemTotalKgs / recordTotalKgs) * recordGrandTotal).toFixed(
+                    3
+                  )
+                )
+              : itemTotalKgs;
+
+          return {
+            ...it,
+            loadingId: rec.id,
+            source: rec.source,
+            billNo: rec.billNo,
+            name: rec.source === "farmer" ? rec.FarmerName : rec.agentName,
+            date: rec.date?.split("T")[0] || "",
+            recordTotalKgs,
+            recordGrandTotal,
+            netKgsForThisItem,
+          };
+        });
+      });
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -171,8 +218,8 @@ export default function VendorBillsPage() {
       );
     }
 
-    if (fromDate) result = result.filter((it) => it.date >= fromDate);
-    if (toDate) result = result.filter((it) => it.date <= toDate);
+    if (fromDate) result = result.filter((it) => (it.date || "") >= fromDate);
+    if (toDate) result = result.filter((it) => (it.date || "") <= toDate);
 
     result.sort((a, b) => {
       const dateA = a.date || "";
@@ -200,19 +247,27 @@ export default function VendorBillsPage() {
     });
   }, []);
 
-  // FIXED: Use filteredItems (always up-to-date)
+  /**
+   * ✅ Fix here:
+   * totalPrice = itemNetKgs * pricePerKg
+   * (itemNetKgs derived from record.grandTotal, already net)
+   */
   const onChangeField = useCallback(
     (itemId: string, value: string) => {
       setEditing((prev) => {
         const current = prev[itemId] || {};
         const num = value === "" ? undefined : Number(value);
+
         const item = filteredItems.find((i) => i.id === itemId);
-        if (!item?.totalKgs) return prev;
+        if (!item) return prev;
 
         const updates: Partial<VendorItem> = { ...current, pricePerKg: num };
+
         if (num !== undefined) {
-          const netKgs = item.totalKgs * 0.95;
+          const netKgs = Number(item.netKgsForThisItem || 0); // already net allocation
           updates.totalPrice = Number((netKgs * num).toFixed(2));
+        } else {
+          updates.totalPrice = undefined;
         }
 
         return { ...prev, [itemId]: updates };
@@ -233,30 +288,7 @@ export default function VendorBillsPage() {
 
     try {
       await patchItemPrice(item.id, payload);
-
-      //   if (item.loadingId && item.source) {
-      //     await axios.post("/api/vendor-bills/update-loading-total", {
-      //       loadingId: item.loadingId,
-      //       source: item.source,
-      //     });
-      //   }
-
-      // Refresh data
-      const [farmers, agents] = await Promise.all([
-        fetchFarmerLoadings(),
-        fetchAgentLoadings(),
-      ]);
-      setRecords([
-        ...farmers.map((r: LoadingRecord) => ({
-          ...r,
-          source: "farmer" as const,
-        })),
-        ...agents.map((r: LoadingRecord) => ({
-          ...r,
-          source: "agent" as const,
-        })),
-      ]);
-
+      await refreshRecords();
       toast.success("Price saved!");
       cancelEdit(item.id);
     } catch (error: any) {
@@ -275,20 +307,7 @@ export default function VendorBillsPage() {
     if (!confirm("Delete this item permanently?")) return;
     try {
       await axios.delete(`/api/vendor-bills/item/${id}`);
-      const [farmers, agents] = await Promise.all([
-        fetchFarmerLoadings(),
-        fetchAgentLoadings(),
-      ]);
-      setRecords([
-        ...farmers.map((r: LoadingRecord) => ({
-          ...r,
-          source: "farmer" as const,
-        })),
-        ...agents.map((r: LoadingRecord) => ({
-          ...r,
-          source: "agent" as const,
-        })),
-      ]);
+      await refreshRecords();
       toast.success("Deleted");
     } catch (error: any) {
       console.error("Delete error:", error);
@@ -296,6 +315,10 @@ export default function VendorBillsPage() {
     }
   };
 
+  /**
+   * ✅ Export: as per your instruction, you said "dont want to see any KGS values"
+   * So export will also contain ONLY trays (no kgs columns).
+   */
   const exportData = (type: "farmer" | "agent") => {
     const data = records
       .filter((r) => r.source === type)
@@ -308,9 +331,6 @@ export default function VendorBillsPage() {
           Village: rec.village || "",
           Variety: it.varietyCode || "",
           Trays: it.noTrays || 0,
-          "Tray Kgs": it.trayKgs || 0,
-          Loose: it.loose || 0,
-          "Total Kgs": it.totalKgs || 0,
           "Price/Kg": it.pricePerKg ?? 0,
           "Total Price": it.totalPrice ?? 0,
         }))
@@ -328,6 +348,7 @@ export default function VendorBillsPage() {
       `${type}-bills-${new Date().toISOString().slice(0, 10)}.xlsx`
     );
   };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -342,7 +363,7 @@ export default function VendorBillsPage() {
 
               {/* Tabs + Export wrapper */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
-                {/* Farmer / Agent Tabs (scroll-safe) */}
+                {/* Farmer / Agent Tabs */}
                 <div className="bg-gray-100 rounded-full p-1.5 flex items-center gap-2 shadow-sm w-full sm:w-auto overflow-x-auto no-scrollbar">
                   <button
                     onClick={() => handleTabClick("farmer")}
@@ -377,7 +398,7 @@ export default function VendorBillsPage() {
                   </button>
                 </div>
 
-                {/* Export Buttons (full width on mobile) */}
+                {/* Export Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full sm:w-auto">
                   <Button
                     variant="outline"
@@ -439,7 +460,7 @@ export default function VendorBillsPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Dates (2 columns on mobile) */}
+                {/* Dates */}
                 <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
                   <Input
                     type="date"
@@ -492,6 +513,14 @@ export default function VendorBillsPage() {
                           <div className="mt-2 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
                             Variety: {it.varietyCode}
                           </div>
+
+                          {/* ✅ ONLY TRAYS */}
+                          <div className="mt-2 text-xs text-gray-500">
+                            Trays:{" "}
+                            <span className="font-semibold text-gray-800">
+                              {it.noTrays ?? 0}
+                            </span>
+                          </div>
                         </div>
 
                         {!isEditing ? (
@@ -534,28 +563,11 @@ export default function VendorBillsPage() {
                       </div>
 
                       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-xl border bg-gray-50 p-3">
+                        {/* ✅ ONLY TRAYS (again for clarity) */}
+                        <div className="rounded-xl border bg-gray-50 p-3 col-span-2">
                           <div className="text-xs text-gray-500">Trays</div>
                           <div className="font-semibold text-gray-900">
                             {it.noTrays ?? "-"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border bg-gray-50 p-3">
-                          <div className="text-xs text-gray-500">Tray Kgs</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.trayKgs ?? "-"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border bg-gray-50 p-3">
-                          <div className="text-xs text-gray-500">Loose</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.loose ?? "-"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border bg-gray-50 p-3">
-                          <div className="text-xs text-gray-500">Total Kgs</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.totalKgs ?? "-"}
                           </div>
                         </div>
 
@@ -603,15 +615,12 @@ export default function VendorBillsPage() {
 
               {/* ✅ Desktop view (table) */}
               <div className="mt-6 hidden md:block overflow-x-auto">
-                <table className="w-full min-w-[1000px] table-auto">
+                <table className="w-full min-w-[900px] table-auto">
                   <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                     <tr>
                       <th className="p-4">Bill No / Name</th>
                       <th className="p-4">Variety</th>
                       <th className="p-4 text-right">Trays</th>
-                      <th className="p-4 text-right">Tray Kgs</th>
-                      <th className="p-4 text-right">Loose</th>
-                      <th className="p-4 text-right">Total Kgs</th>
                       <th className="p-4 text-right">Price/Kg</th>
                       <th className="p-4 text-right">Total Price</th>
                       <th className="p-4 text-center">Actions</th>
@@ -632,17 +641,14 @@ export default function VendorBillsPage() {
                               {it.name}
                             </div>
                           </td>
+
                           <td className="p-4">{it.varietyCode}</td>
-                          <td className="p-4 text-right">
+
+                          {/* ✅ ONLY TRAYS */}
+                          <td className="p-4 text-right font-semibold">
                             {it.noTrays ?? "-"}
                           </td>
-                          <td className="p-4 text-right">
-                            {it.trayKgs ?? "-"}
-                          </td>
-                          <td className="p-4 text-right">{it.loose ?? "-"}</td>
-                          <td className="p-4 text-right font-semibold">
-                            {it.totalKgs ?? "-"}
-                          </td>
+
                           <td className="p-4 text-right">
                             {isEditing ? (
                               <Input
@@ -659,6 +665,7 @@ export default function VendorBillsPage() {
                               <span>{(it.pricePerKg ?? 0).toFixed(2)}</span>
                             )}
                           </td>
+
                           <td className="p-4 text-right font-semibold text-green-600">
                             {isEditing ? (
                               <Input
@@ -670,6 +677,7 @@ export default function VendorBillsPage() {
                               (it.totalPrice ?? 0).toFixed(2)
                             )}
                           </td>
+
                           <td className="p-4 text-center">
                             {!isEditing ? (
                               <div className="flex justify-center gap-2">
