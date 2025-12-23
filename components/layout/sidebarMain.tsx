@@ -14,6 +14,7 @@ import {
   Wallet,
   Warehouse,
   Users,
+  User2,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,7 @@ const menuItems = [
   { href: "/receipts", label: "Receipts", icon: Receipt },
   { href: "/vehicles", label: "Vehicles", icon: Car },
   { href: "/salaries", label: "Salaries", icon: Wallet },
+  { href: "/employee", label: "Employee", icon: User2 },
   { href: "/teams-members", label: "Team Members", icon: Users },
 ];
 

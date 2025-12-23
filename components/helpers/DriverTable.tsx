@@ -19,6 +19,14 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { DriverDialog } from "./AddDriverDialog";
 import DeleteDialog from "./DeleteDialog";
+import { url } from "inspector/promises";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { EllipsisVertical } from "lucide-react";
+import { DropdownMenuItem } from "@radix-ui/react-dropdown-menu";
 
 export type DriverRow = {
   id: string;
@@ -28,7 +36,8 @@ export type DriverRow = {
   address: string;
   age: number;
   aadharNumber: string;
-  identityProof?: string | null; // ← Added
+  aadharProof?: string | null;
+  licenseProof?: string | null;
   assignedVehicle?: {
     vehicleNumber: string | null;
   } | null;
@@ -154,20 +163,77 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
       id: "identityProof",
       header: "Identity Proof",
       cell: ({ row }) => {
-        const url = row.original.identityProof;
-        if (!url) return <span className="text-slate-500">None</span>;
+        const aadharProofUrl = row.original.aadharProof;
+        const licenseProofUrl = row.original.licenseProof;
+        if (!aadharProofUrl && !licenseProofUrl)
+          return <span className="text-slate-500">None</span>;
 
-        const isPdf = url.toLowerCase().endsWith(".pdf");
+        const isAadharPdf = aadharProofUrl?.toLowerCase().endsWith(".pdf");
+        const isLicensePdf = licenseProofUrl?.toLowerCase().endsWith(".pdf");
 
         return (
-          <div className="flex items-center gap-4 py-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-            >
-              {isPdf ? "View PDF" : "View Image"}
-            </Button>
+          <div className="flex items-center justify-center gap-4 py-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <EllipsisVertical />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="border-slate-200">
+                {aadharProofUrl &&
+                  (isAadharPdf ? (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.open(
+                          aadharProofUrl,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      View Pdf
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.open(
+                          aadharProofUrl,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      View Image
+                    </DropdownMenuItem>
+                  ))}
+                {licenseProofUrl &&
+                  (isLicensePdf ? (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.open(
+                          licenseProofUrl,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      View Pdf
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.open(
+                          licenseProofUrl,
+                          "_blank",
+                          "noopener,noreferrer"
+                        )
+                      }
+                    >
+                      View Image
+                    </DropdownMenuItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         );
       },
@@ -366,14 +432,14 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
                   <div className="mt-1">{d.address || "-"}</div>
                 </div>
 
-                {/* Identity Proof in mobile */}
-                {d.identityProof && (
+                {/* aadhar Proof in mobile */}
+                {d.aadharProof && (
                   <div className="mt-3">
                     <div className="font-semibold text-slate-700 mb-2">
                       Identity Proof
                     </div>
                     {(() => {
-                      const isPdf = d.identityProof
+                      const isPdf = d.aadharProof
                         .toLowerCase()
                         .endsWith(".pdf");
                       if (isPdf) {
@@ -385,7 +451,7 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
                               size="sm"
                               onClick={() =>
                                 window.open(
-                                  d.identityProof!,
+                                  d.aadharProof!,
                                   "_blank",
                                   "noopener,noreferrer"
                                 )
@@ -403,7 +469,58 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
                             className="w-full"
                             onClick={() =>
                               window.open(
-                                d.identityProof!,
+                                d.aadharProof!,
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                            }
+                          >
+                            View Image
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* license Proof in mobile */}
+                {d.licenseProof && (
+                  <div className="mt-3">
+                    <div className="font-semibold text-slate-700 mb-2">
+                      Identity Proof
+                    </div>
+                    {(() => {
+                      const isPdf = d.licenseProof
+                        .toLowerCase()
+                        .endsWith(".pdf");
+                      if (isPdf) {
+                        return (
+                          <div className="p-4 border rounded-lg bg-slate-50 flex items-center justify-between">
+                            <span className="font-medium">PDF Document</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                window.open(
+                                  d.licenseProof!,
+                                  "_blank",
+                                  "noopener,noreferrer"
+                                )
+                              }
+                            >
+                              View PDF
+                            </Button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="space-y-4">
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() =>
+                              window.open(
+                                d.licenseProof!,
                                 "_blank",
                                 "noopener,noreferrer"
                               )

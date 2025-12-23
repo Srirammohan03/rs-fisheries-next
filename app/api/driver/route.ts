@@ -15,7 +15,8 @@ export const POST = apiHandler(async (req: Request) => {
   const address = formData.get("address")?.toString();
   const age = formData.get("age")?.toString();
   const aadharNumber = formData.get("aadharNumber")?.toString();
-  const file = formData.get("identityProof") as File | null;
+  const aadharProof = formData.get("aadharProof") as File | null;
+  const licenseProof = formData.get("licenseProof") as File | null;
 
   if (!name || !phone || !licenseNumber || !address || !age || !aadharNumber) {
     throw new ApiError(400, "Required fields are missing");
@@ -39,10 +40,11 @@ export const POST = apiHandler(async (req: Request) => {
     }
   }
 
-  let identityProofUrl: string | undefined;
+  let aadharProofUrl: string | undefined;
+  let licenseProofUrl: string | undefined;
 
-  if (file && file.size > 0) {
-    if (file.size > 5 * 1024 * 1024) {
+  if (aadharProof && aadharProof.size > 0) {
+    if (aadharProof.size > 5 * 1024 * 1024) {
       throw new ApiError(400, "File size must be under 5MB");
     }
 
@@ -53,12 +55,12 @@ export const POST = apiHandler(async (req: Request) => {
       "application/pdf",
     ];
 
-    if (!allowedTypes.includes(file.type)) {
+    if (!allowedTypes.includes(aadharProof?.type)) {
       throw new ApiError(400, "Invalid file type");
     }
 
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split(".").pop() || "jpg";
+    const bytes = Buffer.from(await aadharProof.arrayBuffer());
+    const ext = aadharProof.name.split(".").pop() || "jpg";
     const fileName = `${Date.now()}-${phone}.${ext}`;
 
     const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
@@ -67,7 +69,36 @@ export const POST = apiHandler(async (req: Request) => {
     const filePath = path.join(uploadDir, fileName);
     await fs.writeFile(filePath, bytes);
 
-    identityProofUrl = `/uploads/drivers/${fileName}`;
+    aadharProofUrl = `/uploads/drivers/${fileName}`;
+  }
+
+  if (licenseProof && licenseProof.size > 0) {
+    if (licenseProof.size > 5 * 1024 * 1024) {
+      throw new ApiError(400, "File size must be under 5MB");
+    }
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf",
+    ];
+
+    if (!allowedTypes.includes(licenseProof?.type)) {
+      throw new ApiError(400, "Invalid file type");
+    }
+
+    const bytes = Buffer.from(await licenseProof.arrayBuffer());
+    const ext = licenseProof.name.split(".").pop() || "jpg";
+    const fileName = `${Date.now()}-${phone}.${ext}`;
+
+    const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const filePath = path.join(uploadDir, fileName);
+    await fs.writeFile(filePath, bytes);
+
+    licenseProofUrl = `/uploads/drivers/${fileName}`;
   }
 
   const driver = await prisma.driver.create({
@@ -78,7 +109,8 @@ export const POST = apiHandler(async (req: Request) => {
       address,
       age: Number(age),
       aadharNumber,
-      identityProof: identityProofUrl,
+      aadharProof: aadharProofUrl,
+      licenseProof: licenseProofUrl,
     },
   });
 
@@ -114,9 +146,12 @@ export const PATCH = apiHandler(async (req: Request) => {
   const address = formData.get("address")?.toString();
   const ageStr = formData.get("age")?.toString();
   const aadharNumber = formData.get("aadharNumber")?.toString();
-  const file = formData.get("identityProof") as File | null;
-  const removeIdentity =
-    formData.get("removeIdentityProof")?.toString() === "true";
+  const aadharProof = formData.get("aadharProof") as File | null;
+  const licenseProof = formData.get("licenseProof") as File | null;
+  const removeAadharProof =
+    formData.get("removeAadharProof")?.toString() === "true";
+  const removeLicenseProof =
+    formData.get("removeLicenseProof")?.toString() === "true";
 
   if (
     !name ||
@@ -154,16 +189,17 @@ export const PATCH = apiHandler(async (req: Request) => {
     }
   }
 
-  let identityProofUrl = existing.identityProof ?? null;
+  let aadharProofUrl = existing.aadharProof ?? null;
+  let licenseProofUrl = existing.licenseProof ?? null;
 
-  if (removeIdentity) {
-    if (identityProofUrl) {
-      const oldPath = path.join(process.cwd(), "public", identityProofUrl);
+  if (removeAadharProof) {
+    if (aadharProofUrl) {
+      const oldPath = path.join(process.cwd(), "public", aadharProofUrl);
       await fs.unlink(oldPath).catch(() => {});
     }
-    identityProofUrl = null;
-  } else if (file && file.size > 0) {
-    if (file.size > 5 * 1024 * 1024)
+    aadharProofUrl = null;
+  } else if (aadharProof && aadharProof.size > 0) {
+    if (aadharProof.size > 5 * 1024 * 1024)
       throw new ApiError(400, "File size must be under 5MB");
 
     const allowedTypes = [
@@ -172,16 +208,16 @@ export const PATCH = apiHandler(async (req: Request) => {
       "image/webp",
       "application/pdf",
     ];
-    if (!allowedTypes.includes(file.type))
+    if (!allowedTypes.includes(aadharProof.type))
       throw new ApiError(400, "Invalid file type");
 
-    if (identityProofUrl) {
-      const oldPath = path.join(process.cwd(), "public", identityProofUrl);
+    if (aadharProofUrl) {
+      const oldPath = path.join(process.cwd(), "public", aadharProofUrl);
       await fs.unlink(oldPath).catch(() => {});
     }
 
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split(".").pop() || "jpg";
+    const bytes = Buffer.from(await aadharProof.arrayBuffer());
+    const ext = aadharProof.name.split(".").pop() || "jpg";
     const fileName = `${Date.now()}-${phone}.${ext}`;
 
     const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
@@ -190,7 +226,44 @@ export const PATCH = apiHandler(async (req: Request) => {
     const filePath = path.join(uploadDir, fileName);
     await fs.writeFile(filePath, bytes);
 
-    identityProofUrl = `/uploads/drivers/${fileName}`;
+    aadharProofUrl = `/uploads/drivers/${fileName}`;
+  }
+
+  if (removeLicenseProof) {
+    if (licenseProofUrl) {
+      const oldPath = path.join(process.cwd(), "public", licenseProofUrl);
+      await fs.unlink(oldPath).catch(() => {});
+    }
+    licenseProofUrl = null;
+  } else if (licenseProof && licenseProof.size > 0) {
+    if (licenseProof.size > 5 * 1024 * 1024)
+      throw new ApiError(400, "File size must be under 5MB");
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf",
+    ];
+    if (!allowedTypes.includes(licenseProof.type))
+      throw new ApiError(400, "Invalid file type");
+
+    if (licenseProofUrl) {
+      const oldPath = path.join(process.cwd(), "public", licenseProofUrl);
+      await fs.unlink(oldPath).catch(() => {});
+    }
+
+    const bytes = Buffer.from(await licenseProof.arrayBuffer());
+    const ext = licenseProof.name.split(".").pop() || "jpg";
+    const fileName = `${Date.now()}-${phone}.${ext}`;
+
+    const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    const filePath = path.join(uploadDir, fileName);
+    await fs.writeFile(filePath, bytes);
+
+    licenseProofUrl = `/uploads/drivers/${fileName}`;
   }
 
   const updated = await prisma.driver.update({
@@ -202,7 +275,8 @@ export const PATCH = apiHandler(async (req: Request) => {
       address,
       age: Number(ageStr),
       aadharNumber,
-      identityProof: identityProofUrl,
+      aadharProof: aadharProofUrl,
+      licenseProof: licenseProofUrl,
     },
   });
 
@@ -220,8 +294,13 @@ export const DELETE = apiHandler(async (req: Request) => {
   const driver = await prisma.driver.findUnique({ where: { id } });
   if (!driver) throw new ApiError(404, "Driver not found");
 
-  if (driver.identityProof) {
-    const filePath = path.join(process.cwd(), "public", driver.identityProof);
+  if (driver.aadharProof) {
+    const filePath = path.join(process.cwd(), "public", driver.aadharProof);
+    await fs.unlink(filePath).catch(() => {});
+  }
+
+  if (driver.licenseProof) {
+    const filePath = path.join(process.cwd(), "public", driver.licenseProof);
     await fs.unlink(filePath).catch(() => {});
   }
 

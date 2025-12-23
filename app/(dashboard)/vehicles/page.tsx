@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 
-import { DriverDialog } from "@/components/helpers/AddDriverDialog"; // Assuming this exports the controlled DriverDialog
+import { DriverDialog } from "@/components/helpers/AddDriverDialog";
 import { DriverTable } from "@/components/helpers/DriverTable";
 import { OwnVehicleTable } from "@/components/helpers/OwnVehicleTable";
 import { RentVehicleTable } from "@/components/helpers/RentVehicleTable";
 import { VehicleDialog } from "@/components/helpers/VehicleDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { DriverRow } from "@/components/helpers/DriverTable"; // Import type for editing
+import { DriverRow } from "@/components/helpers/DriverTable";
 
 export default function Vehicles() {
   const [driverDialogOpen, setDriverDialogOpen] = useState(false);
