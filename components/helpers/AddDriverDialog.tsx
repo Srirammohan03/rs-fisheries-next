@@ -69,10 +69,23 @@ export function DriverDialog({
     resolver: zodResolver(schema),
   });
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isRemoving, setIsRemoving] = useState(false);
+  // Aadhar Proof states
+  const [selectedAadharFile, setSelectedAadharFile] = useState<File | null>(
+    null
+  );
+  const [previewAadharUrl, setPreviewAadharUrl] = useState<string | null>(null);
+  const [isRemovingAadhar, setIsRemovingAadhar] = useState(false);
 
+  // License Proof states
+  const [selectedLicenseFile, setSelectedLicenseFile] = useState<File | null>(
+    null
+  );
+  const [previewLicenseUrl, setPreviewLicenseUrl] = useState<string | null>(
+    null
+  );
+  const [isRemovingLicense, setIsRemovingLicense] = useState(false);
+
+  // Reset form and file states when driver changes (edit → add or different driver)
   useEffect(() => {
     if (driver) {
       reset({
@@ -83,26 +96,46 @@ export function DriverDialog({
         age: driver.age.toString(),
         aadharNumber: driver.aadharNumber,
       });
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      setIsRemoving(false);
+
+      // Reset file states
+      setSelectedAadharFile(null);
+      setPreviewAadharUrl(null);
+      setIsRemovingAadhar(false);
+
+      setSelectedLicenseFile(null);
+      setPreviewLicenseUrl(null);
+      setIsRemovingLicense(false);
     } else {
       reset();
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      setIsRemoving(false);
+      setSelectedAadharFile(null);
+      setPreviewAadharUrl(null);
+      setIsRemovingAadhar(false);
+
+      setSelectedLicenseFile(null);
+      setPreviewLicenseUrl(null);
+      setIsRemovingLicense(false);
     }
   }, [driver, reset]);
 
   useEffect(() => {
-    if (selectedFile && selectedFile.type.startsWith("image/")) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
+    if (selectedAadharFile && selectedAadharFile.type.startsWith("image/")) {
+      const url = URL.createObjectURL(selectedAadharFile);
+      setPreviewAadharUrl(url);
       return () => URL.revokeObjectURL(url);
     } else {
-      setPreviewUrl(null);
+      setPreviewAadharUrl(null);
     }
-  }, [selectedFile]);
+  }, [selectedAadharFile]);
+
+  useEffect(() => {
+    if (selectedLicenseFile && selectedLicenseFile.type.startsWith("image/")) {
+      const url = URL.createObjectURL(selectedLicenseFile);
+      setPreviewLicenseUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewLicenseUrl(null);
+    }
+  }, [selectedLicenseFile]);
 
   const mutation = useMutation({
     mutationFn: (formData: FormData) => {
@@ -134,14 +167,20 @@ export function DriverDialog({
     fd.append("age", data.age);
     fd.append("aadharNumber", data.aadharNumber);
 
-    if (selectedFile) {
-      fd.append("identityProof", selectedFile);
+    if (selectedAadharFile) {
+      fd.append("aadharProof", selectedAadharFile);
+    }
+    if (selectedLicenseFile) {
+      fd.append("licenseProof", selectedLicenseFile);
     }
 
     if (isEdit) {
       fd.append("id", driver!.id);
-      if (isRemoving) {
-        fd.append("removeIdentityProof", "true");
+      if (isRemovingAadhar) {
+        fd.append("removeAadharProof", "true");
+      }
+      if (isRemovingLicense) {
+        fd.append("removeLicenseProof", "true");
       }
     }
 
@@ -157,23 +196,32 @@ export function DriverDialog({
     { label: "Aadhar Number", name: "aadharNumber" },
   ];
 
-  const hasCurrentFile = selectedFile || (!isRemoving && driver?.identityProof);
-  const effectiveUrl =
-    previewUrl || (!isRemoving ? driver?.identityProof ?? null : null);
-  const effectiveIsPdf =
-    (selectedFile && selectedFile.type === "application/pdf") ||
-    (!isRemoving && driver?.identityProof?.toLowerCase().endsWith(".pdf"));
+  // Helper calculations for Aadhar
+  const hasCurrentAadhar =
+    !!selectedAadharFile || (!isRemovingAadhar && !!driver?.aadharProof);
+
+  const isAadharPdf =
+    selectedAadharFile?.type === "application/pdf" ||
+    (!isRemovingAadhar && driver?.aadharProof?.toLowerCase().endsWith(".pdf"));
+
+  // Helper calculations for License
+  const hasCurrentLicense =
+    !!selectedLicenseFile || (!isRemovingLicense && !!driver?.licenseProof);
+
+  const isLicensePdf =
+    selectedLicenseFile?.type === "application/pdf" ||
+    (!isRemovingLicense &&
+      driver?.licenseProof?.toLowerCase().endsWith(".pdf"));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Driver" : "Add Driver"}</DialogTitle>
         </DialogHeader>
-
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="space-y-4 overflow-y-auto max-h-[70vh] pb-4"
+          className="space-y-4 overflow-y-auto max-h-[70vh] p-4"
         >
           {fields.map(({ label, name }) => (
             <div key={name} className="space-y-1">
@@ -187,9 +235,9 @@ export function DriverDialog({
             </div>
           ))}
 
-          {/* File Upload */}
+          {/* Aadhar Proof Upload */}
           <div className="space-y-2">
-            <Label>Identity Proof (optional - JPG, PNG, WEBP, PDF ≤ 5MB)</Label>
+            <Label>Aadhar Proof (optional - JPG, PNG, WEBP, PDF ≤ 5MB)</Label>
             <Input
               type="file"
               accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -200,47 +248,48 @@ export function DriverDialog({
                   e.target.value = "";
                   return;
                 }
-                setSelectedFile(file);
-                setIsRemoving(false);
+                setSelectedAadharFile(file);
+                setIsRemovingAadhar(false);
               }}
             />
           </div>
 
-          {/* Preview & Remove */}
-          {hasCurrentFile && (
+          {/* Aadhar Preview & Remove */}
+          {hasCurrentAadhar && (
             <div className="space-y-3">
-              <Label>Current Identity Proof</Label>
-
-              {effectiveUrl ? (
+              <Label>Current Aadhar Proof</Label>
+              {previewAadharUrl ? (
                 <img
-                  src={effectiveUrl}
-                  alt="Identity proof"
+                  src={previewAadharUrl}
+                  alt="Aadhar proof preview"
                   className="max-h-72 rounded-lg border object-contain"
                 />
-              ) : effectiveIsPdf ? (
+              ) : isAadharPdf ? (
                 <div className="p-4 border rounded-lg bg-slate-50 flex items-center justify-between">
                   <span className="font-medium">
-                    {selectedFile?.name || "Uploaded PDF"}
+                    {selectedAadharFile?.name || "Aadhar Proof PDF"}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
                     type="button"
                     onClick={() => {
-                      if (selectedFile) {
-                        window.open(
-                          URL.createObjectURL(selectedFile),
-                          "_blank"
-                        );
-                      } else if (driver?.identityProof) {
-                        window.open(driver.identityProof, "_blank");
-                      }
+                      const url = selectedAadharFile
+                        ? URL.createObjectURL(selectedAadharFile)
+                        : driver!.aadharProof!;
+                      window.open(url, "_blank");
                     }}
                   >
                     View PDF
                   </Button>
                 </div>
-              ) : null}
+              ) : (
+                <img
+                  src={driver!.aadharProof!}
+                  alt="Current Aadhar proof"
+                  className="max-h-72 rounded-lg border object-contain"
+                />
+              )}
 
               <div className="flex gap-2">
                 <Button
@@ -248,28 +297,115 @@ export function DriverDialog({
                   variant="destructive"
                   size="sm"
                   onClick={() => {
-                    setSelectedFile(null);
-                    setPreviewUrl(null);
-                    setIsRemoving(true);
+                    setSelectedAadharFile(null);
+                    setPreviewAadharUrl(null);
+                    setIsRemovingAadhar(true);
                   }}
                 >
-                  {isEdit ? "Remove File" : "Clear File"}
+                  {isEdit ? "Remove Aadhar Proof" : "Clear Aadhar File"}
                 </Button>
-                {isRemoving && isEdit && (
+                {isRemovingAadhar && isEdit && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsRemoving(false)}
+                    onClick={() => setIsRemovingAadhar(false)}
                   >
                     Cancel Remove
                   </Button>
                 )}
               </div>
-
-              {isRemoving && isEdit && (
+              {isRemovingAadhar && isEdit && (
                 <p className="text-sm text-red-600">
-                  Identity proof will be removed on save.
+                  Aadhar proof will be removed on save.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* License Proof Upload */}
+          <div className="space-y-2">
+            <Label>License Proof (optional - JPG, PNG, WEBP, PDF ≤ 5MB)</Label>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                if (file && file.size > 5 * 1024 * 1024) {
+                  toast.error("File size must be under 5MB");
+                  e.target.value = "";
+                  return;
+                }
+                setSelectedLicenseFile(file);
+                setIsRemovingLicense(false);
+              }}
+            />
+          </div>
+
+          {/* License Preview & Remove */}
+          {hasCurrentLicense && (
+            <div className="space-y-3">
+              <Label>Current License Proof</Label>
+              {previewLicenseUrl ? (
+                <img
+                  src={previewLicenseUrl}
+                  alt="License proof preview"
+                  className="max-h-72 rounded-lg border object-contain"
+                />
+              ) : isLicensePdf ? (
+                <div className="p-4 border rounded-lg bg-slate-50 flex items-center justify-between">
+                  <span className="font-medium">
+                    {selectedLicenseFile?.name || "License Proof PDF"}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => {
+                      const url = selectedLicenseFile
+                        ? URL.createObjectURL(selectedLicenseFile)
+                        : driver!.licenseProof!;
+                      window.open(url, "_blank");
+                    }}
+                  >
+                    View PDF
+                  </Button>
+                </div>
+              ) : (
+                <img
+                  src={driver!.licenseProof!}
+                  alt="Current License proof"
+                  className="max-h-72 rounded-lg border object-contain"
+                />
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedLicenseFile(null);
+                    setPreviewLicenseUrl(null);
+                    setIsRemovingLicense(true);
+                  }}
+                >
+                  {isEdit ? "Remove License Proof" : "Clear License File"}
+                </Button>
+                {isRemovingLicense && isEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsRemovingLicense(false)}
+                  >
+                    Cancel Remove
+                  </Button>
+                )}
+              </div>
+              {isRemovingLicense && isEdit && (
+                <p className="text-sm text-red-600">
+                  License proof will be removed on save.
                 </p>
               )}
             </div>
