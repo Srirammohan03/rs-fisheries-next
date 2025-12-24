@@ -530,13 +530,15 @@ model Employee {
   nationality      String?
 
   // Bank Details
-  bankName            String
-  branchName          String
-  accountNumber       String
-  ifsc                String
-  uanNo               String?
-  esicNo              String?
-  nomineeNameRelation String?
+  bankName      String
+  branchName    String
+  accountNumber String
+  ifsc          String
+
+  // documents
+  photo        String?
+  aadhaarProof String?
+  panProof     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -548,4 +550,9 @@ model Employee {
   @@index([mobile])
   @@index([createdAt])
   @@map("employees")
+}
+
+model Counter {
+  id    String @id
+  value Int
 }
