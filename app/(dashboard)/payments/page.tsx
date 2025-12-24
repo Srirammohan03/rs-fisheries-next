@@ -5,8 +5,9 @@ import { VendorPayments } from "./component/VendorPayments";
 import { ClientPayments } from "./component/ClientPayments";
 import { EmployeePayments } from "./component/EmployeePayments";
 import { PackingAmount } from "./component/PackingAmount";
+import { DispatchPayment } from "./component/DispatchPayment";
 
-type TabId = "vendor" | "client" | "employee" | "packing";
+type TabId = "dispatch" | "vendor" | "client" | "employee" | "packing";
 
 function cn(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(" ");
@@ -116,7 +117,7 @@ function TabsContent({
 }
 
 export default function Payments() {
-  const [tab, setTab] = useState<TabId>("vendor");
+  const [tab, setTab] = useState<TabId>("dispatch");
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
@@ -133,6 +134,9 @@ export default function Payments() {
         {/* ✅ Tabs: mobile grid, desktop pill */}
         <TabsRoot value={tab} onValueChange={setTab}>
           <TabsList>
+            <TabsTrigger value="dispatch" activeValue={tab} onClick={setTab}>
+              Dispatch
+            </TabsTrigger>
             <TabsTrigger value="vendor" activeValue={tab} onClick={setTab}>
               Vendor Payments
             </TabsTrigger>
@@ -140,7 +144,6 @@ export default function Payments() {
             <TabsTrigger value="client" activeValue={tab} onClick={setTab}>
               Client Payments
             </TabsTrigger>
-
             <TabsTrigger value="employee" activeValue={tab} onClick={setTab}>
               Employee Payments
             </TabsTrigger>
@@ -153,6 +156,9 @@ export default function Payments() {
       </header>
 
       <main className="w-full">
+        <TabsContent activeValue={tab} value="dispatch">
+          <DispatchPayment />
+        </TabsContent>
         <TabsContent activeValue={tab} value="vendor">
           <VendorPayments />
         </TabsContent>

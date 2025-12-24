@@ -74,7 +74,12 @@ export function PackingAmount() {
     const tempNum = parseFloat(temperature);
     const totalNum = parseFloat(total);
 
-    if (workersNum <= 0 || isNaN(tempNum) || totalNum <= 0) {
+    if (
+      isNaN(workersNum) ||
+      workersNum <= 0 ||
+      isNaN(tempNum) ||
+      totalNum <= 0
+    ) {
       toast.error("Please fill all required fields correctly");
       return;
     }
@@ -86,11 +91,30 @@ export function PackingAmount() {
 
     setIsSaving(true);
     try {
+      // Determine sourceType based on mode
+      let sourceType: "FORMER" | "AGENT" | "CLIENT" | null = null;
+
+      if (selectedBillId) {
+        if (mode === "loading") {
+          sourceType = "CLIENT";
+        } else {
+          // For unloading, we need to know if it's Former or Agent
+          // Find the selected bill to determine type
+          const selectedBill = bills.find((b) => b.id === selectedBillId);
+          if (selectedBill?.FarmerName) {
+            sourceType = "FORMER";
+          } else if (selectedBill?.agentName) {
+            sourceType = "AGENT";
+          }
+        }
+      }
+
       const res = await fetch("/api/payments/packing-amount", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
+          sourceType, // ← NOW SENT!
           sourceRecordId: selectedBillId || null,
           workers: workersNum,
           temperature: tempNum,
@@ -107,7 +131,7 @@ export function PackingAmount() {
 
       toast.success("Packing amount saved successfully!");
 
-      // Reset
+      // Reset form
       setWorkers("");
       setTemperature("");
       setTotal("0");
