@@ -5,6 +5,7 @@ import { ApiResponse } from "@/utils/ApiResponse";
 import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
+import { safeUnlink } from "@/lib/helper";
 
 export const POST = apiHandler(async (req: Request) => {
   const formData = await req.formData();
@@ -42,82 +43,87 @@ export const POST = apiHandler(async (req: Request) => {
 
   let aadharProofUrl: string | undefined;
   let licenseProofUrl: string | undefined;
+  try {
+    if (aadharProof && aadharProof.size > 0) {
+      if (aadharProof.size > 5 * 1024 * 1024) {
+        throw new ApiError(400, "File size must be under 5MB");
+      }
 
-  if (aadharProof && aadharProof.size > 0) {
-    if (aadharProof.size > 5 * 1024 * 1024) {
-      throw new ApiError(400, "File size must be under 5MB");
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+      ];
+
+      if (!allowedTypes.includes(aadharProof?.type)) {
+        throw new ApiError(400, "Invalid file type");
+      }
+
+      const bytes = Buffer.from(await aadharProof.arrayBuffer());
+      const ext = aadharProof.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}-${phone}.${ext}`;
+
+      const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
+      await fs.mkdir(uploadDir, { recursive: true });
+
+      const filePath = path.join(uploadDir, fileName);
+      await fs.writeFile(filePath, bytes);
+
+      aadharProofUrl = `/uploads/drivers/${fileName}`;
     }
 
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/pdf",
-    ];
+    if (licenseProof && licenseProof.size > 0) {
+      if (licenseProof.size > 5 * 1024 * 1024) {
+        throw new ApiError(400, "File size must be under 5MB");
+      }
 
-    if (!allowedTypes.includes(aadharProof?.type)) {
-      throw new ApiError(400, "Invalid file type");
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+      ];
+
+      if (!allowedTypes.includes(licenseProof?.type)) {
+        throw new ApiError(400, "Invalid file type");
+      }
+
+      const bytes = Buffer.from(await licenseProof.arrayBuffer());
+      const ext = licenseProof.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}-${phone}.${ext}`;
+
+      const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
+      await fs.mkdir(uploadDir, { recursive: true });
+
+      const filePath = path.join(uploadDir, fileName);
+      await fs.writeFile(filePath, bytes);
+
+      licenseProofUrl = `/uploads/drivers/${fileName}`;
     }
 
-    const bytes = Buffer.from(await aadharProof.arrayBuffer());
-    const ext = aadharProof.name.split(".").pop() || "jpg";
-    const fileName = `${Date.now()}-${phone}.${ext}`;
+    const driver = await prisma.driver.create({
+      data: {
+        name,
+        phone,
+        licenseNumber,
+        address,
+        age: Number(age),
+        aadharNumber,
+        aadharProof: aadharProofUrl,
+        licenseProof: licenseProofUrl,
+      },
+    });
 
-    const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, fileName);
-    await fs.writeFile(filePath, bytes);
-
-    aadharProofUrl = `/uploads/drivers/${fileName}`;
+    return NextResponse.json(
+      new ApiResponse(201, driver, "Driver added successfully"),
+      { status: 201 }
+    );
+  } catch (error) {
+    await safeUnlink(aadharProofUrl);
+    await safeUnlink(licenseProofUrl);
+    throw error;
   }
-
-  if (licenseProof && licenseProof.size > 0) {
-    if (licenseProof.size > 5 * 1024 * 1024) {
-      throw new ApiError(400, "File size must be under 5MB");
-    }
-
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/pdf",
-    ];
-
-    if (!allowedTypes.includes(licenseProof?.type)) {
-      throw new ApiError(400, "Invalid file type");
-    }
-
-    const bytes = Buffer.from(await licenseProof.arrayBuffer());
-    const ext = licenseProof.name.split(".").pop() || "jpg";
-    const fileName = `${Date.now()}-${phone}.${ext}`;
-
-    const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, fileName);
-    await fs.writeFile(filePath, bytes);
-
-    licenseProofUrl = `/uploads/drivers/${fileName}`;
-  }
-
-  const driver = await prisma.driver.create({
-    data: {
-      name,
-      phone,
-      licenseNumber,
-      address,
-      age: Number(age),
-      aadharNumber,
-      aadharProof: aadharProofUrl,
-      licenseProof: licenseProofUrl,
-    },
-  });
-
-  return NextResponse.json(
-    new ApiResponse(201, driver, "Driver added successfully"),
-    { status: 201 }
-  );
 });
 
 export const GET = apiHandler(async () => {
@@ -192,97 +198,103 @@ export const PATCH = apiHandler(async (req: Request) => {
   let aadharProofUrl = existing.aadharProof ?? null;
   let licenseProofUrl = existing.licenseProof ?? null;
 
-  if (removeAadharProof) {
-    if (aadharProofUrl) {
-      const oldPath = path.join(process.cwd(), "public", aadharProofUrl);
-      await fs.unlink(oldPath).catch(() => {});
+  try {
+    if (removeAadharProof) {
+      if (aadharProofUrl) {
+        const oldPath = path.join(process.cwd(), "public", aadharProofUrl);
+        await fs.unlink(oldPath).catch(() => {});
+      }
+      aadharProofUrl = null;
+    } else if (aadharProof && aadharProof.size > 0) {
+      if (aadharProof.size > 5 * 1024 * 1024)
+        throw new ApiError(400, "File size must be under 5MB");
+
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+      ];
+      if (!allowedTypes.includes(aadharProof.type))
+        throw new ApiError(400, "Invalid file type");
+
+      if (aadharProofUrl) {
+        const oldPath = path.join(process.cwd(), "public", aadharProofUrl);
+        await fs.unlink(oldPath).catch(() => {});
+      }
+
+      const bytes = Buffer.from(await aadharProof.arrayBuffer());
+      const ext = aadharProof.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}-${phone}.${ext}`;
+
+      const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
+      await fs.mkdir(uploadDir, { recursive: true });
+
+      const filePath = path.join(uploadDir, fileName);
+      await fs.writeFile(filePath, bytes);
+
+      aadharProofUrl = `/uploads/drivers/${fileName}`;
     }
-    aadharProofUrl = null;
-  } else if (aadharProof && aadharProof.size > 0) {
-    if (aadharProof.size > 5 * 1024 * 1024)
-      throw new ApiError(400, "File size must be under 5MB");
 
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/pdf",
-    ];
-    if (!allowedTypes.includes(aadharProof.type))
-      throw new ApiError(400, "Invalid file type");
+    if (removeLicenseProof) {
+      if (licenseProofUrl) {
+        const oldPath = path.join(process.cwd(), "public", licenseProofUrl);
+        await fs.unlink(oldPath).catch(() => {});
+      }
+      licenseProofUrl = null;
+    } else if (licenseProof && licenseProof.size > 0) {
+      if (licenseProof.size > 5 * 1024 * 1024)
+        throw new ApiError(400, "File size must be under 5MB");
 
-    if (aadharProofUrl) {
-      const oldPath = path.join(process.cwd(), "public", aadharProofUrl);
-      await fs.unlink(oldPath).catch(() => {});
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+      ];
+      if (!allowedTypes.includes(licenseProof.type))
+        throw new ApiError(400, "Invalid file type");
+
+      if (licenseProofUrl) {
+        const oldPath = path.join(process.cwd(), "public", licenseProofUrl);
+        await fs.unlink(oldPath).catch(() => {});
+      }
+
+      const bytes = Buffer.from(await licenseProof.arrayBuffer());
+      const ext = licenseProof.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}-${phone}.${ext}`;
+
+      const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
+      await fs.mkdir(uploadDir, { recursive: true });
+
+      const filePath = path.join(uploadDir, fileName);
+      await fs.writeFile(filePath, bytes);
+
+      licenseProofUrl = `/uploads/drivers/${fileName}`;
     }
 
-    const bytes = Buffer.from(await aadharProof.arrayBuffer());
-    const ext = aadharProof.name.split(".").pop() || "jpg";
-    const fileName = `${Date.now()}-${phone}.${ext}`;
+    const updated = await prisma.driver.update({
+      where: { id },
+      data: {
+        name,
+        phone,
+        licenseNumber,
+        address,
+        age: Number(ageStr),
+        aadharNumber,
+        aadharProof: aadharProofUrl,
+        licenseProof: licenseProofUrl,
+      },
+    });
 
-    const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, fileName);
-    await fs.writeFile(filePath, bytes);
-
-    aadharProofUrl = `/uploads/drivers/${fileName}`;
+    return NextResponse.json(
+      new ApiResponse(200, updated, "Driver updated successfully")
+    );
+  } catch (error) {
+    await safeUnlink(aadharProofUrl);
+    await safeUnlink(licenseProofUrl);
+    throw error;
   }
-
-  if (removeLicenseProof) {
-    if (licenseProofUrl) {
-      const oldPath = path.join(process.cwd(), "public", licenseProofUrl);
-      await fs.unlink(oldPath).catch(() => {});
-    }
-    licenseProofUrl = null;
-  } else if (licenseProof && licenseProof.size > 0) {
-    if (licenseProof.size > 5 * 1024 * 1024)
-      throw new ApiError(400, "File size must be under 5MB");
-
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/pdf",
-    ];
-    if (!allowedTypes.includes(licenseProof.type))
-      throw new ApiError(400, "Invalid file type");
-
-    if (licenseProofUrl) {
-      const oldPath = path.join(process.cwd(), "public", licenseProofUrl);
-      await fs.unlink(oldPath).catch(() => {});
-    }
-
-    const bytes = Buffer.from(await licenseProof.arrayBuffer());
-    const ext = licenseProof.name.split(".").pop() || "jpg";
-    const fileName = `${Date.now()}-${phone}.${ext}`;
-
-    const uploadDir = path.join(process.cwd(), "public/uploads/drivers");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, fileName);
-    await fs.writeFile(filePath, bytes);
-
-    licenseProofUrl = `/uploads/drivers/${fileName}`;
-  }
-
-  const updated = await prisma.driver.update({
-    where: { id },
-    data: {
-      name,
-      phone,
-      licenseNumber,
-      address,
-      age: Number(ageStr),
-      aadharNumber,
-      aadharProof: aadharProofUrl,
-      licenseProof: licenseProofUrl,
-    },
-  });
-
-  return NextResponse.json(
-    new ApiResponse(200, updated, "Driver updated successfully")
-  );
 });
 
 export const DELETE = apiHandler(async (req: Request) => {
