@@ -4,14 +4,12 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-// Safe string normalization
 function normalizeString(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const str = String(value).trim();
   return str === "" ? null : str;
 }
 
-// Safe positive number
 function asPositiveNumber(value: unknown): number | null {
   const num = typeof value === "string" ? parseFloat(value) : Number(value);
   return Number.isFinite(num) && num > 0 ? num : null;
@@ -29,7 +27,7 @@ export async function POST(req: NextRequest) {
     const amountRaw = body.amount;
     const paymentModeRaw = normalizeString(body.paymentMode);
 
-    // Required fields
+    // Required validations
     if (!source || !["farmer", "agent"].includes(source)) {
       return NextResponse.json(
         { error: "source is required and must be 'farmer' or 'agent'" },
@@ -57,7 +55,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve sourceRecordId (primary: sourceRecordId, fallback: billNo)
+    // Resolve loading ID
     let resolvedId: string | null = sourceRecordId;
 
     if (!resolvedId && billNo) {
@@ -67,13 +65,12 @@ export async function POST(req: NextRequest) {
           where: { billNo },
           select: { id: true },
         });
-      } else if (source === "agent") {
+      } else {
         loading = await prisma.agentLoading.findUnique({
           where: { billNo },
           select: { id: true },
         });
       }
-
       resolvedId = loading?.id ?? null;
     }
 
@@ -87,10 +84,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate vendorId and vendorKey
+    // Generate keys
     const vendorId = `${source}:${resolvedId}`;
     const vendorName = vendorNameRaw ?? "Unknown Vendor";
-    const vendorKey = `${source}:${vendorName}`; // ← As per your schema comment
+    const vendorKey = `${source}:${vendorName}`;
 
     // Optional fields
     const referenceNo = normalizeString(body.referenceNo);
@@ -99,7 +96,7 @@ export async function POST(req: NextRequest) {
     const ifsc = normalizeString(body.ifsc)?.toUpperCase() ?? null;
     const bankName = normalizeString(body.bankName);
     const bankAddress = normalizeString(body.bankAddress);
-    const paymentdetails = normalizeString(body.paymentdetails);
+    const paymentdetails = normalizeString(body.paymentdetails); // ← Now defined
 
     const isInstallment = Boolean(body.isInstallment);
     let installments: number | null = null;
@@ -133,14 +130,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Default paymentMode
     const paymentMode = paymentModeRaw?.toUpperCase() ?? "CASH";
 
-    // Create VendorPayment
     const payment = await prisma.vendorPayment.create({
       data: {
         vendorId,
-        vendorKey, // ← Critical for fast totals/aggregation
+        vendorKey,
         vendorName,
         source,
         date,
@@ -158,7 +153,7 @@ export async function POST(req: NextRequest) {
         installmentNumber,
       },
       include: {
-        vendorInvoice: true, // optional: include linked invoices
+        vendorInvoice: true,
       },
     });
 
@@ -182,7 +177,7 @@ export async function GET(req: NextRequest) {
     if (source && ["farmer", "agent"].includes(source)) {
       where.source = source;
     }
-    if (sourceRecordId) {
+    if (sourceRecordId && source) {
       where.vendorId = `${source}:${sourceRecordId}`;
     }
 
