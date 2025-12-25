@@ -248,9 +248,7 @@ const EmployeePage = () => {
                       <div className="flex items-center gap-4">
                         <Avatar className="h-10 w-10 border border-slate-200">
                           {/* Use emp.photo if available in your type, otherwise fallback */}
-                          <AvatarImage
-                            src={`https://api.dicebear.com/7.x/initials/svg?seed=${emp.fullName}`}
-                          />
+                          <AvatarImage src={emp.photo || undefined} />
                           <AvatarFallback className="bg-blue-50 text-blue-600 font-medium">
                             {getInitials(emp.fullName)}
                           </AvatarFallback>

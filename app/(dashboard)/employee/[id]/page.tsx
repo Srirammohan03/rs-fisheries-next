@@ -59,10 +59,9 @@ const EmployeeDetailPage = () => {
   });
 
   if (isLoading) return <LoadingSkeleton />;
-  if (isError) return <ErrorState message={(error as Error).message} />;
+  if (isError) return <ErrorState message={error} />;
 
   const employee = data!.data;
-  
 
   // Helper for initials
   const getInitials = (name: string) =>
@@ -521,17 +520,25 @@ const LoadingSkeleton = () => (
   </div>
 );
 
-const ErrorState = ({ message }: { message: string }) => (
-  <div className="h-[50vh] flex flex-col items-center justify-center gap-4 text-center">
-    <div className="bg-red-50 p-4 rounded-full">
-      <Trash className="h-8 w-8 text-red-500" />
+const ErrorState = (error: any) => {
+  let message = null;
+  if (axios.isAxiosError(error)) {
+    message = error.response?.data?.message || "An unexpected error occurred.";
+  } else {
+    message = error.message || "An unexpected error occurred.";
+  }
+  return (
+    <div className="h-[50vh] flex flex-col items-center justify-center gap-4 text-center">
+      <div className="bg-red-50 p-4 rounded-full">
+        <Trash className="h-8 w-8 text-red-500" />
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold">Failed to load employee</h3>
+        <p className="text-sm text-muted-foreground max-w-md">{message}</p>
+      </div>
+      <Button variant="outline" onClick={() => window.location.reload()}>
+        Try Again
+      </Button>
     </div>
-    <div className="space-y-2">
-      <h3 className="text-lg font-semibold">Failed to load employee</h3>
-      <p className="text-sm text-muted-foreground max-w-md">{message}</p>
-    </div>
-    <Button variant="outline" onClick={() => window.location.reload()}>
-      Try Again
-    </Button>
-  </div>
-);
+  );
+};

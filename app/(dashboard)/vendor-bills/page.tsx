@@ -168,8 +168,7 @@ export default function VendorBillsPage() {
    * itemNetKgs = (item.totalKgs / record.totalKgs) * record.grandTotal
    *
    * ✅ No hardcoded 0.95 anywhere.
-   */
-  const filteredItems: UIItem[] = useMemo(() => {
+   */ const filteredItems: UIItem[] = useMemo(() => {
     let result: UIItem[] = records
       .filter((rec) =>
         activeTab === "farmer"
@@ -252,22 +251,25 @@ export default function VendorBillsPage() {
    * totalPrice = itemNetKgs * pricePerKg
    * (itemNetKgs derived from record.grandTotal, already net)
    */
+  // Only the changed parts are shown — replace these sections
+
   const onChangeField = useCallback(
     (itemId: string, value: string) => {
       setEditing((prev) => {
-        const current = prev[itemId] || {};
         const num = value === "" ? undefined : Number(value);
-
         const item = filteredItems.find((i) => i.id === itemId);
         if (!item) return prev;
 
-        const updates: Partial<VendorItem> = { ...current, pricePerKg: num };
+        const totalKgs = Number(item.totalKgs || 0); // actual physical weight
 
-        if (num !== undefined) {
-          const netKgs = Number(item.netKgsForThisItem || 0); // already net allocation
-          updates.totalPrice = Number((netKgs * num).toFixed(2));
-        } else {
-          updates.totalPrice = undefined;
+        const updates: Partial<VendorItem> = {
+          pricePerKg: num,
+        };
+
+        if (num !== undefined && totalKgs > 0) {
+          const gross = totalKgs * num;
+          const net = Math.round(gross * 0.95); // 5% deduction on money
+          updates.totalPrice = net;
         }
 
         return { ...prev, [itemId]: updates };
@@ -275,6 +277,9 @@ export default function VendorBillsPage() {
     },
     [filteredItems]
   );
+
+  // In both mobile and desktop views, Total Price shows net amount
+  // No change needed in JSX — it already reads edit.totalPrice or item.totalPrice
 
   const saveRow = async (item: VendorItem) => {
     const edits = editing[item.id];

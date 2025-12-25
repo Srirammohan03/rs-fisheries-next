@@ -1,60 +1,89 @@
-// app\api\former-loading\route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 const TRAY_KG = 35;
 const MONEY_DEDUCTION_PERCENT = 5;
 
-const num = (v: unknown): number =>
-  Number.isFinite(Number(v)) ? Number(v) : 0;
+type FormerItemInput = {
+  varietyCode: string;
+  noTrays: number | string;
+  loose: number | string;
+  pricePerKg: number | string;
+};
+
+type FormerLoadingBody = {
+  fishCode?: string;
+  billNo: string;
+  FarmerName?: string;
+  village?: string;
+  date?: string;
+  vehicleId?: string;
+  vehicleNo?: string;
+  items: FormerItemInput[];
+};
+
+const asTrim = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+const toNum = (v: unknown): number => {
+  const n = typeof v === "string" ? Number(v.trim()) : Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export async function POST(req: Request) {
   try {
-    const data: {
-      fishCode?: string;
-      billNo: string;
-      FarmerName?: string;
-      village?: string;
-      date?: string;
-      vehicleId?: string;
-      vehicleNo?: string;
-      items: {
-        varietyCode: string;
-        noTrays: number;
-        loose: number;
-        pricePerKg: number;
-      }[];
-    } = await req.json();
+    const body = (await req.json()) as FormerLoadingBody;
 
-    if (!data.billNo?.trim()) {
-      return NextResponse.json({ success: false, message: "Bill number required" }, { status: 400 });
+    const billNo = asTrim(body.billNo);
+    if (!billNo) {
+      return NextResponse.json(
+        { success: false, message: "Bill number is required" },
+        { status: 400 }
+      );
     }
 
-    if (!Array.isArray(data.items) || data.items.length === 0) {
-      return NextResponse.json({ success: false, message: "Items required" }, { status: 400 });
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "At least one item is required" },
+        { status: 400 }
+      );
     }
 
-    const loadingDate = data.date ? new Date(data.date) : new Date();
-    if (isNaN(loadingDate.getTime())) {
-      return NextResponse.json({ success: false, message: "Invalid date" }, { status: 400 });
+    const loadingDate = body.date ? new Date(body.date) : new Date();
+    if (Number.isNaN(loadingDate.getTime())) {
+      return NextResponse.json(
+        { success: false, message: "Invalid date provided" },
+        { status: 400 }
+      );
     }
 
-    const items = data.items.map((item) => {
-      const trays = num(item.noTrays);
-      const loose = num(item.loose);
-      const pricePerKg = num(item.pricePerKg);
+    const vehicleId = asTrim(body.vehicleId) || null;
+    const vehicleNo = asTrim(body.vehicleNo) || null;
 
-      const trayKgs = trays * TRAY_KG;
+    if (!vehicleId && !vehicleNo) {
+      return NextResponse.json(
+        { success: false, message: "Vehicle is required" },
+        { status: 400 }
+      );
+    }
+
+    // ✅ compute items with 5% money deduction
+    const items = body.items.map((it) => {
+      const varietyCode = asTrim(it.varietyCode);
+      const noTrays = Math.max(0, Math.floor(toNum(it.noTrays)));
+      const loose = Math.max(0, toNum(it.loose));
+      const pricePerKg = Math.max(0, toNum(it.pricePerKg));
+
+      const trayKgs = noTrays * TRAY_KG;
       const totalKgs = trayKgs + loose;
 
       const gross = totalKgs * pricePerKg;
-      const totalPrice = Number(
-        (gross * (1 - MONEY_DEDUCTION_PERCENT / 100)).toFixed(2)
-      );
+      const totalPrice = round2(gross * (1 - MONEY_DEDUCTION_PERCENT / 100));
 
       return {
-        varietyCode: item.varietyCode,
-        noTrays: trays,
+        varietyCode,
+        noTrays,
         trayKgs,
         loose,
         totalKgs,
@@ -64,41 +93,51 @@ export async function POST(req: Request) {
     });
 
     const totalTrays = items.reduce((s, i) => s + i.noTrays, 0);
-    const totalLooseKgs = items.reduce((s, i) => s + i.loose, 0);
-    const totalTrayKgs = items.reduce((s, i) => s + i.trayKgs, 0);
-    const totalKgs = items.reduce((s, i) => s + i.totalKgs, 0);
-    const totalPrice = Number(items.reduce((s, i) => s + i.totalPrice, 0).toFixed(2));
+    const totalLooseKgs = round2(items.reduce((s, i) => s + i.loose, 0));
+    const totalTrayKgs = round2(items.reduce((s, i) => s + i.trayKgs, 0));
+    const totalKgs = round2(items.reduce((s, i) => s + i.totalKgs, 0));
 
-    const loading = await prisma.formerLoading.create({
-      data: {
-        fishCode: data.fishCode ?? "NA",
-        billNo: data.billNo.trim(),
-        FarmerName: data.FarmerName?.trim() ?? null,
-        village: data.village?.trim() ?? "",
-        date: loadingDate,
+    const totalPrice = round2(items.reduce((s, i) => s + i.totalPrice, 0));
 
-        vehicleId: data.vehicleId ?? null,
-        vehicleNo: data.vehicleId ? null : data.vehicleNo ?? null,
+    const createData: Parameters<typeof prisma.formerLoading.create>[0]["data"] = {
+      fishCode: asTrim(body.fishCode) || "NA",
+      billNo,
+      FarmerName: asTrim(body.FarmerName) || null,
+      village: asTrim(body.village) || "",
+      date: loadingDate,
 
-        totalTrays,
-        totalLooseKgs,
-        totalTrayKgs,
-        totalKgs,
-        totalPrice,
+      totalTrays,
+      totalLooseKgs,
+      totalTrayKgs,
+      totalKgs,
 
-        dispatchChargesTotal: 0,
-        packingAmountTotal: 0,
-        grandTotal: totalPrice,
+      totalPrice,
+      dispatchChargesTotal: 0,
+      packingAmountTotal: 0,
+      grandTotal: totalPrice,
 
-        items: { create: items },
-      },
+      items: { create: items },
+    };
+
+    // ✅ vehicle connect logic
+    if (vehicleId) {
+      createData.vehicle = { connect: { id: vehicleId } };
+      createData.vehicleNo = null;
+    } else {
+      createData.vehicleNo = vehicleNo;
+    }
+
+    const saved = await prisma.formerLoading.create({
+      data: createData,
       include: { items: true, vehicle: { select: { vehicleNumber: true } } },
     });
 
-    return NextResponse.json({ success: true, data: loading });
-  } catch (err) {
-    console.error("Former POST error:", err);
-    return NextResponse.json({ success: false, message: "Save failed" }, { status: 500 });
+    return NextResponse.json({ success: true, data: saved }, { status: 201 });
+  } catch (err: unknown) {
+    console.error("FormerLoading POST error:", err);
+    const message =
+      err instanceof Error ? err.message : "Failed to save farmer loading";
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
 
@@ -110,14 +149,14 @@ export async function GET() {
     });
 
     const data = rows.map((l) => {
-      const itemsTotal = l.items.reduce(
-        (s: number, i) => s + num(i.totalPrice),
-        0
+      const itemsTotalPrice = round2(
+        l.items.reduce((s, it) => s + toNum(it.totalPrice), 0)
       );
 
-      const totalPrice = l.totalPrice > 0 ? l.totalPrice : itemsTotal;
-      const grandTotal =
-        totalPrice + num(l.dispatchChargesTotal) + num(l.packingAmountTotal);
+      const totalPrice = itemsTotalPrice;
+      const grandTotal = round2(
+        totalPrice + toNum(l.dispatchChargesTotal) + toNum(l.packingAmountTotal)
+      );
 
       return {
         ...l,
@@ -127,9 +166,12 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ success: true, data });
-  } catch (err) {
-    console.error("Former GET error:", err);
-    return NextResponse.json({ success: false, message: "Fetch failed" }, { status: 500 });
+    return NextResponse.json({ success: true, data }, { status: 200 });
+  } catch (err: unknown) {
+    console.error("FormerLoading GET error:", err);
+    return NextResponse.json(
+      { success: false, message: "Failed to fetch farmer loadings" },
+      { status: 500 }
+    );
   }
 }
