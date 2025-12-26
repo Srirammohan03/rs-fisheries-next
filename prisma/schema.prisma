@@ -21,11 +21,12 @@ enum Role {
 }
 
 model User {
-  id               String            @id @default(cuid())
-  email            String            @unique
-  password         String
-  name             String?
-  role             Role              @default(others)
+  id       String @id @default(cuid())
+  password String
+
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   salaries         Salaries[]
@@ -539,6 +540,8 @@ model Employee {
   photo        String?
   aadhaarProof String?
   panProof     String?
+
+  user User?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

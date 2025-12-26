@@ -1,4 +1,4 @@
-// app\api\team-member\[id]\route.ts  
+// app\api\team-member\[id]\route.ts
 import prisma from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { apiHandler } from "@/utils/apiHandler";
@@ -19,7 +19,6 @@ export const GET = apiHandler(async (req: Request, context: any) => {
     new ApiResponse(200, user, "User fetched Successfully")
   );
 });
-
 
 export const PUT = apiHandler(async (req: Request, context: any) => {
   const { id } = await context.params;
@@ -50,12 +49,13 @@ export const PUT = apiHandler(async (req: Request, context: any) => {
 
 export const DELETE = apiHandler(async (req: Request, context: any) => {
   const { id } = await context.params;
-
+  console.log("DELETE user id:", id);
   if (!id) throw new ApiError(400, "ID is missing");
 
   const deleteUser = await prisma.user.delete({
     where: { id },
   });
+  console.log("deleteduser", deleteUser);
 
   return NextResponse.json(
     new ApiResponse(200, deleteUser, "User deleted Successfully")

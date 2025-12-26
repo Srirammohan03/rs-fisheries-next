@@ -186,12 +186,12 @@ const EmployeeDetailPage = () => {
                     <CopyButton text={employee.employeeId} />
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
+                {/* <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Type</span>
                   <span className="text-sm text-muted-foreground">
                     Full-Time
                   </span>
-                </div>
+                </div> */}
               </CardContent>
             </Card>
           </div>

@@ -1,4 +1,6 @@
 import { JoiningFormValues } from "./schema";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -15,3 +17,14 @@ export interface Employee extends JoiningFormValues {
   createdAt: string;
   updatedAt: string;
 }
+
+export const useEmployee = () => {
+  return useQuery<ApiResponse<Employee[]>, Error>({
+    queryKey: ["employees"],
+    queryFn: async (): Promise<ApiResponse<Employee[]>> => {
+      const res = await axios.get("/api/employee");
+      return res.data;
+    },
+    refetchOnMount: "always",
+  });
+};

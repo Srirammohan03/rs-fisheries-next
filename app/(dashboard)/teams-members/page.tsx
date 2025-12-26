@@ -84,6 +84,9 @@ export default function UserPage() {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
       setOpenDeleteDialog(false);
     },
+    onError(error) {
+      console.error("Error deleting user:", error);
+    },
   });
 
   const handleCreate = (data: UserFormValues) => createMutation.mutate(data);
@@ -145,63 +148,67 @@ export default function UserPage() {
             <>
               {/* ✅ Mobile Cards */}
               <div className="grid grid-cols-1 gap-3 md:hidden">
-                {users.map((user) => (
-                  <div
-                    key={user.id}
-                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-slate-900 font-extrabold truncate">
-                          <UserIcon className="h-4 w-4 text-slate-400" />
-                          {user.name || "—"}
-                        </div>
+                {users &&
+                  users.length > 0 &&
+                  users.map((user) => (
+                    <div
+                      key={user.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-slate-900 font-extrabold truncate">
+                            <UserIcon className="h-4 w-4 text-slate-400" />
+                            {user.employee.fullName || "—"}
+                          </div>
 
-                        <div className="mt-2 flex items-center gap-2 text-sm text-slate-700 break-all">
-                          <Mail className="h-4 w-4 text-slate-400" />
-                          {user.email}
-                        </div>
+                          <div className="mt-2 flex items-center gap-2 text-sm text-slate-700 break-all">
+                            <Mail className="h-4 w-4 text-slate-400" />
+                            {user.employee.email}
+                          </div>
 
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 capitalize">
-                            <Shield className="h-3.5 w-3.5 text-slate-400" />
-                            {user.role}
-                          </span>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 capitalize">
+                              <Shield className="h-3.5 w-3.5 text-slate-400" />
+                              {user.employee.designation}
+                            </span>
 
-                          <span className="text-xs text-slate-500">
-                            Created: {formatDate(user.createdAt)}
-                          </span>
+                            <span className="text-xs text-slate-500">
+                              Created: {formatDate(user.createdAt)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        className="border-slate-200 text-slate-700 hover:bg-slate-50"
-                        onClick={() => {
-                          setMode("edit");
-                          setSelectedUser(user);
-                          setOpenDialog(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Edit
-                      </Button>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                          onClick={() => {
+                            setMode("edit");
+                            setSelectedUser(user);
+                            setOpenDialog(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
 
-                      <Button
-                        variant="destructive"
-                        onClick={() => {
-                          setSelectedUser(user);
-                          setOpenDeleteDialog(true);
-                        }}
-                      >
-                        <Trash className="h-4 w-4 mr-2" />
-                        Delete
-                      </Button>
+                        {user.employee.designation !== "Admin" && (
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setOpenDeleteDialog(true);
+                            }}
+                          >
+                            <Trash className="h-4 w-4 mr-2" />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
 
               {/* ✅ Desktop Table */}
@@ -228,56 +235,63 @@ export default function UserPage() {
                   </TableHeader>
 
                   <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id} className="hover:bg-slate-50/60">
-                        <TableCell className="text-slate-800">
-                          {user.email}
-                        </TableCell>
+                    {users &&
+                      users.length > 0 &&
+                      users.map((user) => (
+                        <TableRow
+                          key={user.id}
+                          className="hover:bg-slate-50/60"
+                        >
+                          <TableCell className="text-slate-800">
+                            {user.employee.email}
+                          </TableCell>
 
-                        <TableCell className="font-medium text-slate-900">
-                          {user.name || "—"}
-                        </TableCell>
+                          <TableCell className="font-medium text-slate-900">
+                            {user.employee.fullName || "—"}
+                          </TableCell>
 
-                        <TableCell>
-                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 capitalize">
-                            {user.role}
-                          </span>
-                        </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 capitalize">
+                              {user.employee.designation}
+                            </span>
+                          </TableCell>
 
-                        <TableCell className="text-slate-600">
-                          {formatDate(user.createdAt)}
-                        </TableCell>
+                          <TableCell className="text-slate-600">
+                            {formatDate(user.createdAt)}
+                          </TableCell>
 
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
-                              onClick={() => {
-                                setMode("edit");
-                                setSelectedUser(user);
-                                setOpenDialog(true);
-                              }}
-                            >
-                              <Pencil size={16} />
-                            </Button>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+                                onClick={() => {
+                                  setMode("edit");
+                                  setSelectedUser(user);
+                                  setOpenDialog(true);
+                                }}
+                              >
+                                <Pencil size={16} />
+                              </Button>
 
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              className="shadow-sm"
-                              onClick={() => {
-                                setSelectedUser(user);
-                                setOpenDeleteDialog(true);
-                              }}
-                            >
-                              <Trash size={16} />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                              {user.employee.designation !== "Admin" && (
+                                <Button
+                                  size="icon"
+                                  variant="destructive"
+                                  className="shadow-sm"
+                                  onClick={() => {
+                                    setSelectedUser(user);
+                                    setOpenDeleteDialog(true);
+                                  }}
+                                >
+                                  <Trash size={16} />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </div>
@@ -292,9 +306,13 @@ export default function UserPage() {
         onClose={() => setOpenDialog(false)}
         onSubmit={mode === "add" ? handleCreate : handleUpdate}
         mode={mode}
-        defaultValues={selectedUser}
         isLoading={
           mode === "add" ? createMutation.isPending : updateMutation.isPending
+        }
+        defaultValues={
+          mode === "edit" && selectedUser
+            ? { employeeId: selectedUser.employeeId }
+            : null
         }
       />
 

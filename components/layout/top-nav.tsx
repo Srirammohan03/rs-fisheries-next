@@ -14,15 +14,16 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
+import { User } from "@/utils/user-types";
 
 const BRAND = "#139BC3";
 
 // TEMP user hook (replace later with JWT decode)
 const useAuth = () => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -53,7 +54,10 @@ function initials(name?: string) {
 export function TopNav() {
   const router = useRouter();
   const { user } = useAuth();
-  const userInitials = useMemo(() => initials(user?.name), [user?.name]);
+  const userInitials = useMemo(
+    () => initials(user?.employee?.fullName),
+    [user?.employee?.fullName]
+  );
 
   const { toggleSidebar } = useSidebar();
 
@@ -119,6 +123,7 @@ export function TopNav() {
                 }}
               >
                 <Avatar className="h-9 w-9 bg-transparent">
+                  <AvatarImage src={user?.employee.photo || undefined} />
                   <AvatarFallback className="bg-transparent text-white font-bold">
                     {userInitials}
                   </AvatarFallback>
@@ -128,10 +133,10 @@ export function TopNav() {
               {/* Text (hidden on mobile) */}
               <div className="hidden sm:flex min-w-0 flex-col items-start leading-tight pr-1">
                 <span className="text-sm font-semibold text-slate-900 max-w-[180px] truncate">
-                  {user?.name || "User"}
+                  {user?.employee.fullName || "User"}
                 </span>
                 <span className="text-xs text-slate-500 max-w-[180px] truncate">
-                  {user?.email || "user@example.com"}
+                  {user?.employee.email || "user@example.com"}
                 </span>
               </div>
             </button>
@@ -145,10 +150,10 @@ export function TopNav() {
             <DropdownMenuLabel className="rounded-xl px-3 py-2">
               <div className="flex flex-col min-w-0">
                 <span className="font-semibold text-slate-900 truncate">
-                  {user?.name || "User"}
+                  {user?.employee.fullName || "User"}
                 </span>
                 <span className="text-xs text-slate-500 truncate">
-                  {user?.email || "user@example.com"}
+                  {user?.employee.email || "user@example.com"}
                 </span>
               </div>
             </DropdownMenuLabel>

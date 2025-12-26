@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 
 import {
   Form,
@@ -282,7 +282,9 @@ export default function EditEmployeePage() {
 
   if (isLoading) {
     return (
-      <div className="py-8 px-5 text-center">Loading employee data...</div>
+      <div className=" flex justify-center items-center py-8 px-5 text-center">
+        <Loader2 className="animate-spin" /> Loading employee data...
+      </div>
     );
   }
 
@@ -363,6 +365,8 @@ export default function EditEmployeePage() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
+                            captionLayout="dropdown"
+                            toYear={new Date().getFullYear()}
                             selected={
                               field.value ? new Date(field.value) : undefined
                             }
@@ -627,6 +631,7 @@ export default function EditEmployeePage() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
+                            captionLayout="dropdown"
                             selected={
                               field.value ? new Date(field.value) : undefined
                             }

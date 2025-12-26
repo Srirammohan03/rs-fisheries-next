@@ -18,13 +18,7 @@ import {
 // Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -47,28 +41,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 // Logic/Types
 import { generateJoiningFormPDF } from "./components/generateJoiningFormPDF";
-import { ApiResponse } from "@/utils/ApiResponse";
-import { type Employee } from "@/lib/types";
+import { useEmployee } from "@/lib/types";
 import DeleteDialog from "@/components/helpers/DeleteDialog";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const EmployeePage = () => {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<"new" | "old">("new");
+  const [shiftFilter, setShiftFilter] = useState<string>("all");
+  const [designationFilter, setDesignationFilter] = useState<string>("all");
+
   const queryClient = useQueryClient();
-  const {
-    data: response,
-    isLoading,
-    isError,
-  } = useQuery<ApiResponse<Employee[]>, Error>({
-    queryKey: ["employees"],
-    queryFn: async (): Promise<ApiResponse<Employee[]>> => {
-      const res = await axios.get("/api/employee");
-      return res.data;
-    },
-  });
+  const { data: response, isLoading, isError } = useEmployee();
 
   const deleteMutation = useMutation({
     mutationFn: async (employeeId: string) => {
@@ -95,12 +89,45 @@ const EmployeePage = () => {
 
   const employees = response?.data || [];
 
-  // Filter Logic
-  const filteredEmployees = employees.filter(
-    (emp) =>
-      emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase())
+  const uniqueDesignations = Array.from(
+    new Set(
+      employees
+        .map((e) => e.designation)
+        .filter((des): des is string => Boolean(des))
+    )
   );
+
+  const uniqueShifts = Array.from(
+    new Set(
+      employees
+        .map((e) => e.shiftType)
+        .filter((shift): shift is string => Boolean(shift))
+    )
+  );
+
+  // Filter Logic
+  const processedEmployees = employees
+    .filter((emp) => {
+      const search = searchTerm.toLowerCase();
+      const matchesSearch =
+        emp.fullName.toLowerCase().includes(search) ||
+        emp.employeeId.toLowerCase().includes(search) ||
+        emp.designation.toLowerCase().includes(search);
+
+      const matchesShift =
+        shiftFilter === "all" || emp.shiftType === shiftFilter;
+
+      const matchesDesignation =
+        designationFilter === "all" || emp.designation === designationFilter;
+
+      return matchesSearch && matchesShift && matchesDesignation;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+
+      return sortOrder === "new" ? dateB - dateA : dateA - dateB;
+    });
 
   // Helper for Initials
   const getInitials = (name: string) =>
@@ -114,6 +141,13 @@ const EmployeePage = () => {
   const handleDelete = () => {
     if (!employeeToDelete) return;
     deleteMutation.mutate(employeeToDelete);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSortOrder("new");
+    setShiftFilter("all");
+    setDesignationFilter("all");
   };
 
   return (
@@ -151,7 +185,8 @@ const EmployeePage = () => {
 
       {/* ---------------- Filters & Controls ---------------- */}
       <Card className="border-none shadow-sm bg-transparent">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 px-5">
+          {/* Search */}
           <div className="relative flex-1 md:max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -161,7 +196,61 @@ const EmployeePage = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          {/* You can add a Department Filter Dropdown here in the future */}
+
+          {/* Sort */}
+          <Select
+            value={sortOrder}
+            onValueChange={(v: "new" | "old") => setSortOrder(v)}
+          >
+            <SelectTrigger className="w-[180px] bg-white">
+              <SelectValue placeholder="Sort by date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="new">New → Old</SelectItem>
+              <SelectItem value="old">Old → New</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Shift Filter */}
+          {/* <Select value={shiftFilter} onValueChange={setShiftFilter}>
+            <SelectTrigger className="w-[180px] bg-white">
+              <SelectValue placeholder="Filter by shift" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Shifts</SelectItem>
+              {uniqueShifts.map((shift) => (
+                <SelectItem key={shift} value={shift}>
+                  {shift}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select> */}
+
+          {/* Designation Filter */}
+          <Select
+            value={designationFilter}
+            onValueChange={setDesignationFilter}
+          >
+            <SelectTrigger className="w-[200px] bg-white">
+              <SelectValue placeholder="Filter by designation" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Designations</SelectItem>
+              {uniqueDesignations.map((des) => (
+                <SelectItem key={des} value={des}>
+                  {des}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            onClick={clearFilters}
+            className="bg-white border-slate-200 text-slate-700"
+          >
+            Clear Filters
+          </Button>
         </div>
       </Card>
 
@@ -212,7 +301,7 @@ const EmployeePage = () => {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : filteredEmployees.length === 0 ? (
+              ) : processedEmployees.length === 0 ? (
                 // Empty State
                 <TableRow>
                   <TableCell colSpan={5} className="h-96 text-center">
@@ -238,7 +327,7 @@ const EmployeePage = () => {
                 </TableRow>
               ) : (
                 // Data Rows
-                filteredEmployees.map((emp) => (
+                processedEmployees.map((emp) => (
                   <TableRow
                     key={emp.id}
                     className="group hover:bg-slate-50/50 transition-colors"
@@ -312,7 +401,7 @@ const EmployeePage = () => {
                             <span className="sr-only">Open menu</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-[160px]">
+                        <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem
                             onClick={() => router.push(`/employee/${emp.id}`)}
@@ -351,7 +440,7 @@ const EmployeePage = () => {
 
       {/* Footer / Meta info */}
       <div className="text-xs text-muted-foreground text-center">
-        Showing {filteredEmployees.length} of {employees.length} employees
+        Showing {processedEmployees.length} of {employees.length} employees
       </div>
 
       <DeleteDialog
