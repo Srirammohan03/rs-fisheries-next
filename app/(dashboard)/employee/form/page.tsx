@@ -264,6 +264,7 @@ export default function JoiningFormPage() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
+                            captionLayout="dropdown"
                             selected={
                               field.value ? new Date(field.value) : undefined
                             }
@@ -271,9 +272,6 @@ export default function JoiningFormPage() {
                               field.onChange(
                                 date ? date.toISOString().split("T")[0] : ""
                               )
-                            }
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
                             }
                             initialFocus
                           />
@@ -521,6 +519,7 @@ export default function JoiningFormPage() {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
+                            captionLayout="dropdown"
                             selected={
                               field.value ? new Date(field.value) : undefined
                             }
@@ -528,9 +527,6 @@ export default function JoiningFormPage() {
                               field.onChange(
                                 date ? date.toISOString().split("T")[0] : ""
                               )
-                            }
-                            disabled={(date) =>
-                              date > new Date() || date < new Date("1900-01-01")
                             }
                             initialFocus
                           />

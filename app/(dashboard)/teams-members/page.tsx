@@ -24,6 +24,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useUsers } from "@/utils/api-config";
+import { toast } from "sonner";
 
 const formatDate = (d: string | Date) =>
   new Date(d).toLocaleDateString("en-IN", {
@@ -52,6 +53,16 @@ export default function UserPage() {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
       setOpenDialog(false);
     },
+    onError: (error) => {
+      if (axios.isAxiosError(error)) {
+        toast.error(
+          error?.response?.data?.message ||
+            "please fill all the required fileds"
+        );
+      } else {
+        toast.error(error?.message || "please fill all the required fileds");
+      }
+    },
   });
 
   const updateMutation = useMutation({
@@ -71,6 +82,16 @@ export default function UserPage() {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
       setOpenDialog(false);
     },
+    onError: (error) => {
+      if (axios.isAxiosError(error)) {
+        toast.error(
+          error?.response?.data?.message ||
+            "please fill all the required fileds"
+        );
+      } else {
+        toast.error(error?.message || "please fill all the required fileds");
+      }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -84,8 +105,12 @@ export default function UserPage() {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
       setOpenDeleteDialog(false);
     },
-    onError(error) {
-      console.error("Error deleting user:", error);
+    onError: (error) => {
+      if (axios.isAxiosError(error)) {
+        toast.error(error?.response?.data?.message || "Something went wrong");
+      } else {
+        toast.error(error?.message || "Something went wrong");
+      }
     },
   });
 

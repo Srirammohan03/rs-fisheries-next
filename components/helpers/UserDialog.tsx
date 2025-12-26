@@ -40,13 +40,14 @@ export default function UserDialog({
   defaultValues,
   isLoading,
 }: Props) {
-  const { handleSubmit, reset, control, formState } = useForm<UserFormValues>({
+  const { handleSubmit, reset, control, watch } = useForm<UserFormValues>({
     resolver: zodResolver(UserValidationSchema),
     defaultValues: {
       employeeId: "",
       password: "",
     },
   });
+  const passwordValue = watch("password");
 
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
     null
@@ -78,6 +79,10 @@ export default function UserDialog({
       setSelectedEmployee(null);
     }
   }, [open, mode, defaultValues, res?.data, reset]);
+
+  const isSubmitDisabled =
+    isLoading ||
+    (mode === "edit" && (!passwordValue || passwordValue.trim() === ""));
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -201,7 +206,7 @@ export default function UserDialog({
               Cancel
             </Button>
 
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isSubmitDisabled}>
               {mode === "add" ? "Create User" : "Update User"}
             </Button>
           </DialogFooter>
