@@ -103,6 +103,7 @@ export function VendorPayments() {
           loadingIds: string[];
           latestLoadingId: string;
           totalDue: number;
+          dispatchChargesTotal: number; // ← Add this
           accountNumber?: string;
           ifsc?: string;
           bankName?: string;
@@ -120,6 +121,7 @@ export function VendorPayments() {
 
         const billNo = String(item.billNo || "").trim();
         const totalOwed = Number(item.grandTotal || 0);
+        const dispatchCharges = Number(item.dispatchChargesTotal || 0); // ← Extract this
 
         const key = `${source}:${name.toLowerCase()}`;
 
@@ -131,6 +133,7 @@ export function VendorPayments() {
             loadingIds: [loadingId],
             latestLoadingId: loadingId,
             totalDue: totalOwed,
+            dispatchChargesTotal: dispatchCharges,
             accountNumber: item.accountNumber || undefined,
             ifsc: item.ifsc || undefined,
             bankName: item.bankName || undefined,
@@ -139,27 +142,29 @@ export function VendorPayments() {
         } else {
           const existing = vendorMap.get(key)!;
           existing.totalDue += totalOwed;
+          existing.dispatchChargesTotal += dispatchCharges; // ← Accumulate
           if (billNo) existing.billNos.push(billNo);
           existing.loadingIds.push(loadingId);
           existing.latestLoadingId = loadingId;
         }
       });
 
-      // Step 2: Calculate total paid per vendor using vendorId
+      // Step 2: Calculate total paid per vendor
       const paidMap = new Map<string, number>();
-
       payments.forEach((p: any) => {
-        const vendorId = p.vendorId; // format: "farmer:uuid" or "agent:uuid"
+        const vendorId = p.vendorId;
         if (!vendorId) return;
         const amount = Number(p.amount || 0);
         paidMap.set(vendorId, (paidMap.get(vendorId) || 0) + amount);
       });
 
-      // Step 3: Build final list with remaining > 0
+      // Step 3: Build final list — only if dispatchChargesTotal > 0 AND remaining > 0
       const result: VendorRow[] = [];
 
       for (const [key, vendor] of vendorMap) {
-        // Find total paid for this vendor (check all loadingIds since payments use specific loadingId)
+        // Only include if total dispatch charges across all loadings > 0
+        if (vendor.dispatchChargesTotal <= 0) continue;
+
         let totalPaid = 0;
         for (const loadingId of vendor.loadingIds) {
           const fullVendorId = `${vendor.source}:${loadingId}`;
@@ -170,7 +175,7 @@ export function VendorPayments() {
 
         if (remaining > 0) {
           result.push({
-            id: `${vendor.source}:${vendor.latestLoadingId}`, // keep latest as id for selection
+            id: `${vendor.source}:${vendor.latestLoadingId}`,
             name: vendor.name,
             source: vendor.source,
             billNos: vendor.billNos,
@@ -187,7 +192,7 @@ export function VendorPayments() {
 
       return result.sort((a, b) => a.name.localeCompare(b.name));
     },
-    staleTime: 1000 * 30, // optional: cache for 30 seconds
+    staleTime: 1000 * 30,
   });
 
   const { data: payments = [] } = useQuery<VendorPayment[]>({
@@ -420,13 +425,36 @@ export function VendorPayments() {
                 <Input
                   type="text"
                   value={amount}
-                  onChange={(e) =>
-                    /^\d*\.?\d*$/.test(e.target.value) &&
-                    setAmount(e.target.value)
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    // Allow only valid number format (digits, optional decimal)
+                    if (!/^\d*\.?\d*$/.test(value)) return;
+
+                    // If a vendor is selected and there's a remaining due, prevent exceeding it
+                    if (selected && remaining > 0) {
+                      const numericValue = value === "" ? 0 : parseFloat(value);
+                      if (!isNaN(numericValue) && numericValue > remaining) {
+                        toast.error(
+                          `Amount cannot exceed remaining due of ${currency(
+                            remaining
+                          )}`
+                        );
+                        return;
+                      }
+                    }
+
+                    setAmount(value);
+                  }}
                   placeholder="100000"
                   className="h-11 border-slate-200 bg-white shadow-sm font-mono text-lg focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
                 />
+                {/* Helpful hint below the input */}
+                {selected && remaining > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Maximum allowed: {currency(remaining)}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">

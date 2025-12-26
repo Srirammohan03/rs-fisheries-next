@@ -22,9 +22,11 @@ import { toast } from "sonner";
 type PaymentMode = "cash" | "ac" | "upi" | "cheque";
 
 type ClientRow = {
-  id: string; // clientLoading.id
+  id: string; // latest loading id
   name: string; // clientName
   billNos: string[];
+  loadingIds: string[];
+  latestLoadingId: string;
   totalBilled: number; // sum of grandTotal (what client owes)
   accountNumber?: string;
   ifsc?: string;
@@ -90,10 +92,12 @@ export function ClientPayments() {
       const clientMap = new Map<
         string,
         {
-          id: string;
           name: string;
           billNos: string[];
+          loadingIds: string[];
+          latestLoadingId: string;
           totalBilled: number;
+          dispatchChargesTotal: number;
           accountNumber?: string;
           ifsc?: string;
           bankName?: string;
@@ -106,16 +110,20 @@ export function ClientPayments() {
         if (!name || !load.id) return;
 
         const billed = Number(load.grandTotal || 0);
+        const dispatchCharges = Number(load.dispatchChargesTotal || 0);
         const billNo = load.billNo || "";
+        const loadingId = load.id;
 
         const key = name.toLowerCase();
 
         if (!clientMap.has(key)) {
           clientMap.set(key, {
-            id: load.id,
             name,
             billNos: billNo ? [billNo] : [],
+            loadingIds: [loadingId],
+            latestLoadingId: loadingId,
             totalBilled: billed,
+            dispatchChargesTotal: dispatchCharges,
             accountNumber: load.accountNumber || undefined,
             ifsc: load.ifsc || undefined,
             bankName: load.bankName || undefined,
@@ -124,31 +132,47 @@ export function ClientPayments() {
         } else {
           const existing = clientMap.get(key)!;
           existing.totalBilled += billed;
+          existing.dispatchChargesTotal += dispatchCharges;
           if (billNo) existing.billNos.push(billNo);
-          existing.id = load.id;
+          existing.loadingIds.push(loadingId);
+          existing.latestLoadingId = loadingId;
         }
       });
 
-      // Calculate total paid per client
+      // Calculate total paid per loadingId
       const paidMap = new Map<string, number>();
       payments.forEach((p: any) => {
-        const name = (p.clientName || "").trim().toLowerCase();
-        if (!name) return;
+        const clientId = p.clientId;
+        if (!clientId) return;
         const amount = Number(p.amount || 0);
-        paidMap.set(name, (paidMap.get(name) || 0) + amount);
+        paidMap.set(clientId, (paidMap.get(clientId) || 0) + amount);
       });
 
-      // Build final list: only clients with remaining > 0
+      // Build final list: only clients with dispatchChargesTotal > 0 and remaining > 0
       const result: ClientRow[] = [];
 
       for (const [key, client] of clientMap) {
-        const totalPaid = paidMap.get(key) || 0;
+        if (client.dispatchChargesTotal <= 0) continue;
+
+        let totalPaid = 0;
+        for (const loadingId of client.loadingIds) {
+          totalPaid += paidMap.get(loadingId) || 0;
+        }
+
         const remaining = client.totalBilled - totalPaid;
 
         if (remaining > 0) {
           result.push({
-            ...client,
-            // Keep totalBilled for display
+            id: client.latestLoadingId,
+            name: client.name,
+            billNos: client.billNos,
+            loadingIds: client.loadingIds,
+            latestLoadingId: client.latestLoadingId,
+            totalBilled: client.totalBilled,
+            accountNumber: client.accountNumber,
+            ifsc: client.ifsc,
+            bankName: client.bankName,
+            bankAddress: client.bankAddress,
           });
         }
       }
@@ -168,11 +192,11 @@ export function ClientPayments() {
   const selectedClient = clientData.find((c) => c.id === clientId);
 
   const paidAmount = useMemo(() => {
-    if (!clientId) return 0;
+    if (!selectedClient) return 0;
     return payments
-      .filter((p) => p.clientId === clientId)
+      .filter((p) => selectedClient.loadingIds.includes(p.clientId))
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  }, [payments, clientId]);
+  }, [payments, selectedClient]);
 
   const totalBilled = selectedClient?.totalBilled || 0;
   const remaining = Math.max(0, totalBilled - paidAmount);
@@ -388,13 +412,36 @@ export function ClientPayments() {
                 <Input
                   type="text"
                   value={amount}
-                  onChange={(e) =>
-                    /^\d*\.?\d*$/.test(e.target.value) &&
-                    setAmount(e.target.value)
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    // Allow only valid number format (including empty or decimal)
+                    if (!/^\d*\.?\d*$/.test(value)) return;
+
+                    // If there's a selected client and remaining due, prevent exceeding it
+                    if (selectedClient && remaining > 0) {
+                      const numericValue = value === "" ? 0 : parseFloat(value);
+                      if (!isNaN(numericValue) && numericValue > remaining) {
+                        toast.error(
+                          `Amount cannot exceed remaining due of ${currency(
+                            remaining
+                          )}`
+                        );
+                        return;
+                      }
+                    }
+
+                    setAmount(value);
+                  }}
                   placeholder="100000"
                   className="h-11 font-mono text-lg"
                 />
+                {/* Optional: Show helpful text below input */}
+                {selectedClient && remaining > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Maximum allowed: {currency(remaining)}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
