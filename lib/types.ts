@@ -28,3 +28,14 @@ export const useEmployee = () => {
     refetchOnMount: "always",
   });
 };
+
+export const useEmployeeDropDown = () => {
+  return useQuery<ApiResponse<Employee[]>, Error>({
+    queryKey: ["employees"],
+    queryFn: async (): Promise<ApiResponse<Employee[]>> => {
+      const res = await axios.get("/api/employee/drop-down");
+      return res.data;
+    },
+    staleTime: 0,
+  });
+};

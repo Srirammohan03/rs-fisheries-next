@@ -21,7 +21,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { UserFormValues, UserValidationSchema } from "@/utils/user-types";
 import { useEffect, useState } from "react";
-import { Employee, useEmployee } from "@/lib/types";
+import { Employee, useEmployeeDropDown } from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -40,7 +40,7 @@ export default function UserDialog({
   defaultValues,
   isLoading,
 }: Props) {
-  const { handleSubmit, reset, control } = useForm<UserFormValues>({
+  const { handleSubmit, reset, control, formState } = useForm<UserFormValues>({
     resolver: zodResolver(UserValidationSchema),
     defaultValues: {
       employeeId: "",
@@ -56,7 +56,7 @@ export default function UserDialog({
     data: res,
     isLoading: isEmployeeLoading,
     isError: isEmployeeError,
-  } = useEmployee();
+  } = useEmployeeDropDown();
 
   useEffect(() => {
     if (!open || !res?.data) return;
@@ -112,32 +112,49 @@ export default function UserDialog({
             <Controller
               name="employeeId"
               control={control}
-              render={({ field }) => (
-                <Select
-                  disabled={
-                    isEmployeeLoading || isEmployeeError || mode === "edit"
-                  }
-                  value={field.value}
-                  onValueChange={(id) => {
-                    const emp = res?.data.find((e) => e.id === id);
-                    if (!emp) return;
+              render={({ field, fieldState }) => (
+                <div className="space-y-1">
+                  <Select
+                    disabled={
+                      isEmployeeLoading || isEmployeeError || mode === "edit"
+                    }
+                    value={field.value}
+                    onValueChange={(id) => {
+                      const emp = res?.data.find((e) => e.id === id);
+                      if (!emp) return;
 
-                    field.onChange(id);
-                    setSelectedEmployee(emp);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select employee" />
-                  </SelectTrigger>
+                      field.onChange(id);
+                      setSelectedEmployee(emp);
+                    }}
+                  >
+                    <SelectTrigger
+                      className={fieldState.error ? "border-red-500" : ""}
+                    >
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
 
-                  <SelectContent>
-                    {res?.data.map((emp) => (
-                      <SelectItem key={emp.id} value={emp.id}>
-                        {emp.fullName} ({emp.email})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                    <SelectContent>
+                      {res?.data && res.data.length > 0 ? (
+                        res.data.map((emp) => (
+                          <SelectItem key={emp.id} value={emp.id}>
+                            {emp.fullName} ({emp.email})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-data" disabled>
+                          No employees available
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+
+                  {/* ✅ ERROR MESSAGE */}
+                  {fieldState.error && (
+                    <p className="text-sm text-red-600">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </div>
               )}
             />
           </div>
