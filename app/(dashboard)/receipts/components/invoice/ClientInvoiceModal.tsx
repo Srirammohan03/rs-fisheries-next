@@ -1,180 +1,179 @@
+// app/(dashboard)/receipts/components/invoice/ClientInvoiceModal.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
-type ClientInvoiceModalProps = {
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+interface Props {
   open: boolean;
+  onClose: () => void;
   clientId: string;
   clientName: string;
   paymentId: string;
-  onClose: () => void;
   onSaved: () => void;
-};
+}
 
 export function ClientInvoiceModal({
   open,
+  onClose,
   clientId,
   clientName,
   paymentId,
-  onClose,
   onSaved,
-}: ClientInvoiceModalProps) {
+}: Props) {
   const [invoiceNo, setInvoiceNo] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState(
-    new Date().toISOString().slice(0, 10)
+  const [billTo, setBillTo] = useState("");
+  const [shipTo, setShipTo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [existingInvoiceNo, setExistingInvoiceNo] = useState<string | null>(
+    null
   );
-  const [hsn, setHsn] = useState("");
-  const [gstPercent, setGstPercent] = useState("5");
-  const [taxableValue, setTaxableValue] = useState("");
-  const [description, setDescription] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [existing, setExisting] = useState<any>(null);
 
   useEffect(() => {
     if (!open) return;
 
-    async function loadExisting() {
+    setExistingInvoiceNo(null);
+    setInvoiceNo("");
+
+    (async () => {
       try {
-        const res = await fetch(
+        // 1️⃣ Check if invoice already exists
+        const res = await axios.get(
           `/api/invoices/client/by-payment?paymentId=${paymentId}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          const inv = data.invoice;
-          setExisting(inv);
-          setInvoiceNo(inv.invoiceNo);
-          setInvoiceDate(new Date(inv.invoiceDate).toISOString().slice(0, 10));
-          setHsn(inv.hsn || "");
-          setGstPercent(String(inv.gstPercent || 5));
-          setTaxableValue(String(inv.taxableValue || ""));
-          setDescription(inv.description || "");
-        }
-      } catch (err) {
-        // No existing invoice
-      }
-    }
 
-    loadExisting();
+        const inv = res.data.invoice;
+
+        // Existing invoice → reuse number
+        setInvoiceNo(inv.invoiceNo);
+        setExistingInvoiceNo(inv.invoiceNo);
+        setBillTo(inv.billTo ?? "");
+        setShipTo(inv.shipTo ?? "");
+      } catch (err: any) {
+        // 2️⃣ No invoice → preview next invoice number
+        if (err?.response?.status === 404) {
+          const next = await axios.get("/api/invoices/next-number");
+
+          setInvoiceNo(next.data.invoiceNumber);
+          setBillTo("");
+          setShipTo("");
+        } else {
+          console.error(err);
+        }
+      }
+    })();
   }, [open, paymentId]);
 
-  const handleSave = async () => {
-    if (!invoiceNo || !taxableValue) {
-      toast.error("Invoice No and Taxable Value are required");
+  const saveInvoice = async () => {
+    if (!billTo.trim() || !shipTo.trim()) {
+      alert("Please fill both Bill To and Ship To");
       return;
     }
 
-    setLoading(true);
     try {
-      const res = await fetch("/api/invoices/client", {
-        method: existing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paymentId,
-          clientId,
-          clientName,
-          invoiceNo,
-          invoiceDate,
-          hsn,
-          gstPercent: Number(gstPercent),
-          taxableValue: Number(taxableValue),
-          description,
-        }),
+      setSaving(true);
+
+      let finalInvoiceNo = invoiceNo;
+
+      if (!existingInvoiceNo) {
+        const reserve = await axios.post("/api/invoices/next-number");
+        finalInvoiceNo = reserve.data.invoiceNumber;
+      }
+
+      await axios.post("/api/invoices/client", {
+        paymentId,
+        clientId,
+        clientName,
+        invoiceNo: finalInvoiceNo,
+        billTo: billTo.trim(),
+        shipTo: shipTo.trim(),
+        hsn: "0302", // Fixed HSN for fish sales
+        gstPercent: 0, // Common GST rate for clients
       });
 
-      if (!res.ok) throw new Error("Failed to save");
-
-      toast.success(existing ? "Invoice updated" : "Invoice created");
+      setInvoiceNo(finalInvoiceNo);
+      setExistingInvoiceNo(finalInvoiceNo);
       onSaved();
       onClose();
     } catch (err) {
-      toast.error("Failed to save invoice");
+      console.error(err);
+      alert("Failed to save invoice");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="text-xl font-bold text-slate-900">
-          {existing ? "Edit" : "Create"} Client Invoice
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">For: {clientName}</p>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Client GST Invoice Details</DialogTitle>
+        </DialogHeader>
 
-        <div className="mt-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+        <div className="space-y-6">
+          {/* Invoice No + Client Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <Label>Invoice No</Label>
-              <Input
-                value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value)}
-                placeholder="RS-CLI-001"
-              />
+              <Input value={invoiceNo} disabled className="bg-slate-50" />
             </div>
-            <div className="space-y-2">
-              <Label>Invoice Date</Label>
-              <Input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-              />
+            <div>
+              <Label>Client Name</Label>
+              <Input value={clientName} disabled className="bg-slate-50" />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>HSN/SAC Code (Optional)</Label>
-            <Input value={hsn} onChange={(e) => setHsn(e.target.value)} />
+          {/* Bill To */}
+          <div>
+            <Label>Bill To (Buyer)</Label>
+            <Textarea
+              rows={6}
+              placeholder="Client Company Name&#10;Address Line 1&#10;Address Line 2&#10;City, State - PIN&#10;GSTIN: XXAAAAA0000X0XX"
+              value={billTo}
+              onChange={(e) => setBillTo(e.target.value)}
+              className="resize-none font-mono text-sm"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>GST %</Label>
-              <Input
-                type="number"
-                value={gstPercent}
-                onChange={(e) => setGstPercent(e.target.value)}
-                min="0"
-                max="28"
-                step="0.01"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Taxable Value (₹)</Label>
-              <Input
-                type="number"
-                value={taxableValue}
-                onChange={(e) => setTaxableValue(e.target.value)}
-                min="0"
-                step="0.01"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Description (Optional)</Label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Supply of fresh fish"
+          {/* Ship To */}
+          <div>
+            <Label>Consignee (Ship To)</Label>
+            <Textarea
+              rows={6}
+              placeholder="Same as Bill To or different shipping address"
+              value={shipTo}
+              onChange={(e) => setShipTo(e.target.value)}
+              className="resize-none font-mono text-sm"
             />
           </div>
         </div>
 
-        <div className="mt-8 flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={loading}>
-            {loading ? "Saving..." : existing ? "Update" : "Save"} Invoice
+        <div className="mt-8">
+          <Button
+            onClick={saveInvoice}
+            disabled={saving || !invoiceNo || !billTo.trim() || !shipTo.trim()}
+            className="w-full"
+            size="lg"
+          >
+            {saving
+              ? "Saving..."
+              : existingInvoiceNo
+              ? "Update Invoice"
+              : "Save & Finalize Invoice"}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

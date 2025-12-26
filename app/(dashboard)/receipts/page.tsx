@@ -18,9 +18,9 @@ import type {
 
 import { generatePackingPDF } from "@/lib/pdf/packing";
 import { generatePayslipPDF } from "@/lib/pdf/payslip";
-import { generateClientReceiptPDF } from "@/lib/pdf/clientslip";
+
 import { VendorInvoiceModal } from "./components/invoice/VendorInvoiceModal";
-import { ClientInvoiceModal } from "./components/invoice/ClientInvoiceModal"; // ← Import this
+import { ClientInvoiceModal } from "./components/invoice/ClientInvoiceModal";
 
 const formatCurrency = (amt: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -40,7 +40,6 @@ function cn(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(" ");
 }
 
-/** Mobile: 2x2 grid | Desktop: segmented pill */
 function TabsList({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -116,7 +115,6 @@ export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal states
   const [openVendorInvoice, setOpenVendorInvoice] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<VendorReceipt | null>(
     null
@@ -127,7 +125,6 @@ export default function ReceiptsPage() {
     null
   );
 
-  // Invoice existence map (for both vendor & client)
   const [invoiceMap, setInvoiceMap] = useState<Record<string, boolean>>({});
 
   const isVendorReceipt = (r: Receipt): r is VendorReceipt =>
@@ -166,7 +163,6 @@ export default function ReceiptsPage() {
 
         setReceipts(data);
 
-        // Build invoice map for vendor AND client tabs
         if (activeTab === "vendor" || activeTab === "client") {
           const map: Record<string, boolean> = {};
           await Promise.all(
@@ -174,7 +170,7 @@ export default function ReceiptsPage() {
               const endpoint =
                 activeTab === "vendor"
                   ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
-                  : `/api/invoices/client/by-payment?paymentId=${r.id}`; // Adjust if your client endpoint is different
+                  : `/api/invoices/client/by-payment?paymentId=${r.id}`;
 
               const x = await fetch(endpoint);
               map[r.id] = x.ok;
@@ -195,22 +191,6 @@ export default function ReceiptsPage() {
 
     fetchData();
   }, [activeTab]);
-
-  const handleGenerate = (receipt: Receipt) => {
-    switch (activeTab) {
-      case "packing":
-        return generatePackingPDF(receipt as PackingReceipt);
-      case "employee":
-        return generatePayslipPDF(receipt as EmployeeReceipt);
-      case "client":
-        return generateClientReceiptPDF(receipt as ClientReceipt);
-      case "vendor":
-        toast.error("Please edit and save invoice before generating PDF");
-        return;
-      default:
-        toast.error("Invalid receipt type");
-    }
-  };
 
   const getActionLabel = (): string => {
     if (activeTab === "vendor" || activeTab === "client")
@@ -245,7 +225,6 @@ export default function ReceiptsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
-      {/* Header */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
@@ -256,7 +235,6 @@ export default function ReceiptsPage() {
           </p>
         </div>
 
-        {/* Tabs */}
         <TabsList>
           {tabs.map((t) => (
             <TabsTrigger
@@ -271,7 +249,6 @@ export default function ReceiptsPage() {
         </TabsList>
       </header>
 
-      {/* Content */}
       <CardCustom title={getTitle()}>
         {loading ? (
           <div className="py-14 text-center text-slate-500">Loading...</div>
@@ -323,7 +300,6 @@ export default function ReceiptsPage() {
                     </div>
                   </div>
 
-                  {/* Details */}
                   <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                     {activeTab === "packing" ? (
                       <>
@@ -362,7 +338,6 @@ export default function ReceiptsPage() {
                     )}
                   </div>
 
-                  {/* Actions */}
                   <div className="mt-4">
                     {(activeTab === "vendor" && isVendorReceipt(r)) ||
                     (activeTab === "client" && isClientReceipt(r)) ? (
@@ -393,7 +368,7 @@ export default function ReceiptsPage() {
                             const endpoint =
                               activeTab === "vendor"
                                 ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
-                                : `/api/invoices/client/by-payment?paymentId=${r.id}`; // Adjust if needed
+                                : `/api/invoices/client/by-payment?paymentId=${r.id}`;
 
                             const res = await fetch(endpoint);
                             if (!res.ok) {
@@ -413,23 +388,32 @@ export default function ReceiptsPage() {
                               generateVendorInvoicePDF(jsPDF, {
                                 ...invoice,
                                 description: invoice.description ?? "",
-                                items: [
-                                  {
-                                    description:
-                                      invoice.description ?? "Goods / Service",
-                                    hsn: invoice.hsn,
-                                    uom: "NOS",
-                                    totalKgs: 1,
-                                    totalPrice: invoice.taxableValue,
-                                  },
-                                ],
                               });
                             } else if (activeTab === "client") {
-                              // Add your client invoice PDF generation here
-                              // Example: generateClientInvoicePDF(jsPDF, invoice);
-                              toast.info(
-                                "Client invoice PDF generation coming soon"
+                              const { generateClientInvoicePDF } = await import(
+                                "@/lib/pdf/client-invoice"
                               );
+                              const baseAmount =
+                                invoice.taxableValue || invoice.amount || 0;
+
+                              generateClientInvoicePDF(jsPDF, {
+                                invoiceNo: invoice.invoiceNo,
+                                invoiceDate:
+                                  invoice.invoiceDate ||
+                                  new Date().toISOString(),
+                                clientName:
+                                  (r as ClientReceipt).clientName || "Client",
+                                billTo: invoice.billTo,
+                                shipTo: invoice.shipTo,
+                                description:
+                                  invoice.description || "Supply of fresh fish",
+                                hsn: "0302",
+
+                                gstPercent: 0,
+                                taxableValue: baseAmount,
+                                gstAmount: 0,
+                                totalAmount: baseAmount,
+                              });
                             }
                           }}
                         >
@@ -442,7 +426,13 @@ export default function ReceiptsPage() {
                         variant="outline"
                         size="sm"
                         className="w-full gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
-                        onClick={() => handleGenerate(r)}
+                        onClick={() => {
+                          if (activeTab === "packing") {
+                            generatePackingPDF(r as PackingReceipt);
+                          } else if (activeTab === "employee") {
+                            generatePayslipPDF(r as EmployeeReceipt);
+                          }
+                        }}
                       >
                         <FileText className="w-4 h-4" />
                         {getActionLabel()}
@@ -476,7 +466,6 @@ export default function ReceiptsPage() {
                       </th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {receipts.map((r) => (
                       <tr
@@ -600,23 +589,36 @@ export default function ReceiptsPage() {
                                     generateVendorInvoicePDF(jsPDF, {
                                       ...invoice,
                                       description: invoice.description ?? "",
-                                      items: [
-                                        {
-                                          description:
-                                            invoice.description ??
-                                            "Goods / Service",
-                                          hsn: invoice.hsn,
-                                          uom: "NOS",
-                                          totalKgs: 1,
-                                          totalPrice: invoice.taxableValue,
-                                        },
-                                      ],
                                     });
                                   } else if (activeTab === "client") {
-                                    // Add client invoice PDF generation logic here
-                                    toast.info(
-                                      "Client invoice PDF generation coming soon"
-                                    );
+                                    const { generateClientInvoicePDF } =
+                                      await import("@/lib/pdf/client-invoice");
+                                    generateClientInvoicePDF(jsPDF, {
+                                      invoiceNo: invoice.invoiceNo,
+                                      invoiceDate:
+                                        invoice.invoiceDate ||
+                                        new Date().toISOString(),
+                                      clientName:
+                                        (r as ClientReceipt).clientName ||
+                                        "Client",
+                                      billTo: invoice.billTo,
+                                      shipTo: invoice.shipTo,
+                                      description:
+                                        invoice.description ||
+                                        "Supply of fresh fish",
+                                      hsn: "0302",
+                                      gstPercent: 0,
+                                      taxableValue:
+                                        invoice.taxableValue ||
+                                        invoice.amount ||
+                                        0,
+                                      gstAmount:
+                                        invoice.taxableValue || invoice.amount,
+                                      totalAmount:
+                                        (invoice.taxableValue ||
+                                          invoice.amount ||
+                                          0) * 1.05,
+                                    });
                                   }
                                 }}
                               >
@@ -630,7 +632,13 @@ export default function ReceiptsPage() {
                                 variant="outline"
                                 size="sm"
                                 className="gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
-                                onClick={() => handleGenerate(r)}
+                                onClick={() => {
+                                  if (activeTab === "packing") {
+                                    generatePackingPDF(r as PackingReceipt);
+                                  } else if (activeTab === "employee") {
+                                    generatePayslipPDF(r as EmployeeReceipt);
+                                  }
+                                }}
                               >
                                 <FileText className="w-4 h-4" />
                                 {getActionLabel()}
@@ -645,7 +653,6 @@ export default function ReceiptsPage() {
               </div>
             </div>
 
-            {/* Total */}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                 <p className="text-base font-semibold text-slate-700">
@@ -660,7 +667,6 @@ export default function ReceiptsPage() {
         )}
       </CardCustom>
 
-      {/* Vendor Invoice Modal */}
       {openVendorInvoice && selectedVendor && (
         <VendorInvoiceModal
           open={openVendorInvoice}
@@ -679,7 +685,6 @@ export default function ReceiptsPage() {
         />
       )}
 
-      {/* Client Invoice Modal */}
       {openClientInvoice && selectedClient && (
         <ClientInvoiceModal
           open={openClientInvoice}
