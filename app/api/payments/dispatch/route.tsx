@@ -241,10 +241,15 @@ export async function GET(req: NextRequest) {
     const dispatchCharges = await prisma.dispatchCharge.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: {
-        createdBy: {
-          select: { name: true, email: true },
-        },
+      select: {
+        id: true,
+        type: true,
+        label: true,
+        amount: true,
+        notes: true,
+        createdAt: true,
+        sourceType: true,
+        sourceRecordId: true,
       },
     });
 

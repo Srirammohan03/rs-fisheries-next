@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
         const packing = await prisma.packingAmount.create({
             data,
             include: {
-                createdBy: { select: { name: true, email: true } },
+                createdBy: { select: { id: true, } },
             },
         });
 
@@ -176,6 +176,7 @@ export async function POST(req: NextRequest) {
     }
 }
 
+// app/api/payments/packing-amount/route.ts
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
@@ -190,7 +191,17 @@ export async function GET(req: NextRequest) {
             where,
             orderBy: { createdAt: "desc" },
             include: {
-                createdBy: { select: { name: true } },
+                createdBy: {
+                    select: {
+                        id: true,
+                        employee: {
+                            select: {
+                                fullName: true,
+                                employeeId: true,
+                            },
+                        },
+                    },
+                },
             },
         });
 
@@ -200,24 +211,37 @@ export async function GET(req: NextRequest) {
                 let vehicleNo: string | null = null;
 
                 if (r.sourceRecordId && r.sourceType) {
-                    if (r.sourceType === DispatchSourceType.CLIENT && r.mode === "loading") {
+                    if (r.sourceType === "CLIENT") {
                         const client = await prisma.clientLoading.findUnique({
                             where: { id: r.sourceRecordId },
-                            select: { clientName: true, vehicle: { select: { vehicleNumber: true } } },
+                            select: {
+                                clientName: true,
+                                vehicle: { select: { vehicleNumber: true } },
+                            },
                         });
                         partyName = client?.clientName ?? null;
                         vehicleNo = client?.vehicle?.vehicleNumber ?? null;
-                    } else if (r.sourceType === DispatchSourceType.FORMER) {
+                    }
+
+                    if (r.sourceType === "FORMER") {
                         const former = await prisma.formerLoading.findUnique({
                             where: { id: r.sourceRecordId },
-                            select: { FarmerName: true, vehicle: { select: { vehicleNumber: true } } },
+                            select: {
+                                FarmerName: true,
+                                vehicle: { select: { vehicleNumber: true } },
+                            },
                         });
                         partyName = former?.FarmerName ?? null;
                         vehicleNo = former?.vehicle?.vehicleNumber ?? null;
-                    } else if (r.sourceType === DispatchSourceType.AGENT) {
+                    }
+
+                    if (r.sourceType === "AGENT") {
                         const agent = await prisma.agentLoading.findUnique({
                             where: { id: r.sourceRecordId },
-                            select: { agentName: true, vehicle: { select: { vehicleNumber: true } } },
+                            select: {
+                                agentName: true,
+                                vehicle: { select: { vehicleNumber: true } },
+                            },
                         });
                         partyName = agent?.agentName ?? null;
                         vehicleNo = agent?.vehicle?.vehicleNumber ?? null;
@@ -226,6 +250,7 @@ export async function GET(req: NextRequest) {
 
                 return {
                     ...r,
+                    createdByName: r.createdBy?.employee?.fullName ?? null,
                     partyName,
                     vehicleNo,
                 };
