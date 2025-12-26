@@ -351,7 +351,7 @@ model EmployeePayment {
   reference    String?
   createdAt    DateTime    @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([date])
@@ -371,7 +371,7 @@ model PackingAmount {
   reference   String?
   createdAt   DateTime    @default(now())
   createdById String?
-  createdBy   User?       @relation(fields: [createdById], references: [id])
+  createdBy   User?       @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   // NEW: Separate foreign key fields
   formerLoadingId String?
@@ -467,7 +467,7 @@ model DispatchCharge {
   notes       String?
   createdAt   DateTime           @default(now())
   createdById String?
-  createdBy   User?              @relation(fields: [createdById], references: [id])
+  createdBy   User?              @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   // NEW: Separate foreign key fields — no conflict!
   formerLoadingId String?

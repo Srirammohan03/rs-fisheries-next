@@ -1,52 +1,56 @@
-// app/api/payments/client/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMode } from "@prisma/client";
-import { put } from "@vercel/blob";
 
-export const runtime = "nodejs"; // Required for Prisma + Vercel Blob
+export const runtime = "nodejs";
 
-// Safe parsers
-function asString(value: string | null): string {
-  return value?.trim() || "";
+function asString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim();
+  return str === "" ? null : str;
 }
 
-function asPositiveNumber(value: string | null): number | null {
-  const num = parseFloat(value || "");
-  return isNaN(num) || num <= 0 ? null : num;
+function asPositiveNumber(value: unknown): number | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    const num = parseFloat(trimmed);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+  if (typeof value === "number") {
+    return value > 0 ? value : null;
+  }
+  return null;
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true || value === "true";
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
+    const body = await req.json();
 
-    const clientId = asString(formData.get("clientId") as string);
-    const clientName = asString(formData.get("clientName") as string);
-    const dateStr = asString(formData.get("date") as string);
-    const amountStr = formData.get("amount") as string;
-    const paymentModeStr = asString(formData.get("paymentMode") as string);
-    const referenceNo = asString(formData.get("referenceNo") as string) || null;
-    const paymentRef = asString(formData.get("paymentRef") as string) || null;
-    const accountNumber = asString(formData.get("accountNumber") as string) || null;
-    const ifsc = asString(formData.get("ifsc") as string) || null;
-    const bankName = asString(formData.get("bankName") as string) || null;
-    const bankAddress = asString(formData.get("bankAddress") as string) || null;
-    const paymentDetails = asString(formData.get("paymentdetails") as string) || null;
-    const isInstallmentStr = formData.get("isInstallment") as string;
-    const installmentsStr = formData.get("installments") as string;
-    const installmentNumberStr = formData.get("installmentNumber") as string;
+    const clientId = asString(body.clientId);
+    const clientName = asString(body.clientName);
+    const dateStr = asString(body.date);
+    const amount = asPositiveNumber(body.amount);
+    const paymentModeStr = asString(body.paymentMode)?.toUpperCase() as PaymentMode | null;
+    const referenceNo = asString(body.referenceNo);
+    const paymentRef = asString(body.paymentRef);
+    const accountNumber = asString(body.accountNumber);
+    const ifsc = asString(body.ifsc);
+    const bankName = asString(body.bankName);
+    const bankAddress = asString(body.bankAddress);
+    const paymentdetails = asString(body.paymentdetails);
+    const billNo = asString(body.billNo); // optional
 
-    // Required validation
-    if (!clientId || !clientName || !dateStr || !amountStr || !paymentModeStr) {
+    // Required fields
+    if (!clientId || !clientName || !dateStr || !amount || !paymentModeStr) {
       return NextResponse.json(
         { error: "Missing required fields: clientId, clientName, date, amount, paymentMode" },
         { status: 400 }
       );
-    }
-
-    const amount = asPositiveNumber(amountStr);
-    if (!amount) {
-      return NextResponse.json({ error: "Valid positive amount is required" }, { status: 400 });
     }
 
     const date = new Date(dateStr);
@@ -54,8 +58,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
     }
 
-    const paymentMode = paymentModeStr.toUpperCase() as PaymentMode;
-    if (!Object.values(PaymentMode).includes(paymentMode)) {
+    if (!Object.values(PaymentMode).includes(paymentModeStr)) {
       return NextResponse.json(
         { error: "Invalid paymentMode. Allowed: CASH, AC, UPI, CHEQUE" },
         { status: 400 }
@@ -73,52 +76,50 @@ export async function POST(req: NextRequest) {
     }
 
     // Installment logic
-    const isInstallment = isInstallmentStr === "true";
+    // Handle installment logic — only validate if isInstallment is true AND fields are provided
+    const isInstallment = asBoolean(body.isInstallment);
     let installments: number | null = null;
     let installmentNumber: number | null = null;
 
     if (isInstallment) {
-      installments = parseInt(installmentsStr || "", 10);
-      installmentNumber = parseInt(installmentNumberStr || "", 10);
+      const inst = body.installments;
+      const instNum = body.installmentNumber;
 
-      if (!installments || installments < 1 || !installmentNumber || installmentNumber < 1) {
-        return NextResponse.json(
-          { error: "Valid installments and installmentNumber required when isInstallment=true" },
-          { status: 400 }
-        );
+      if (inst !== undefined && inst !== null && inst !== "") {
+        installments = Number(inst);
+        if (!Number.isInteger(installments) || installments < 1) {
+          return NextResponse.json(
+            { error: "Total installments must be a positive integer" },
+            { status: 400 }
+          );
+        }
       }
 
-      if (installmentNumber > installments) {
-        return NextResponse.json(
-          { error: "installmentNumber cannot exceed total installments" },
-          { status: 400 }
-        );
+      if (instNum !== undefined && instNum !== null && instNum !== "") {
+        installmentNumber = Number(instNum);
+        if (!Number.isInteger(installmentNumber) || installmentNumber < 1) {
+          return NextResponse.json(
+            { error: "Installment number must be a positive integer" },
+            { status: 400 }
+          );
+        }
       }
+
+      // Only check relation if both are provided
+      if (installments !== null && installmentNumber !== null) {
+        if (installmentNumber > installments) {
+          return NextResponse.json(
+            { error: "Installment number cannot exceed total installments" },
+            { status: 400 }
+          );
+        }
+      }
+
+      // If isInstallment=true but no numbers provided → still allow (just mark as installment without details)
     }
 
-    // Generate clientKey for fast grouping
     const clientKey = `client:${clientName}`;
 
-    // Handle image upload (optional)
-    const image = formData.get("image") as File | null;
-    let imageUrl: string | undefined = undefined;
-
-    if (image && image.size > 0) {
-      const ext = image.name.split(".").pop()?.toLowerCase() || "jpg";
-      const safeName = clientName.replace(/[^a-zA-Z0-9-_]/g, "_");
-      const filename = `client-payments/${safeName}/${Date.now()}-${Math.random()
-        .toString(36)
-        .substring(2, 8)}.${ext}`;
-
-      const { url } = await put(filename, image, {
-        access: "public",
-        token: process.env.BLOB_READ_WRITE_TOKEN, // Recommended: use token
-      });
-
-      imageUrl = url;
-    }
-
-    // Create payment — NOTE: no imageUrl in schema anymore!
     const payment = await prisma.clientPayment.create({
       data: {
         clientId,
@@ -126,18 +127,17 @@ export async function POST(req: NextRequest) {
         clientName,
         date,
         amount,
-        paymentMode,
+        paymentMode: paymentModeStr,
         referenceNo,
         paymentRef,
         accountNumber,
         ifsc,
         bankName,
         bankAddress,
-        paymentdetails: paymentDetails,
+        paymentdetails,
         isInstallment,
         installments: installments ?? undefined,
         installmentNumber: installmentNumber ?? undefined,
-        // imageUrl removed — you said it's no longer needed
       },
       include: {
         client: {
@@ -159,6 +159,7 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
 
 export async function GET(req: NextRequest) {
   try {

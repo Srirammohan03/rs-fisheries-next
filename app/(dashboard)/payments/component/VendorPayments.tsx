@@ -80,17 +80,35 @@ export function VendorPayments() {
   const { data: vendorData = [], isLoading: loadingVendors } = useQuery<
     VendorRow[]
   >({
-    queryKey: ["vendors"],
+    queryKey: ["vendors-with-due"],
     queryFn: async () => {
-      const [fRes, aRes] = await Promise.all([
+      // Fetch loadings and payments in parallel
+      const [formerRes, agentRes, paymentRes] = await Promise.all([
         axios.get("/api/former-loading"),
         axios.get("/api/agent-loading"),
+        axios.get("/api/payments/vendor"),
       ]);
 
-      const farmers = (fRes.data?.data || []) as any[];
-      const agents = (aRes.data?.data || []) as any[];
+      const farmers = (formerRes.data?.data || []) as any[];
+      const agents = (agentRes.data?.data || []) as any[];
+      const payments = (paymentRes.data?.data || []) as any[];
 
-      const map = new Map<string, VendorRow>();
+      // Step 1: Build map of total owed per vendor (grouped by source:name)
+      const vendorMap = new Map<
+        string,
+        {
+          name: string;
+          source: "farmer" | "agent";
+          billNos: string[];
+          loadingIds: string[];
+          latestLoadingId: string;
+          totalDue: number;
+          accountNumber?: string;
+          ifsc?: string;
+          bankName?: string;
+          bankAddress?: string;
+        }
+      >();
 
       [...farmers, ...agents].forEach((item: any) => {
         const name = (item.FarmerName || item.agentName || "").trim();
@@ -101,41 +119,75 @@ export function VendorPayments() {
         if (!loadingId) return;
 
         const billNo = String(item.billNo || "").trim();
-
-        // ✅ CORRECT: Use grandTotal = total amount owed to vendor
         const totalOwed = Number(item.grandTotal || 0);
 
-        const displayKey = `${source}:${name}`;
-        const vendorBackendId = `${source}:${loadingId}`;
+        const key = `${source}:${name.toLowerCase()}`;
 
-        if (!map.has(displayKey)) {
-          map.set(displayKey, {
-            id: vendorBackendId,
+        if (!vendorMap.has(key)) {
+          vendorMap.set(key, {
             name,
             source,
             billNos: billNo ? [billNo] : [],
             loadingIds: [loadingId],
             latestLoadingId: loadingId,
             totalDue: totalOwed,
-            accountNumber: item.accountNumber,
-            ifsc: item.ifsc,
-            bankName: item.bankName,
-            bankAddress: item.bankAddress,
+            accountNumber: item.accountNumber || undefined,
+            ifsc: item.ifsc || undefined,
+            bankName: item.bankName || undefined,
+            bankAddress: item.bankAddress || undefined,
           });
         } else {
-          const existing = map.get(displayKey)!;
+          const existing = vendorMap.get(key)!;
           existing.totalDue += totalOwed;
           if (billNo) existing.billNos.push(billNo);
           existing.loadingIds.push(loadingId);
           existing.latestLoadingId = loadingId;
-          existing.id = `${source}:${loadingId}`;
         }
       });
 
-      return Array.from(map.values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
-      );
+      // Step 2: Calculate total paid per vendor using vendorId
+      const paidMap = new Map<string, number>();
+
+      payments.forEach((p: any) => {
+        const vendorId = p.vendorId; // format: "farmer:uuid" or "agent:uuid"
+        if (!vendorId) return;
+        const amount = Number(p.amount || 0);
+        paidMap.set(vendorId, (paidMap.get(vendorId) || 0) + amount);
+      });
+
+      // Step 3: Build final list with remaining > 0
+      const result: VendorRow[] = [];
+
+      for (const [key, vendor] of vendorMap) {
+        // Find total paid for this vendor (check all loadingIds since payments use specific loadingId)
+        let totalPaid = 0;
+        for (const loadingId of vendor.loadingIds) {
+          const fullVendorId = `${vendor.source}:${loadingId}`;
+          totalPaid += paidMap.get(fullVendorId) || 0;
+        }
+
+        const remaining = vendor.totalDue - totalPaid;
+
+        if (remaining > 0) {
+          result.push({
+            id: `${vendor.source}:${vendor.latestLoadingId}`, // keep latest as id for selection
+            name: vendor.name,
+            source: vendor.source,
+            billNos: vendor.billNos,
+            loadingIds: vendor.loadingIds,
+            latestLoadingId: vendor.latestLoadingId,
+            totalDue: vendor.totalDue,
+            accountNumber: vendor.accountNumber,
+            ifsc: vendor.ifsc,
+            bankName: vendor.bankName,
+            bankAddress: vendor.bankAddress,
+          });
+        }
+      }
+
+      return result.sort((a, b) => a.name.localeCompare(b.name));
     },
+    staleTime: 1000 * 30, // optional: cache for 30 seconds
   });
 
   const { data: payments = [] } = useQuery<VendorPayment[]>({
