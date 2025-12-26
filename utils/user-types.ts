@@ -2,7 +2,8 @@ import { Employee } from "@/lib/types";
 import { z } from "zod";
 
 export const UserValidationSchema = z.object({
-  employeeId: z.string().uuid(),
+  employeeId: z.string().min(1, "Please select an employee").uuid(),
+
   password: z
     .string()
     .optional()
