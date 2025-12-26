@@ -27,12 +27,12 @@ model User {
   employeeId String   @unique
   employee   Employee @relation(fields: [employeeId], references: [id])
 
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  salaries         Salaries[]
-  employeePayments EmployeePayment[]
-  packingAmounts   PackingAmount[]
-  dispatchCharges  DispatchCharge[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  salaries  Salaries[]
+
+  packingAmounts  PackingAmount[]
+  dispatchCharges DispatchCharge[]
 }
 
 model FishVariety {
@@ -344,7 +344,7 @@ model Driver {
 
 model EmployeePayment {
   id           String      @id @default(uuid())
-  userId       String
+  employeeId   String
   employeeName String
   date         DateTime
   amount       Float
@@ -352,9 +352,9 @@ model EmployeePayment {
   reference    String?
   createdAt    DateTime    @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([employeeId])
   @@index([date])
 }
 
@@ -542,6 +542,8 @@ model Employee {
   panProof     String?
 
   user User?
+
+  employeePayments EmployeePayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
