@@ -51,6 +51,10 @@ State: Telangana, Code: 36`,
     bankAccNo: "50200012345678",
     bankIFSC: "HDFC0000123",
     bankBranch: "Jubilee Hills Branch, Hyderabad",
+
+    irn: "dummy-irn-1234567890",
+    ackNo: "dummy-ack-0987654321",
+    ackDate: "2025-12-26",
 };
 
 /* ---------------- HELPERS ---------------- */
@@ -106,7 +110,7 @@ function textBox(
     doc.setFontSize(fontSize);
     const maxW = w - pad * 2;
     const lines = doc.splitTextToSize((text || "").replace(/\r/g, ""), maxW);
-    const startY = y + pad + fontSize * 0.35;
+    const startY = y + pad + fontSize * 0.45;
 
     lines.forEach((line: string, i: number) => {
         const yy = startY + i * lineH;
@@ -154,17 +158,15 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData) {
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(9);
 
-    // === REMOVED QR CODE BOX ENTIRELY ===
-
-    // IRN/Ack box (kept but empty if not provided)
+    // IRN/Ack box with hardcoded values
     const irnBoxX = L;
     const irnBoxY = T + 16;
-    const irnBoxW = R - L; // Full width now since no QR
+    const irnBoxW = R - L; // Full width
     const irnBoxH = 20;
     rectOuter(doc, irnBoxX, irnBoxY, irnBoxW, irnBoxH);
 
     doc.setFontSize(8);
-    const irnBlock = `IRN : ${data.irn ?? ""}\nAck No. : ${data.ackNo ?? ""}\nAck Date : ${data.ackDate ?? ""}`;
+    const irnBlock = `IRN : ${COMPANY_DETAILS.irn}\nAck No. : ${COMPANY_DETAILS.ackNo}\nAck Date : ${COMPANY_DETAILS.ackDate}`;
     textBox(doc, irnBlock, irnBoxX, irnBoxY, irnBoxW, irnBoxH, 8, 4);
 
     // MAIN BOX
@@ -187,11 +189,11 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData) {
     lineInner(doc, L, shipY, rightX, shipY);
     lineInner(doc, L, billY, rightX, billY);
 
-    // Seller (Vendor) Details
-    doc.setFont("Helvetica", "bold");
+    // Seller (Vendor) Details – NO BOLD
+    doc.setFont("Helvetica", "normal");
     doc.setFontSize(9);
     const sellerLines: string[] = [];
-    sellerLines.push((data.vendorName || "").toUpperCase());
+    sellerLines.push(data.vendorName || "");
     if (data.vendorAddress) sellerLines.push(data.vendorAddress);
     textBox(doc, sellerLines.join("\n"), L, sellerY, leftW, sellerH, 9, 4);
 
@@ -230,7 +232,7 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData) {
 
     const rightMeta: Array<[string, string]> = [
         ["Dated", fmtDate],
-        ["Mode/Terms of Payment", "Cash / Bank Transfer"],
+        ["Mode", "Cash / Bank"],
         ["Other References", ""],
         ["Dated", ""],
         ["Delivery Note Date", ""],
@@ -259,8 +261,8 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData) {
     autoTable(doc, {
         startY: itemsStartY,
         theme: "grid",
-        styles: { fontSize: 8, cellPadding: 1.8, lineWidth: 0.35 },
-        headStyles: { fontStyle: "bold", halign: "center", lineWidth: 0.45 },
+        styles: { fontSize: 8, cellPadding: 1.8, lineWidth: 0.45, fillColor: [255, 255, 255] },
+        headStyles: { fontStyle: "bold", halign: "center", lineWidth: 0.45, fillColor: [255, 255, 255], textColor: [0, 0, 0] },
         columnStyles: {
             0: { cellWidth: 10, halign: "center" },
             1: { cellWidth: 62 },
@@ -296,10 +298,20 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData) {
 
     y += wordsBoxH + 6;
 
-    // Tax Table (0% GST)
+    // Tax Table with green head
     autoTable(doc, {
         startY: y,
         theme: "grid",
+        styles: { fontSize: 8, cellPadding: 1.8, lineWidth: 0.45, fillColor: [255, 255, 255] },
+        headStyles: { fontStyle: "bold", halign: "center", lineWidth: 0.45, fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+        footStyles: { fontStyle: "bold", halign: "center", lineWidth: 0.45, fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+        columnStyles: {
+            0: { cellWidth: 35, halign: "center" },
+            1: { cellWidth: 45, halign: "right" },
+            2: { cellWidth: 22, halign: "center" },
+            3: { cellWidth: 35, halign: "right" },
+            4: { cellWidth: 35, halign: "right" },
+        },
         head: [["HSN/SAC", "Taxable Value", "IGST Rate", "IGST Amount", "Total Tax Amount"]],
         body: [[data.hsn, money(data.taxableValue), "0%", "0.00", "0.00"]],
         foot: [["Total", money(data.taxableValue), "", "0.00", "0.00"]],

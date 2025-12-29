@@ -1,34 +1,68 @@
-// app\api\invoices\next-number\route.tsx
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-/**
- * GET  → Preview invoice number (NO increment)
- * POST → Reserve invoice number (increment)
- */
+// Financial year helper
+function getFinancialYear(date: Date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  return month >= 3 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+}
 
-// 🔹 PREVIEW (safe)
+/**
+ * GET → PREVIEW ONLY (NO DB WRITE)
+ * Used when opening Edit modal
+ */
 export async function GET() {
+  const currentFY = getFinancialYear();
+
   const counter = await prisma.invoiceCounter.findUnique({
     where: { id: 1 },
   });
 
-  const next = (counter?.invoiceCount ?? 0) + 1;
+  let nextCount = 1;
 
-  return NextResponse.json({
-    invoiceNumber: `RS-INV-${String(next).padStart(4, "0")}`,
-  });
+  if (counter && counter.financialYear === currentFY) {
+    nextCount = counter.count + 1;
+  }
+
+  const padded = String(nextCount).padStart(4, "0");
+  const invoiceNumber = `RS-INV-${currentFY.slice(2)}-${padded}`;
+
+  return NextResponse.json({ invoiceNumber });
 }
 
-// 🔹 RESERVE (increment only on save)
+/**
+ * POST → RESERVE NUMBER (INCREMENT ON SAVE)
+ * Used only when user clicks "Save & Finalize"
+ */
 export async function POST() {
-  const counter = await prisma.invoiceCounter.upsert({
+  const currentFY = getFinancialYear();
+
+  const counter = await prisma.invoiceCounter.findUnique({
     where: { id: 1 },
-    update: { invoiceCount: { increment: 1 } },
-    create: { id: 1, invoiceCount: 1 },
   });
 
-  return NextResponse.json({
-    invoiceNumber: `RS-INV-${String(counter.invoiceCount).padStart(4, "0")}`,
+  let nextCount = 1;
+
+  if (counter && counter.financialYear === currentFY) {
+    nextCount = counter.count + 1;
+  }
+
+  await prisma.invoiceCounter.upsert({
+    where: { id: 1 },
+    update: {
+      count: nextCount,
+      financialYear: currentFY,
+    },
+    create: {
+      id: 1,
+      count: nextCount,
+      financialYear: currentFY,
+    },
   });
+
+  const padded = String(nextCount).padStart(4, "0");
+  const invoiceNumber = `RS-INV-${currentFY.slice(2)}-${padded}`;
+
+  return NextResponse.json({ invoiceNumber });
 }
