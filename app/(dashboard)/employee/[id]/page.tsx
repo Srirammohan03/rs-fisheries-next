@@ -4,8 +4,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useState } from "react";
-
-// UI Components
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,11 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-
-// Icons
 import {
-  Pencil,
-  Trash,
   ArrowLeft,
   Mail,
   Phone,
@@ -37,16 +31,40 @@ import {
   Briefcase,
   User,
   Wallet,
+  Receipt,
+  Trash,
 } from "lucide-react";
-
-// Types
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { ApiResponse, Employee } from "@/lib/types";
 
-/* ------------------------------------------------------------ */
+interface Payment {
+  id: string;
+  employeeId: string;
+  salaryMonth: string;
+  date: string;
+  amount: number;
+  paymentMode: string;
+  reference: string | null;
+  createdAt: string;
+}
+
+interface PaymentResponse {
+  payments: Payment[];
+}
 
 const EmployeeDetailPage = () => {
   const { id } = useParams();
   const router = useRouter();
+
+  // Pagination state (client-side)
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data, isLoading, isError, error } = useQuery<ApiResponse<Employee>>({
     queryKey: ["employee", id],
@@ -58,12 +76,21 @@ const EmployeeDetailPage = () => {
     },
   });
 
+  const { data: paymentData } = useQuery<ApiResponse<PaymentResponse>>({
+    queryKey: ["payments", id],
+    queryFn: async () => {
+      const res = await axios.get(`/api/payments/employee?employeeId=${id}`);
+      return res.data;
+    },
+    enabled: !!id,
+  });
+
   if (isLoading) return <LoadingSkeleton />;
-  if (isError) return <ErrorState message={error} />;
+  if (isError) return <ErrorState error={error} />;
 
   const employee = data!.data;
+  const payments = paymentData?.data?.payments || [];
 
-  // Helper for initials
   const getInitials = (name: string) =>
     name
       .split(" ")
@@ -72,10 +99,74 @@ const EmployeeDetailPage = () => {
       .substring(0, 2)
       .toUpperCase();
 
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const getDuration = (salaryMonth: string) => {
+    // Expecting format: YYYY-MM
+    const [yearStr, monthStr] = salaryMonth.split("-");
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+
+    if (
+      Number.isNaN(year) ||
+      Number.isNaN(monthIndex) ||
+      monthIndex < 0 ||
+      monthIndex > 11
+    ) {
+      return "Invalid month";
+    }
+
+    const monthName = monthNames[monthIndex];
+
+    const start = `01 ${monthName} ${year}`;
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const end = `${lastDay.toString().padStart(2, "0")} ${monthName} ${year}`;
+
+    return `${start} - ${end}`;
+  };
+
+  const getMonthName = (salaryMonth: string) => {
+    const [year, month] = salaryMonth.split("-");
+    const monthIndex = Number(month) - 1;
+    if (Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+      return "Invalid month";
+    }
+
+    return `${year} - ${monthNames[monthIndex]}`;
+  };
+
+  // Sort payments latest first
+  const sortedPayments = [...payments].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  const itemsPerPage = 10;
+  const totalPages =
+    sortedPayments.length > 0
+      ? Math.ceil(sortedPayments.length / itemsPerPage)
+      : 0;
+
+  const paginatedPayments = sortedPayments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   return (
     <div className="p-6 md:p-8">
       <div className="space-y-6">
-        {/* ---------------- Top Navigation Header ---------------- */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button
@@ -98,11 +189,10 @@ const EmployeeDetailPage = () => {
         </header>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* ---------------- LEFT COLUMN: Identity Sidebar ---------------- */}
           <div className="lg:col-span-4 space-y-6">
             <Card className="overflow-hidden border-none shadow-md">
               <div
-                className="h-32 bg-gradient-to-r "
+                className="h-32"
                 style={{
                   backgroundImage: `url('/favicon.jpg')`,
                   backgroundSize: "cover",
@@ -171,7 +261,6 @@ const EmployeeDetailPage = () => {
               </CardContent>
             </Card>
 
-            {/* Quick Status Card */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
@@ -186,32 +275,27 @@ const EmployeeDetailPage = () => {
                     <CopyButton text={employee.employeeId} />
                   </div>
                 </div>
-                {/* <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Type</span>
-                  <span className="text-sm text-muted-foreground">
-                    Full-Time
-                  </span>
-                </div> */}
               </CardContent>
             </Card>
           </div>
 
-          {/* ---------------- RIGHT COLUMN: Detailed Tabs ---------------- */}
           <div className="lg:col-span-8">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4 h-12">
+              <TabsList className="grid w-full grid-cols-4 mb-4 h-12">
                 <TabsTrigger value="overview" className="gap-2">
                   <User className="h-4 w-4" /> Overview
                 </TabsTrigger>
                 <TabsTrigger value="financial" className="gap-2">
                   <Wallet className="h-4 w-4" /> Financials
                 </TabsTrigger>
+                <TabsTrigger value="payslips" className="gap-2">
+                  <Receipt className="h-4 w-4" /> Pay Slips
+                </TabsTrigger>
                 <TabsTrigger value="documents" className="gap-2">
                   <FileText className="h-4 w-4" /> Documents
                 </TabsTrigger>
               </TabsList>
 
-              {/* TAB 1: Overview */}
               <TabsContent value="overview" className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -278,7 +362,6 @@ const EmployeeDetailPage = () => {
                 </Card>
               </TabsContent>
 
-              {/* TAB 2: Financials */}
               <TabsContent value="financial" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Card>
@@ -314,7 +397,7 @@ const EmployeeDetailPage = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Briefcase className="h-5 w-5 text-muted-foreground" />
+                      <Briefcase className="h-5 w-5 text-muted-foreground" />{" "}
                       Bank Details
                     </CardTitle>
                   </CardHeader>
@@ -337,7 +420,7 @@ const EmployeeDetailPage = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <CreditCard className="h-5 w-5 text-muted-foreground" />
+                      <CreditCard className="h-5 w-5 text-muted-foreground" />{" "}
                       Identity Proofs
                     </CardTitle>
                   </CardHeader>
@@ -356,7 +439,109 @@ const EmployeeDetailPage = () => {
                 </Card>
               </TabsContent>
 
-              {/* TAB 3: Documents */}
+              <TabsContent value="payslips" className="space-y-6">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-semibold">Salary Overview</h2>
+                  <p className="text-sm text-muted-foreground">
+                    View salary payment history
+                  </p>
+                </div>
+
+                <Card>
+                  <CardContent className="p-0">
+                    {sortedPayments.length === 0 ? (
+                      <div className="py-12 text-center text-muted-foreground">
+                        No salary payments recorded yet.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="divide-y">
+                          {paginatedPayments.map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="flex items-center justify-between px-6 py-5 hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="bg-blue-100 p-3 rounded-full text-blue-600">
+                                  <FileText className="h-5 w-5" />
+                                </div>
+                                <div>
+                                  <p className="text-lg font-semibold">
+                                    {getMonthName(payment.salaryMonth)}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Duration: {getDuration(payment.salaryMonth)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="text-right">
+                                <p className="text-xl font-semibold">
+                                  ₹ {payment.amount.toLocaleString("en-IN")}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {payment.paymentMode}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {totalPages > 1 && (
+                          <div className="border-t px-6 py-4">
+                            <Pagination>
+                              <PaginationContent>
+                                <PaginationItem>
+                                  <PaginationPrevious
+                                    onClick={() =>
+                                      setCurrentPage((prev) =>
+                                        Math.max(prev - 1, 1)
+                                      )
+                                    }
+                                    className={
+                                      currentPage === 1
+                                        ? "pointer-events-none opacity-50"
+                                        : "cursor-pointer"
+                                    }
+                                  />
+                                </PaginationItem>
+
+                                {Array.from({ length: totalPages }, (_, i) => (
+                                  <PaginationItem key={i + 1}>
+                                    <PaginationLink
+                                      onClick={() => setCurrentPage(i + 1)}
+                                      isActive={currentPage === i + 1}
+                                      className="cursor-pointer"
+                                    >
+                                      {i + 1}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                ))}
+
+                                <PaginationItem>
+                                  <PaginationNext
+                                    onClick={() =>
+                                      setCurrentPage((prev) =>
+                                        Math.min(prev + 1, totalPages)
+                                      )
+                                    }
+                                    className={
+                                      currentPage === totalPages
+                                        ? "pointer-events-none opacity-50"
+                                        : "cursor-pointer"
+                                    }
+                                  />
+                                </PaginationItem>
+                              </PaginationContent>
+                            </Pagination>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="documents">
                 <Card>
                   <CardHeader>
@@ -395,9 +580,6 @@ const EmployeeDetailPage = () => {
 };
 
 export default EmployeeDetailPage;
-
-/* ------------------------------------------------------------ */
-/* Helper Components for Cleaner Main File */
 
 const ContactItem = ({
   icon: Icon,
@@ -520,12 +702,12 @@ const LoadingSkeleton = () => (
   </div>
 );
 
-const ErrorState = (error: any) => {
+const ErrorState = ({ error }: { error: any }) => {
   let message = null;
   if (axios.isAxiosError(error)) {
     message = error.response?.data?.message || "An unexpected error occurred.";
   } else {
-    message = error.message || "An unexpected error occurred.";
+    message = (error as Error).message || "An unexpected error occurred.";
   }
   return (
     <div className="h-[50vh] flex flex-col items-center justify-center gap-4 text-center">
@@ -533,7 +715,7 @@ const ErrorState = (error: any) => {
         <Trash className="h-8 w-8 text-red-500" />
       </div>
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold">Failed to load employee</h3>
+        <h3 className="text-lg font-semibold">Failed to load data</h3>
         <p className="text-sm text-muted-foreground max-w-md">{message}</p>
       </div>
       <Button variant="outline" onClick={() => window.location.reload()}>

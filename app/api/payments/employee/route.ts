@@ -1,109 +1,109 @@
-// app/api/payments/employee/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMode } from "@prisma/client";
+import { ApiError } from "@/utils/ApiError";
+import { apiHandler } from "@/utils/apiHandler";
+import { ApiResponse } from "@/utils/ApiResponse";
 
+export const POST = apiHandler(async (req: NextRequest) => {
+  const formData = await req.formData();
 
-export async function POST(req: NextRequest) {
-    try {
-        const formData = await req.formData();
+  const employeeId = formData.get("employeeId")?.toString().trim();
+  const employeeName = formData.get("employeeName")?.toString().trim();
+  const salaryMonth = formData.get("salaryMonth")?.toString().trim();
+  const dateStr = formData.get("date")?.toString();
+  const amountStr = formData.get("amount")?.toString();
+  const paymentModeStr = formData.get("paymentMode")?.toString();
+  const reference = formData.get("reference")?.toString().trim() || null;
 
-        const userId = formData.get("userId") as string;
-        const employeeName = formData.get("employeeName") as string;
-        const dateStr = formData.get("date") as string;
-        const amountStr = formData.get("amount") as string;
-        const paymentModeStr = formData.get("paymentMode") as string;
-        const reference = (formData.get("reference") as string) || null;
+  if (
+    !employeeId ||
+    !employeeName ||
+    !salaryMonth ||
+    !dateStr ||
+    !amountStr ||
+    !paymentModeStr
+  ) {
+    throw new ApiError(400, "Missing required fields");
+  }
 
-        // Validation
-        if (!userId || !employeeName || !dateStr || !amountStr || !paymentModeStr) {
-            return NextResponse.json(
-                { error: "Missing required fields" },
-                { status: 400 }
-            );
-        }
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) {
+    throw new ApiError(400, "Invalid amount");
+  }
 
-        const amount = parseFloat(amountStr);
-        if (isNaN(amount) || amount <= 0) {
-            return NextResponse.json(
-                { error: "Invalid amount" },
-                { status: 400 }
-            );
-        }
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    throw new ApiError(400, "Invalid payment date");
+  }
 
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) {
-            return NextResponse.json(
-                { error: "Invalid date" },
-                { status: 400 }
-            );
-        }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(salaryMonth)) {
+    throw new ApiError(400, "Invalid salary month format. Expected YYYY-MM");
+  }
 
-        const paymentMode = paymentModeStr.toUpperCase() as PaymentMode;
-        if (!["CASH", "AC", "UPI", "CHEQUE"].includes(paymentMode)) {
-            return NextResponse.json(
-                { error: "Invalid payment mode" },
-                { status: 400 }
-            );
-        }
+  const upperMode = paymentModeStr.toUpperCase();
+  if (!["CASH", "AC", "UPI", "CHEQUE"].includes(upperMode)) {
+    throw new ApiError(400, "Invalid payment mode");
+  }
 
-        // Save to database
-        const payment = await prisma.employeePayment.create({
-            data: {
-                userId,
-                employeeName,
-                date,
-                amount,
-                paymentMode,
-                reference: reference || undefined,
-            },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                    },
-                },
-            },
-        });
+  const paymentMode = upperMode as PaymentMode;
 
-        return NextResponse.json(
-            {
-                success: true,
-                message: "Salary payment recorded successfully",
-                payment,
-            },
-            { status: 201 }
-        );
-    } catch (error: any) {
-        console.error("Employee payment save error:", error);
-        return NextResponse.json(
-            { error: "Failed to save payment", details: error.message },
-            { status: 500 }
-        );
+  if (paymentMode !== PaymentMode.CASH && !reference) {
+    throw new ApiError(400, "Reference is required for non-cash payments");
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+
+  if (!employee) {
+    throw new ApiError(404, "Employee not found");
+  }
+
+  try {
+    const payment = await prisma.employeePayment.create({
+      data: {
+        employeeId,
+        employeeName,
+        salaryMonth,
+        date,
+        amount,
+        paymentMode,
+        reference: reference ?? undefined,
+      },
+    });
+    return NextResponse.json(
+      new ApiResponse(201, { payment }, "Salary payment recorded successfully")
+    );
+  } catch (error: any) {
+    if (error.code === "P2002") {
+      throw new ApiError(
+        400,
+        `Salary for ${salaryMonth} has already been paid to this employee`
+      );
     }
-}
+    throw error;
+  }
+});
 
-// Optional: GET all employee payments (for history page later)
-export async function GET() {
-    try {
-        const payments = await prisma.employeePayment.findMany({
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                    },
-                },
-            },
-            orderBy: { date: "desc" },
-        });
+export const GET = apiHandler(async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url);
+  const employeeId = searchParams.get("employeeId");
 
-        return NextResponse.json({ success: true, payments });
-    } catch (error: any) {
-        console.error("Employee payments fetch error:", error);
-        return NextResponse.json(
-            { error: "Failed to fetch payments" },
-            { status: 500 }
-        );
-    }
-}
+  const payments = await prisma.employeePayment.findMany({
+    where: employeeId ? { employeeId } : {},
+    orderBy: { date: "desc" },
+    include: {
+      employee: {
+        select: {
+          fullName: true,
+          designation: true,
+        },
+      },
+    },
+  });
+
+  return NextResponse.json(
+    new ApiResponse(200, { payments }, "Employee payments fetched successfully")
+  );
+});

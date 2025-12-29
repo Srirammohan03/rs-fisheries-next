@@ -46,7 +46,7 @@ export const POST = apiHandler(async (req: Request) => {
   const email = formData.get("email") as string | null;
   const accountNumber = requiredString("accountNumber");
 
-  const exists = await prisma.employee.findFirst({
+  const existingEmployee = await prisma.employee.findFirst({
     where: {
       OR: [
         { aadhaar },
@@ -56,9 +56,34 @@ export const POST = apiHandler(async (req: Request) => {
         { accountNumber },
       ],
     },
+    select: {
+      aadhaar: true,
+      pan: true,
+      mobile: true,
+      email: true,
+      accountNumber: true,
+    },
   });
 
-  if (exists) throw new ApiError(400, "Employee already exists");
+  if (existingEmployee) {
+    const conflicts: string[] = [];
+
+    if (existingEmployee.aadhaar === aadhaar) conflicts.push("Aadhaar");
+
+    if (existingEmployee.pan === pan) conflicts.push("PAN");
+
+    if (existingEmployee.mobile === mobile) conflicts.push("Mobile number");
+
+    if (email && existingEmployee.email === email) conflicts.push("Email");
+
+    if (existingEmployee.accountNumber === accountNumber)
+      conflicts.push("Account number");
+
+    throw new ApiError(
+      400,
+      `Employee with same ${conflicts.join(", ")} already exists`
+    );
+  }
 
   //! Upload Files
 

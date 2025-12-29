@@ -1,7 +1,6 @@
-// app\(dashboard)\payments\component\EmployeePayments.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CardCustom } from "@/components/ui/card-custom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,12 +20,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type PaymentMode = "cash" | "ac" | "upi" | "cheque";
 
-interface EmployeeWithDue {
+interface Employee {
   id: string;
-  name: string;
-  role: string;
-  email: string;
-  pendingSalary: number;
+  fullName: string;
+  designation: string;
+  grossSalary: number;
 }
 
 const formatCurrency = (value: number): string =>
@@ -41,75 +39,57 @@ export function EmployeePayments() {
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [employeeName, setEmployeeName] = useState<string>("");
+  const [salaryMonth, setSalaryMonth] = useState<string>("");
   const [date, setDate] = useState<string>("");
   const [amount, setAmount] = useState<number>(0);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
-  const [reference, setReference] = useState<string>(""); // Reference number
+  const [reference, setReference] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  useEffect(() => {
+    const now = new Date();
+    const yyyyMm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
+    const yyyyMmDd = now.toISOString().split("T")[0];
+    if (salaryMonth === "") setSalaryMonth(yyyyMm);
+    if (date === "") setDate(yyyyMmDd);
+  }, [salaryMonth, date]);
+
   const { data: employees = [], isLoading: loadingEmployees } = useQuery<
-    EmployeeWithDue[]
+    Employee[]
   >({
-    queryKey: ["employees-with-salary-due"],
-    queryFn: async (): Promise<EmployeeWithDue[]> => {
-      const [userRes, salaryRes] = await Promise.all([
-        fetch("/api/team-member"),
-        fetch("/api/salaries"),
-      ]);
-
-      if (!userRes.ok || !salaryRes.ok) throw new Error("Failed to load data");
-
-      const usersJson = await userRes.json();
-      const salariesJson = await salaryRes.json();
-
-      const users: {
-        id: string;
-        name: string | null;
-        email: string | null;
-        role: string;
-      }[] = usersJson.data || [];
-
-      const salaries: { userId: string; amount: number }[] =
-        salariesJson.data || [];
-
-      const salaryMap = new Map<string, number>();
-      salaries.forEach((s) => {
-        const current = salaryMap.get(s.userId) || 0;
-        salaryMap.set(s.userId, current + s.amount);
-      });
-
-      const paidMap = new Map<string, number>(); // extend later
-
-      return users
-        .map((user) => {
-          const totalSalary = salaryMap.get(user.id) || 0;
-          const totalPaid = paidMap.get(user.id) || 0;
-          const pending = totalSalary - totalPaid;
-
-          return {
-            id: user.id,
-            name: user.name || "Unnamed Employee",
-            role: user.role || "staff",
-            email: user.email || "",
-            pendingSalary: pending,
-          };
-        })
-        .filter((emp): emp is EmployeeWithDue => emp.pendingSalary > 0)
-        .sort((a, b) => a.name.localeCompare(b.name));
+    queryKey: ["employees"],
+    queryFn: async () => {
+      const res = await fetch("/api/employee");
+      if (!res.ok) throw new Error("Failed to load employees");
+      const json = await res.json();
+      return (json.data || []).sort((a: Employee, b: Employee) =>
+        a.fullName.localeCompare(b.fullName)
+      );
     },
     staleTime: 1000 * 60,
   });
 
   const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId);
 
+  const monthYear = salaryMonth
+    ? new Date(salaryMonth + "-01").toLocaleString("en-IN", {
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+
   const handleEmployeeChange = (id: string) => {
     setSelectedEmployeeId(id);
     const emp = employees.find((e) => e.id === id);
-    setEmployeeName(emp?.name || "");
+    setEmployeeName(emp?.fullName || "");
+    setAmount(emp?.grossSalary || 0);
   };
 
   const handleSave = async () => {
-    if (!selectedEmployeeId || !date || amount <= 0) {
+    if (!selectedEmployeeId || !salaryMonth || !date || amount <= 0) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -120,8 +100,9 @@ export function EmployeePayments() {
     setIsSubmitting(true);
 
     const formData = new FormData();
-    formData.append("userId", selectedEmployeeId);
+    formData.append("employeeId", selectedEmployeeId);
     formData.append("employeeName", employeeName);
+    formData.append("salaryMonth", salaryMonth);
     formData.append("date", date);
     formData.append("amount", amount.toString());
     formData.append("paymentMode", paymentMode);
@@ -140,16 +121,14 @@ export function EmployeePayments() {
 
       toast.success("Salary payment recorded successfully!");
 
-      // Reset
       setSelectedEmployeeId("");
       setEmployeeName("");
+      setSalaryMonth("");
       setDate("");
       setAmount(0);
       setPaymentMode("cash");
       setReference("");
-      queryClient.invalidateQueries({
-        queryKey: ["employees-with-salary-due"],
-      });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to save");
     } finally {
@@ -157,7 +136,6 @@ export function EmployeePayments() {
     }
   };
 
-  // Show reference field only if not cash
   const showReference = paymentMode !== "cash";
 
   return (
@@ -171,6 +149,8 @@ export function EmployeePayments() {
             isSubmitting ||
             loadingEmployees ||
             !selectedEmployeeId ||
+            !salaryMonth ||
+            !date ||
             amount <= 0
           }
           className="bg-[#139BC3] text-white hover:bg-[#1088AA] focus-visible:ring-2 focus-visible:ring-[#139BC3]/40 shadow-sm"
@@ -181,31 +161,28 @@ export function EmployeePayments() {
       }
     >
       <div className="space-y-7">
-        {/* Employee + Date */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-3">
               <Label className="text-base font-medium text-slate-700">
                 Employee Name <span className="text-rose-600">*</span>
               </Label>
-
               <Select
                 value={selectedEmployeeId}
                 onValueChange={handleEmployeeChange}
                 disabled={loadingEmployees}
               >
                 <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm focus:ring-2 focus:ring-[#139BC3]/30">
-                  <SelectValue
-                    placeholder={
-                      loadingEmployees ? "Loading..." : "Select employee"
-                    }
-                  />
+                  <SelectValue placeholder="Select an employee" />
                 </SelectTrigger>
-
                 <SelectContent className="border-slate-200">
-                  {employees.length === 0 ? (
+                  {loadingEmployees ? (
                     <div className="px-6 py-4 text-center text-sm text-slate-500">
-                      No pending salaries
+                      Loading employees...
+                    </div>
+                  ) : employees.length === 0 ? (
+                    <div className="px-6 py-4 text-center text-sm text-slate-500">
+                      No employees found
                     </div>
                   ) : (
                     employees.map((emp) => (
@@ -213,15 +190,14 @@ export function EmployeePayments() {
                         <div className="flex items-center justify-between w-full gap-3">
                           <div className="flex flex-col leading-tight min-w-0">
                             <span className="font-medium text-sm text-slate-800 truncate">
-                              {emp.name}
+                              {emp.fullName}
                             </span>
                             <span className="text-[11px] text-slate-500 capitalize truncate">
-                              {emp.role}
+                              {emp.designation}
                             </span>
                           </div>
-
                           <span className="text-sm font-semibold text-[#139BC3] whitespace-nowrap">
-                            {formatCurrency(emp.pendingSalary)}
+                            {formatCurrency(emp.grossSalary)}
                           </span>
                         </div>
                       </SelectItem>
@@ -229,53 +205,50 @@ export function EmployeePayments() {
                   )}
                 </SelectContent>
               </Select>
-
-              {selectedEmployee && (
-                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-5">
-                  <p className="text-xs font-medium text-slate-600">
-                    Total Pending Salary
-                  </p>
-                  <p className="mt-1 text-3xl font-bold text-emerald-600">
-                    {formatCurrency(selectedEmployee.pendingSalary)}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    {selectedEmployee.name} ({selectedEmployee.role})
-                  </p>
-                </div>
-              )}
             </div>
-
+            <Field label="Salary Month *">
+              <Input
+                type="month"
+                value={salaryMonth}
+                onChange={(e) => setSalaryMonth(e.target.value)}
+                className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
             <Field label="Payment Date *">
               <Input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                required
                 className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
               />
             </Field>
           </div>
         </div>
 
-        {/* Amount */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
-          <Field label="Amount Paid (₹) *">
-            <Input
-              type="number"
-              value={amount || ""}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-              placeholder="0"
-              min="1"
-              required
-              className="h-12 border-slate-200 bg-white shadow-sm text-3xl font-bold focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
-            />
-          </Field>
+          {selectedEmployee && amount > 0 ? (
+            <div className="space-y-4">
+              <div>
+                <p className="text-base font-medium text-slate-700">
+                  Salary Amount{monthYear ? ` for ${monthYear}` : ""}
+                </p>
+              </div>
+              <p className="text-4xl font-bold text-emerald-600">
+                {formatCurrency(amount)}
+              </p>
+              <p className="text-sm text-slate-500">
+                {selectedEmployee.fullName} - {selectedEmployee.designation}
+              </p>
+            </div>
+          ) : (
+            <p className="text-center text-slate-500 py-8">
+              Select an employee to view the salary amount
+            </p>
+          )}
         </div>
 
-        {/* Payment Mode + Reference */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-4">
           <Label className="text-slate-700">Payment Mode</Label>
-
           <div className="flex flex-wrap gap-2">
             {(["cash", "ac", "upi", "cheque"] as const).map((mode) => {
               const selected = paymentMode === mode;
@@ -316,7 +289,6 @@ export function EmployeePayments() {
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder="Enter reference number"
-                required
                 className="h-11 border-slate-200 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
               />
             </Field>
