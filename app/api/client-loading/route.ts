@@ -49,11 +49,11 @@ async function getNetKgsByCodes(codes: string[]) {
 }
 
 export async function POST(req: Request) {
+  // Your existing POST logic — unchanged
   try {
     const body = await req.json();
     const { clientName, billNo, date, vehicleId, vehicleNo, village, fishCode, items } = body;
 
-    // ---------- VALIDATIONS ----------
     if (!clientName?.trim()) {
       return NextResponse.json({ success: false, message: "Client name is required" }, { status: 400 });
     }
@@ -78,7 +78,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: "Vehicle is required" }, { status: 400 });
     }
 
-    // ---------- Compute items (weight only) ----------
     const processedItems = items.map((item: any) => {
       const trays = Number(item.noTrays) || 0;
       const loose = Number(item.loose) || 0;
@@ -95,7 +94,6 @@ export async function POST(req: Request) {
       };
     });
 
-    // Stock check
     const reqMap: Record<string, number> = {};
     for (const it of processedItems) {
       if (!it.varietyCode) continue;
@@ -122,16 +120,13 @@ export async function POST(req: Request) {
       }
     }
 
-    // ---------- Calculate weight totals ----------
     const totalTrays = processedItems.reduce((sum, i) => sum + i.noTrays, 0);
     const totalLooseKgs = processedItems.reduce((sum, i) => sum + i.loose, 0);
     const totalTrayKgs = processedItems.reduce((sum, i) => sum + i.trayKgs, 0);
     const totalKgs = processedItems.reduce((sum, i) => sum + i.totalKgs, 0);
 
-    // 5% deduction on WEIGHT only
     const grandTotal = Number((totalKgs * (1 - DEDUCTION_PERCENT / 100)).toFixed(2));
 
-    // ---------- SAVE ----------
     const createData: any = {
       clientName: clientName.trim(),
       billNo: billNo.trim(),
@@ -144,7 +139,7 @@ export async function POST(req: Request) {
       totalKgs,
 
       totalPrice: 0,
-      grandTotal: grandTotal, // Deducted kgs
+      grandTotal: grandTotal,
 
       items: {
         create: processedItems.map((i) => ({
@@ -200,15 +195,52 @@ export async function GET(req: Request) {
         vehicle: {
           select: { vehicleNumber: true },
         },
+        // ✅ Include dispatch charges to calculate breakdown
+        dispatchCharges: {
+          select: {
+            type: true,
+            label: true,
+            amount: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
       },
       orderBy: { date: "desc" },
     });
 
-    const formatted = loadings.map((l) => ({
-      ...l,
-      vehicleNo: l.vehicle?.vehicleNumber ?? l.vehicleNo ?? "",
-      vehicle: undefined,
-    }));
+    const formatted = loadings.map((l) => {
+      // ✅ Calculate dispatch breakdown from real records
+      const breakdown = {
+        iceCooling: 0,
+        transportCharges: 0,
+        otherCharges: [] as { label: string; amount: number }[],
+        dispatchChargesTotal: 0,
+      };
+
+      l.dispatchCharges.forEach((c) => {
+        const amt = Number(c.amount);
+        breakdown.dispatchChargesTotal += amt;
+
+        if (c.type === "ICE_COOLING") {
+          breakdown.iceCooling += amt;
+        } else if (c.type === "TRANSPORT") {
+          breakdown.transportCharges += amt;
+        } else if (c.type === "OTHER" && c.label) {
+          breakdown.otherCharges.push({
+            label: c.label,
+            amount: amt,
+          });
+        }
+      });
+
+      return {
+        ...l,
+        vehicleNo: l.vehicle?.vehicleNumber ?? l.vehicleNo ?? "",
+        vehicle: undefined,
+        // ✅ Add the breakdown
+        dispatchBreakdown: breakdown,
+      };
+    });
 
     return NextResponse.json({ success: true, data: formatted });
   } catch (error) {

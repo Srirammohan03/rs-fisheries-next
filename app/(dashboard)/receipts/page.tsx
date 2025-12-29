@@ -661,7 +661,7 @@ export default function ReceiptsPage() {
                   {formatCurrency(total)}
                 </p>
               </div>
-            </div> */}
+            </div>
           </div>
         )}
       </CardCustom>

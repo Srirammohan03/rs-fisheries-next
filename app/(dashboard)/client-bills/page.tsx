@@ -21,7 +21,6 @@ interface ClientItem {
   id: string;
   varietyCode?: string;
 
-  // stored in backend (do NOT show in UI)
   noTrays?: number;
   trayKgs?: number;
   loose?: number;
@@ -46,16 +45,16 @@ interface ClientRecord {
   items: ClientItem[];
   createdAt?: string;
 
-  // IMPORTANT: backend totals
-  totalKgs?: number; // original total (before -5%)
-  grandTotal?: number; // net total after -5% (already computed by backend)
+  totalKgs?: number;
+  grandTotal?: number;
   totalPrice?: number;
 }
 
 type UIItem = ClientItem & {
   recordTotalKgs: number;
   recordGrandTotal: number;
-  netKgsForThisItem: number; // derived using record.grandTotal
+  netKgsForThisItem: number;
+  loose?: number; // ← Added for display
 };
 
 const fetchClientLoadings = async (): Promise<ClientRecord[]> => {
@@ -76,13 +75,11 @@ export default function ClientBillsPage() {
   );
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
 
-  // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  // New entries badge
   const [newCount, setNewCount] = useState(0);
 
   const refreshRecords = useCallback(async () => {
@@ -103,7 +100,6 @@ export default function ClientBillsPage() {
     };
   }, [refreshRecords]);
 
-  // Calculate new entries badge
   useEffect(() => {
     if (typeof window === "undefined") return;
     const key = "clientBillsLastSeen";
@@ -122,15 +118,10 @@ export default function ClientBillsPage() {
     handlePageVisit();
   }, [records.length, handlePageVisit]);
 
-  /**
-   * ✅ Key Fix:
-   * DO NOT do `*0.95` here.
-   * Use record.grandTotal (already net after -5%) and allocate per item proportionally.
-   */
   const items: UIItem[] = useMemo(() => {
     let result: UIItem[] = records.flatMap((rec) => {
-      const recordTotalKgs = Number(rec.totalKgs || 0); // original total
-      const recordGrandTotal = Number(rec.grandTotal || 0); // net after -5%
+      const recordTotalKgs = Number(rec.totalKgs || 0);
+      const recordGrandTotal = Number(rec.grandTotal || 0);
 
       return rec.items.map((it) => {
         const itemTotalKgs = Number(it.totalKgs || 0);
@@ -151,11 +142,11 @@ export default function ClientBillsPage() {
           recordTotalKgs,
           recordGrandTotal,
           netKgsForThisItem,
+          loose: it.loose, // ← Pass loose field
         };
       });
     });
 
-    // Search
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(
@@ -166,11 +157,9 @@ export default function ClientBillsPage() {
       );
     }
 
-    // Date range
     if (fromDate) result = result.filter((it) => (it.date || "") >= fromDate);
     if (toDate) result = result.filter((it) => (it.date || "") <= toDate);
 
-    // Sort
     result.sort((a, b) =>
       sortOrder === "newest"
         ? (b.date || "").localeCompare(a.date || "")
@@ -195,10 +184,6 @@ export default function ClientBillsPage() {
     });
   }, []);
 
-  /**
-   * ✅ totalPrice = itemNetKgs * pricePerKg (netKgs already derived from grandTotal)
-   * ✅ No `0.95` anywhere
-   */
   const onPriceChange = useCallback(
     (id: string, value: string) => {
       setEditing((prev) => {
@@ -234,8 +219,6 @@ export default function ClientBillsPage() {
 
     try {
       await patchItemPrice(item.id, payload);
-
-      // Update parent total
       await axios.post("/api/client-bills/update-total", {
         loadingId: item.loadingId,
       });
@@ -267,9 +250,6 @@ export default function ClientBillsPage() {
     }
   };
 
-  /**
-   * ✅ Export without KGS columns (only trays + pricing)
-   */
   const exportToExcel = () => {
     const data = records.flatMap((rec) =>
       rec.items.map((it) => ({
@@ -294,15 +274,39 @@ export default function ClientBillsPage() {
     );
   };
 
+  // Reusable Trays/Loose display component
+  const TraysDisplay = ({ item }: { item: UIItem }) => {
+    const trays = item.noTrays ?? 0;
+    const looseKgs = Number(item.loose ?? 0);
+
+    if (trays > 0) {
+      return <span className="font-semibold text-gray-900">{trays}</span>;
+    }
+
+    if (looseKgs > 0) {
+      return (
+        <span className="text-orange-600 font-medium text-sm">
+          (Loose) {looseKgs.toFixed(1)} KGS
+        </span>
+      );
+    }
+
+    return <span className="text-gray-400">-</span>;
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         <Card className="p-4 sm:p-6 rounded-2xl shadow-lg">
-          {/* Header */}
           <div className="space-y-5 sm:space-y-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Client Bills
+                Client Bills{" "}
+                {newCount > 0 && (
+                  <span className="ml-2 text-sm font-normal text-red-600">
+                    ({newCount} new)
+                  </span>
+                )}
               </h2>
 
               <Button
@@ -315,10 +319,8 @@ export default function ClientBillsPage() {
               </Button>
             </div>
 
-            {/* Filters */}
             <div className="flex flex-col gap-4 p-4 sm:p-5 rounded-xl border border-blue-100 bg-white/40">
               <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-                {/* Search */}
                 <div className="relative w-full lg:w-[420px]">
                   <Input
                     placeholder="Search Bill No, Client, Variety..."
@@ -341,7 +343,6 @@ export default function ClientBillsPage() {
                   </svg>
                 </div>
 
-                {/* Sort */}
                 <Select
                   value={sortOrder}
                   onValueChange={(v: any) => setSortOrder(v)}
@@ -355,7 +356,6 @@ export default function ClientBillsPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Dates */}
                 <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
                   <Input
                     type="date"
@@ -374,7 +374,6 @@ export default function ClientBillsPage() {
             </div>
           </div>
 
-          {/* Content */}
           {loading ? (
             <div className="text-center py-16 text-gray-500">
               Loading client bills...
@@ -385,7 +384,7 @@ export default function ClientBillsPage() {
             </div>
           ) : (
             <>
-              {/* ✅ Mobile view (cards) */}
+              {/* Mobile Cards */}
               <div className="mt-5 grid grid-cols-1 gap-3 md:hidden">
                 {items.map((it) => {
                   const edit = editing[it.id];
@@ -407,6 +406,11 @@ export default function ClientBillsPage() {
                           </div>
                           <div className="mt-2 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
                             Variety: {it.varietyCode || "-"}
+                          </div>
+
+                          <div className="mt-2 text-xs text-gray-500">
+                            <span className="font-medium">Quantity:</span>{" "}
+                            <TraysDisplay item={it} />
                           </div>
                         </div>
 
@@ -449,12 +453,11 @@ export default function ClientBillsPage() {
                         )}
                       </div>
 
-                      {/* ✅ ONLY TRAYS + PRICE */}
                       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div className="rounded-xl border bg-gray-50 p-3 col-span-2">
                           <div className="text-xs text-gray-500">Trays</div>
-                          <div className="font-semibold text-gray-900">
-                            {it.noTrays ?? "-"}
+                          <div className="mt-1">
+                            <TraysDisplay item={it} />
                           </div>
                         </div>
 
@@ -499,14 +502,15 @@ export default function ClientBillsPage() {
                 })}
               </div>
 
-              {/* ✅ Desktop view (table) */}
+              {/* Desktop Table */}
               <div className="mt-6 hidden md:block overflow-x-auto">
                 <table className="w-full min-w-[900px] table-auto">
                   <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                     <tr>
                       <th className="p-4">Bill No / Client</th>
                       <th className="p-4">Variety</th>
-                      <th className="p-4 text-right">Trays</th>
+                      <th className="p-4 text-right">Trays</th>{" "}
+                      {/* ← Header unchanged */}
                       <th className="p-4 text-right">Price/Kg</th>
                       <th className="p-4 text-right">Total Price</th>
                       <th className="p-4 text-center">Actions</th>
@@ -532,9 +536,9 @@ export default function ClientBillsPage() {
 
                           <td className="p-4">{it.varietyCode || "-"}</td>
 
-                          {/* ✅ ONLY TRAYS */}
-                          <td className="p-4 text-right font-semibold">
-                            {it.noTrays ?? "-"}
+                          {/* ← Only value changes here */}
+                          <td className="p-4 text-right">
+                            <TraysDisplay item={it} />
                           </td>
 
                           <td className="p-4 text-right">

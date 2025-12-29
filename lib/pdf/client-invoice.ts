@@ -17,7 +17,7 @@ export interface ClientInvoiceData {
 
 type Doc = InstanceType<typeof jsPDF>;
 
-const RED: [number, number, number] = [200, 0, 0];
+const RED: [number, number, number] = [0, 0, 0];
 
 const COMPANY = {
   seller: `RS Fisheries Pvt. Ltd.

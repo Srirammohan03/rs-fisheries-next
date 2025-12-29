@@ -1,3 +1,4 @@
+// app/api/former-loading/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -68,7 +69,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ compute items with 5% money deduction
     const items = body.items.map((it) => {
       const varietyCode = asTrim(it.varietyCode);
       const noTrays = Math.max(0, Math.floor(toNum(it.noTrays)));
@@ -119,7 +119,6 @@ export async function POST(req: Request) {
       items: { create: items },
     };
 
-    // ✅ vehicle connect logic
     if (vehicleId) {
       createData.vehicle = { connect: { id: vehicleId } };
       createData.vehicleNo = null;
@@ -144,7 +143,19 @@ export async function POST(req: Request) {
 export async function GET() {
   try {
     const rows = await prisma.formerLoading.findMany({
-      include: { items: true, vehicle: { select: { vehicleNumber: true } } },
+      include: {
+        items: true,
+        vehicle: { select: { vehicleNumber: true } },
+        // Include all dispatch charges
+        dispatchCharges: {
+          select: {
+            type: true,
+            label: true,
+            amount: true,
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -154,15 +165,42 @@ export async function GET() {
       );
 
       const totalPrice = itemsTotalPrice;
-      const grandTotal = round2(
-        totalPrice + toNum(l.dispatchChargesTotal) + toNum(l.packingAmountTotal)
-      );
+
+      // ✅ Calculate breakdown from real dispatch charges
+      const breakdown = {
+        iceCooling: 0,
+        transportCharges: 0,
+        otherCharges: [] as { label: string; amount: number }[],
+        dispatchChargesTotal: 0,
+      };
+
+      l.dispatchCharges.forEach((c) => {
+        const amt = Number(c.amount);
+        breakdown.dispatchChargesTotal += amt;
+
+        if (c.type === "ICE_COOLING") {
+          breakdown.iceCooling += amt;
+        } else if (c.type === "TRANSPORT") {
+          breakdown.transportCharges += amt;
+        } else if (c.type === "OTHER" && c.label) {
+          breakdown.otherCharges.push({
+            label: c.label,
+            amount: amt,
+          });
+        }
+      });
+
+      const packingTotal = toNum(l.packingAmountTotal);
+
+      const grandTotal = round2(totalPrice + breakdown.dispatchChargesTotal + packingTotal);
 
       return {
         ...l,
         totalPrice,
         grandTotal,
         vehicleNo: l.vehicle?.vehicleNumber ?? l.vehicleNo ?? "",
+        // ✅ Add breakdown to response
+        dispatchBreakdown: breakdown,
       };
     });
 

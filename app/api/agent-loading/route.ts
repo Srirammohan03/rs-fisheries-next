@@ -1,3 +1,4 @@
+// app/api/agent-loading/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -32,6 +33,7 @@ const toNum = (v: unknown): number => {
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export async function POST(req: Request) {
+    // Your existing POST logic — completely unchanged
     try {
         const body = (await req.json()) as AgentLoadingBody;
 
@@ -77,7 +79,6 @@ export async function POST(req: Request) {
             );
         }
 
-        // ✅ compute items with 5% money deduction
         const items = body.items.map((it) => {
             const varietyCode = asTrim(it.varietyCode);
             const noTrays = Math.max(0, Math.floor(toNum(it.noTrays)));
@@ -106,7 +107,6 @@ export async function POST(req: Request) {
         const totalTrayKgs = round2(items.reduce((s, i) => s + i.trayKgs, 0));
         const totalKgs = round2(items.reduce((s, i) => s + i.totalKgs, 0));
 
-        // ✅ sum of item totalPrice
         const totalPrice = round2(items.reduce((s, i) => s + i.totalPrice, 0));
 
         const createData: Parameters<typeof prisma.agentLoading.create>[0]["data"] = {
@@ -129,7 +129,6 @@ export async function POST(req: Request) {
             items: { create: items },
         };
 
-        // ✅ vehicle connect logic
         if (vehicleId) {
             createData.vehicle = { connect: { id: vehicleId } };
             createData.vehicleNo = null;
@@ -154,26 +153,64 @@ export async function POST(req: Request) {
 export async function GET() {
     try {
         const rows = await prisma.agentLoading.findMany({
-            include: { items: true, vehicle: { select: { vehicleNumber: true } } },
+            include: {
+                items: true,
+                vehicle: { select: { vehicleNumber: true } },
+                // ✅ Include dispatch charges for breakdown
+                dispatchCharges: {
+                    select: {
+                        type: true,
+                        label: true,
+                        amount: true,
+                    },
+                    orderBy: { createdAt: "desc" },
+                },
+            },
             orderBy: { createdAt: "desc" },
         });
 
-        // ✅ Always recompute totals from items (source of truth)
         const data = rows.map((l) => {
             const itemsTotalPrice = round2(
                 l.items.reduce((s, it) => s + toNum(it.totalPrice), 0)
             );
 
             const totalPrice = itemsTotalPrice;
-            const grandTotal = round2(
-                totalPrice + toNum(l.dispatchChargesTotal) + toNum(l.packingAmountTotal)
-            );
+
+            // ✅ Calculate real dispatch breakdown
+            const breakdown = {
+                iceCooling: 0,
+                transportCharges: 0,
+                otherCharges: [] as { label: string; amount: number }[],
+                dispatchChargesTotal: 0,
+            };
+
+            l.dispatchCharges.forEach((c) => {
+                const amt = Number(c.amount);
+                breakdown.dispatchChargesTotal += amt;
+
+                if (c.type === "ICE_COOLING") {
+                    breakdown.iceCooling += amt;
+                } else if (c.type === "TRANSPORT") {
+                    breakdown.transportCharges += amt;
+                } else if (c.type === "OTHER" && c.label) {
+                    breakdown.otherCharges.push({
+                        label: c.label,
+                        amount: amt,
+                    });
+                }
+            });
+
+            const packingTotal = toNum(l.packingAmountTotal);
+
+            const grandTotal = round2(totalPrice + breakdown.dispatchChargesTotal + packingTotal);
 
             return {
                 ...l,
                 totalPrice,
                 grandTotal,
                 vehicleNo: l.vehicle?.vehicleNumber ?? l.vehicleNo ?? "",
+                // ✅ Return the breakdown
+                dispatchBreakdown: breakdown,
             };
         });
 

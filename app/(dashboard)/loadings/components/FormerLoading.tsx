@@ -121,7 +121,9 @@ export default function FormerLoading() {
     setDate(todayYMD());
     setVehicleId("");
     setOtherVehicleNo("");
-    setItems([{ id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 }]);
+    setItems([
+      { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
+    ]);
   };
 
   const getVarietyName = (code: string) => {
@@ -145,11 +147,13 @@ export default function FormerLoading() {
     if (!FarmerName.trim()) return toast.error("Enter Farmer Name");
     if (!date) return toast.error("Select Date");
     if (!vehicleId) return toast.error("Select Vehicle");
-    if (isOtherVehicle && !otherVehicleNo.trim()) return toast.error("Enter Vehicle Number");
+    if (isOtherVehicle && !otherVehicleNo.trim())
+      return toast.error("Enter Vehicle Number");
 
     const validRows = items.filter((i) => i.noTrays > 0 || i.loose > 0);
     if (validRows.length === 0) return toast.error("Enter at least one item");
-    if (!validRows[0].varietyCode) return toast.error("Select variety for first item");
+    if (!validRows[0].varietyCode)
+      return toast.error("Select variety for first item");
 
     const fishCodeValue = validRows[0].varietyCode.toUpperCase();
 
@@ -186,10 +190,17 @@ export default function FormerLoading() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-slate-900">Farmer Loading</h2>
-          <p className="text-sm text-slate-500">Add farmer details and loading items</p>
+          <h2 className="text-xl font-semibold text-slate-900">
+            Farmer Loading
+          </h2>
+          <p className="text-sm text-slate-500">
+            Add farmer details and loading items
+          </p>
         </div>
-        <Button onClick={handleSave} className="w-full sm:w-auto rounded-xl px-5 bg-[#139BC3] text-white hover:bg-[#1088AA]">
+        <Button
+          onClick={handleSave}
+          className="w-full sm:w-auto rounded-xl px-5 bg-[#139BC3] text-white hover:bg-[#1088AA]"
+        >
           <Save className="h-4 w-4 mr-2" />
           Save
         </Button>
@@ -199,11 +210,18 @@ export default function FormerLoading() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <Field>
           <FieldLabel>Farmer Bill No</FieldLabel>
-          <Input readOnly value={displayBillNo} className="bg-slate-50 font-semibold" />
+          <Input
+            readOnly
+            value={displayBillNo}
+            className="bg-slate-50 font-semibold"
+          />
         </Field>
         <Field>
           <FieldLabel>Farmer Name</FieldLabel>
-          <Input value={FarmerName} onChange={(e) => setFarmerName(e.target.value)} />
+          <Input
+            value={FarmerName}
+            onChange={(e) => setFarmerName(e.target.value)}
+          />
         </Field>
         <Field>
           <FieldLabel>Village</FieldLabel>
@@ -211,11 +229,21 @@ export default function FormerLoading() {
         </Field>
         <Field>
           <FieldLabel>Date</FieldLabel>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </Field>
         <Field className="sm:col-span-2 md:col-span-1">
           <FieldLabel>Select Vehicle</FieldLabel>
-          <Select value={vehicleId} onValueChange={(v) => { setVehicleId(v); if (v !== "__OTHER__") setOtherVehicleNo(""); }}>
+          <Select
+            value={vehicleId}
+            onValueChange={(v) => {
+              setVehicleId(v);
+              if (v !== "__OTHER__") setOtherVehicleNo("");
+            }}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select Vehicle" />
             </SelectTrigger>
@@ -232,7 +260,11 @@ export default function FormerLoading() {
         {isOtherVehicle && (
           <Field>
             <FieldLabel>Other Vehicle Number</FieldLabel>
-            <Input value={otherVehicleNo} onChange={(e) => setOtherVehicleNo(e.target.value)} placeholder="Enter vehicle number" />
+            <Input
+              value={otherVehicleNo}
+              onChange={(e) => setOtherVehicleNo(e.target.value)}
+              placeholder="Enter vehicle number"
+            />
           </Field>
         )}
       </div>
@@ -240,35 +272,78 @@ export default function FormerLoading() {
       {/* Items Table - Mobile & Desktop */}
       <div className="grid grid-cols-1 gap-3 md:hidden">
         {items.map((item, i) => (
-          <div key={item.id} className="rounded-2xl border border-[#139BC3]/15 bg-white p-4 shadow-sm">
+          <div
+            key={item.id}
+            className="rounded-2xl border border-[#139BC3]/15 bg-white p-4 shadow-sm"
+          >
             <div className="flex justify-between items-center mb-3">
               <div className="font-semibold">Row #{i + 1}</div>
-              <Button size="icon" variant="ghost" disabled={items.length === 1} onClick={() => removeRow(item.id)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                disabled={items.length === 1}
+                onClick={() => removeRow(item.id)}
+              >
                 <Trash2 className="h-4 w-4 text-red-500" />
               </Button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500">Variety</label>
-                <Select value={item.varietyCode} onValueChange={(v) => updateRow(item.id, "varietyCode", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>{varieties.map((v: any) => <SelectItem key={v.code} value={v.code}>{v.code}</SelectItem>)}</SelectContent>
+                <label className="text-xs font-semibold text-slate-500">
+                  Variety
+                </label>
+                <Select
+                  value={item.varietyCode}
+                  onValueChange={(v) => updateRow(item.id, "varietyCode", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {varieties.map((v: any) => (
+                      <SelectItem key={v.code} value={v.code}>
+                        {v.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
-                <div className="mt-1 text-sm text-slate-700">{getVarietyName(item.varietyCode)}</div>
+                <div className="mt-1 text-sm text-slate-700">
+                  {getVarietyName(item.varietyCode)}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500">Trays</label>
-                  <Input type="number" value={item.noTrays} onChange={(e) => updateRow(item.id, "noTrays", Number(e.target.value))} min={0} />
+                  <label className="text-xs font-semibold text-slate-500">
+                    Trays
+                  </label>
+                  <Input
+                    type="number"
+                    value={item.noTrays}
+                    onChange={(e) =>
+                      updateRow(item.id, "noTrays", Number(e.target.value))
+                    }
+                    min={0}
+                  />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500">Loose</label>
-                  <Input type="number" value={item.loose} onChange={(e) => updateRow(item.id, "loose", Number(e.target.value))} min={0} />
+                  <label className="text-xs font-semibold text-slate-500">
+                    Loose
+                  </label>
+                  <Input
+                    type="number"
+                    value={item.loose}
+                    onChange={(e) =>
+                      updateRow(item.id, "loose", Number(e.target.value))
+                    }
+                    min={0}
+                  />
                 </div>
               </div>
               <div className="bg-slate-50 border rounded-xl p-3 flex justify-between">
                 <span className="text-sm">Total Kgs</span>
-                <span className="font-bold">{calculateRowTotal(item).toFixed(2)}</span>
+                <span className="font-bold">
+                  {calculateRowTotal(item).toFixed(2)}
+                </span>
               </div>
             </div>
           </div>
@@ -293,17 +368,55 @@ export default function FormerLoading() {
               <tr key={item.id} className="hover:bg-[#139BC3]/5">
                 <td className="px-4 py-3">{i + 1}</td>
                 <td className="px-4 py-3">
-                  <Select value={item.varietyCode} onValueChange={(v) => updateRow(item.id, "varietyCode", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>{varieties.map((v: any) => <SelectItem key={v.code} value={v.code}>{v.code}</SelectItem>)}</SelectContent>
+                  <Select
+                    value={item.varietyCode}
+                    onValueChange={(v) => updateRow(item.id, "varietyCode", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {varieties.map((v: any) => (
+                        <SelectItem key={v.code} value={v.code}>
+                          {v.code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </td>
-                <td className="px-4 py-3">{getVarietyName(item.varietyCode)}</td>
-                <td className="px-4 py-3"><Input type="number" value={item.noTrays} onChange={(e) => updateRow(item.id, "noTrays", Number(e.target.value))} className="w-24" /></td>
-                <td className="px-4 py-3"><Input type="number" value={item.loose} onChange={(e) => updateRow(item.id, "loose", Number(e.target.value))} className="w-24" /></td>
-                <td className="px-4 py-3 font-semibold">{calculateRowTotal(item).toFixed(2)}</td>
                 <td className="px-4 py-3">
-                  <Button size="icon" variant="ghost" disabled={items.length === 1} onClick={() => removeRow(item.id)}>
+                  {getVarietyName(item.varietyCode)}
+                </td>
+                <td className="px-4 py-3">
+                  <Input
+                    type="number"
+                    value={item.noTrays}
+                    onChange={(e) =>
+                      updateRow(item.id, "noTrays", Number(e.target.value))
+                    }
+                    className="w-24"
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <Input
+                    type="number"
+                    value={item.loose}
+                    onChange={(e) =>
+                      updateRow(item.id, "loose", Number(e.target.value))
+                    }
+                    className="w-24"
+                  />
+                </td>
+                <td className="px-4 py-3 font-semibold">
+                  {calculateRowTotal(item).toFixed(2)}
+                </td>
+                <td className="px-4 py-3">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={items.length === 1}
+                    onClick={() => removeRow(item.id)}
+                  >
                     <Trash2 className="h-4 w-4 text-red-500" />
                   </Button>
                 </td>
@@ -321,8 +434,13 @@ export default function FormerLoading() {
         </Button>
         <div className="text-right">
           <p className="text-sm text-slate-500">Total Weight</p>
-          <p className="text-2xl font-bold">{totalKgs.toFixed(2)} <span className="text-lg text-slate-500">Kgs</span></p>
-          <p className="text-xs text-slate-500 mt-1">* 5% deduction applied on final payment in Vendor Bills</p>
+          <p className="text-2xl font-bold">
+            {(totalKgs * 0.95).toFixed(2)}{" "}
+            <span className="text-lg text-slate-500">Kgs</span>
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            * 5% deduction applied on final payment in Vendor Bills
+          </p>
         </div>
       </div>
     </Card>
