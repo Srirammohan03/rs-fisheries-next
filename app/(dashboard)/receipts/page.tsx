@@ -154,8 +154,7 @@ export default function ReceiptsPage() {
         if (!res.ok) throw new Error("Failed to load");
 
         const json = await res.json();
-        const rawData = json.payments || json.records || json.data || [];
-
+        const rawData = json?.data?.payments || json.records || json.data || [];
         const data: Receipt[] = rawData.map((item: any) => ({
           ...item,
           date: item.date || item.createdAt || new Date(),
@@ -662,7 +661,7 @@ export default function ReceiptsPage() {
                   {formatCurrency(total)}
                 </p>
               </div>
-            </div>
+            </div> */}
           </div>
         )}
       </CardCustom>
