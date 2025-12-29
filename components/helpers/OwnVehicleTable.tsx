@@ -18,6 +18,15 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { AssignDriverDialog } from "./AssignDriverDialog";
 import { UnassignDriverDialog } from "./UnassignDriverDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { EllipsisVertical, Eye } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export type OwnVehicle = {
   id: string;
@@ -51,12 +60,67 @@ const columns: ColumnDef<OwnVehicle>[] = [
   {
     id: "actions",
     header: "Action",
-    cell: ({ row }) =>
-      row.original.assignedDriver ? (
-        <UnassignDriverDialog vehicleId={row.original.id} />
-      ) : (
-        <AssignDriverDialog vehicleId={row.original.id} />
-      ),
+    cell: ({ row }) => {
+      const vehicle = row.original;
+      const router = useRouter();
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="
+              flex h-8 w-8 items-center justify-center
+              rounded-md border border-border
+              text-muted-foreground
+              hover:bg-accent hover:text-accent-foreground
+              focus:outline-none focus:ring-2 focus:ring-ring
+              transition-colors
+            "
+            >
+              <EllipsisVertical className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            align="end"
+            className="w-48 rounded-lg border bg-popover p-1 shadow-lg"
+          >
+            {/* View Details */}
+            <DropdownMenuItem
+              className="
+              flex items-center gap-2 rounded-md px-2 py-2 text-sm
+              hover:bg-accent hover:text-accent-foreground
+              cursor-pointer
+            "
+              onClick={() => {
+                router.push(`/vehicles/details/${vehicle.id}`);
+                console.log("View details", vehicle.id);
+              }}
+            >
+              <Eye className="h-4 w-4 text-muted-foreground" />
+              View Details
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator className="my-1" />
+
+            {/* Assign / Unassign */}
+            <DropdownMenuItem
+              asChild
+              className="
+              flex items-center gap-2 rounded-md px-2 py-2 text-sm
+              hover:bg-accent hover:text-accent-foreground
+              cursor-pointer
+            "
+            >
+              {vehicle.assignedDriver ? (
+                <UnassignDriverDialog vehicleId={vehicle.id} />
+              ) : (
+                <AssignDriverDialog vehicleId={vehicle.id} />
+              )}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    },
   },
 ];
 
