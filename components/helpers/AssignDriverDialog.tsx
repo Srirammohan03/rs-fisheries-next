@@ -45,10 +45,11 @@ export function AssignDriverDialog({ vehicleId }: { vehicleId: string }) {
       });
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["available-drivers"] });
       queryClient.invalidateQueries({ queryKey: ["own-vehicles"] });
       queryClient.invalidateQueries({ queryKey: ["rent-vehicles"] });
+      await queryClient.invalidateQueries({ queryKey: ["vehicle"] });
       toast.success(data.message ?? "Driver assigned successfully");
       setOpen(false);
     },

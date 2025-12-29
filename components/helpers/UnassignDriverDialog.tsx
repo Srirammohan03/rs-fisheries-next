@@ -27,11 +27,12 @@ export function UnassignDriverDialog({ vehicleId }: { vehicleId: string }) {
       );
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success(data.message ?? "Driver unassigned");
       queryClient.invalidateQueries({ queryKey: ["available-drivers"] });
       queryClient.invalidateQueries({ queryKey: ["own-vehicles"] });
       queryClient.invalidateQueries({ queryKey: ["rent-vehicles"] });
+      await queryClient.invalidateQueries({ queryKey: ["vehicle"] });
       setOpen(false);
     },
     onError: (err: any) => {
