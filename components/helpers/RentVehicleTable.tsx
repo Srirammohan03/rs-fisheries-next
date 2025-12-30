@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios, { AxiosError } from "axios";
 import { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 
@@ -27,15 +27,10 @@ import {
 import { useRouter } from "next/navigation";
 import { EllipsisVertical, Eye } from "lucide-react";
 import { UnassignDriverDialog } from "./UnassignDriverDialog";
-
-export type RentVehicle = {
-  id: string;
-  vehicleNumber: string;
-  rentalAgency: string | null;
-  rentalRatePerDay: string;
-  assignedDriver?: { name: string | null };
-  createdAt?: string;
-};
+import { RentVehicle } from "./forms/types";
+import EditRentVehicleDialog from "./EditRentVehicleDialog";
+import DeleteDialog from "./DeleteDialog";
+import { toast } from "sonner";
 
 const columns: ColumnDef<RentVehicle>[] = [
   { accessorKey: "vehicleNumber", header: "Vehicle No" },
@@ -57,11 +52,45 @@ const columns: ColumnDef<RentVehicle>[] = [
     cell: ({ row }) => {
       const vehicle = row.original;
       const router = useRouter();
+      const [open, setOpen] = useState(false);
+      const [openDelete, setOpenDelete] = useState(false);
+      const [deleteId, setDeleteId] = useState<string | null>(null);
+      const queryClient = useQueryClient();
+
+      const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+          const { data } = await axios.delete(`/api/vehicles/rent/${id}`, {
+            withCredentials: true,
+          });
+          return data;
+        },
+        onSuccess: (data) => {
+          toast.success(data?.message ?? "Vehicle deleted successfully");
+          queryClient.invalidateQueries({ queryKey: ["rent-vehicles"] });
+          setDeleteId(null);
+          setOpenDelete(false);
+        },
+        onError: (err: unknown) => {
+          if (err instanceof AxiosError) {
+            toast.error(
+              err.response?.data?.message ?? "Error deleting vehicle"
+            );
+          } else {
+            toast.error("Error updating vehicle");
+          }
+        },
+      });
+
+      const handleDelete = async () => {
+        if (!deleteId) return;
+        deleteMutation.mutate(deleteId);
+      };
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="
                 flex h-8 w-8 items-center justify-center
                 rounded-md border border-border
                 text-muted-foreground
@@ -69,50 +98,81 @@ const columns: ColumnDef<RentVehicle>[] = [
                 focus:outline-none focus:ring-2 focus:ring-ring
                 transition-colors
               "
-            >
-              <EllipsisVertical className="h-4 w-4" />
-            </button>
-          </DropdownMenuTrigger>
+              >
+                <EllipsisVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
 
-          <DropdownMenuContent
-            align="end"
-            className="w-48 rounded-lg border bg-popover p-1 shadow-lg"
-          >
-            {/* View Details */}
-            <DropdownMenuItem
-              className="
+            <DropdownMenuContent
+              align="end"
+              className="flex flex-col items-center justify-center w-48 rounded-lg border bg-popover p-1 shadow-lg"
+            >
+              {/* View Details */}
+              <DropdownMenuItem
+                className="
+                flex items-center justify-center gap-2 rounded-md px-2 py-2 text-sm
+                hover:bg-accent hover:text-accent-foreground
+                cursor-pointer
+              "
+                onClick={() => {
+                  router.push(`/vehicles/details/${vehicle.id}`);
+                  console.log("View details", vehicle.id);
+                }}
+              >
+                <Eye className="h-4 w-4 text-muted-foreground" />
+                View Details
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="my-1" />
+
+              <DropdownMenuItem
+                onClick={() => setOpen(true)}
+                className="flex items-center justify-center"
+              >
+                Edit Rent Vehicle
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuItem
+                onClick={() => {
+                  setDeleteId(vehicle.id);
+                  setOpenDelete(true);
+                }}
+                className="flex items-center justify-center"
+              >
+                Delete Rent Vehicle
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="my-1" />
+
+              {/* Assign / Unassign */}
+              <DropdownMenuItem
+                asChild
+                className="
                 flex items-center gap-2 rounded-md px-2 py-2 text-sm
                 hover:bg-accent hover:text-accent-foreground
                 cursor-pointer
               "
-              onClick={() => {
-                router.push(`/vehicles/details/${vehicle.id}`);
-                console.log("View details", vehicle.id);
-              }}
-            >
-              <Eye className="h-4 w-4 text-muted-foreground" />
-              View Details
-            </DropdownMenuItem>
+              >
+                {vehicle.assignedDriver ? (
+                  <UnassignDriverDialog vehicleId={vehicle.id} />
+                ) : (
+                  <AssignDriverDialog vehicleId={vehicle.id} />
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-            <DropdownMenuSeparator className="my-1" />
-
-            {/* Assign / Unassign */}
-            <DropdownMenuItem
-              asChild
-              className="
-                flex items-center gap-2 rounded-md px-2 py-2 text-sm
-                hover:bg-accent hover:text-accent-foreground
-                cursor-pointer
-              "
-            >
-              {vehicle.assignedDriver ? (
-                <UnassignDriverDialog vehicleId={vehicle.id} />
-              ) : (
-                <AssignDriverDialog vehicleId={vehicle.id} />
-              )}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          <EditRentVehicleDialog
+            vehicle={vehicle}
+            open={open}
+            onOpenChange={setOpen}
+          />
+          <DeleteDialog
+            onClose={() => setOpenDelete(false)}
+            open={openDelete}
+            onConfirm={handleDelete}
+          />
+        </>
       );
     },
   },

@@ -3,15 +3,7 @@ import { ApiError } from "@/utils/ApiError";
 import { apiHandler } from "@/utils/apiHandler";
 import { ApiResponse } from "@/utils/ApiResponse";
 import { NextResponse } from "next/server";
-
-// Reusable date parser
-const parseDate = (value: any) => {
-  if (!value) return null;
-  const d = new Date(value);
-  if (isNaN(d.getTime()))
-    throw new ApiError(400, `Invalid date format: ${value}`);
-  return d;
-};
+import { parseDate } from "./types";
 
 export const POST = apiHandler(async (req: Request) => {
   const body = await req.json();

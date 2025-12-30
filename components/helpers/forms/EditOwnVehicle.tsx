@@ -2,68 +2,109 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import axios, { AxiosError } from "axios";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState } from "react";
-import { OwnFormType, ownSchema, useAvalibleDrivers } from "./types";
+import { useState, useEffect } from "react";
+import { OwnFormType, ownSchema, Props } from "./types";
 
-export function OwnVehicleForm({ onSuccess }: { onSuccess: () => void }) {
+const EditOwnVehicle = ({ vehicle }: Props) => {
+  const queryClient = useQueryClient();
+  const NO_DRIVER = "NONE";
+  const [selected, setSelected] = useState<string>(NO_DRIVER);
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
+    watch,
+    reset,
   } = useForm<OwnFormType>({
     resolver: zodResolver(ownSchema),
   });
-  const [selected, setSelected] = useState("");
-  const queryClient = useQueryClient();
 
-  const { data: drivers, isLoading, isError } = useAvalibleDrivers();
-
-  const addMutation = useMutation({
-    mutationFn: async (payload: OwnFormType & { ownership: string }) => {
-      const { data: res } = await axios.post("/api/vehicles/own", payload, {
-        withCredentials: true,
+  useEffect(() => {
+    if (vehicle) {
+      reset({
+        vehicleNumber: vehicle.vehicleNumber?.toUpperCase() ?? "",
+        manufacturer: vehicle.manufacturer ?? "",
+        model: vehicle.model ?? "",
+        yearOfManufacture: vehicle.yearOfManufacture?.toString() ?? "",
+        fuelType: vehicle.fuelType ?? undefined,
+        engineNumber: vehicle.engineNumber ?? "",
+        chassisNumber: vehicle.chassisNumber ?? "",
+        capacityInTons: vehicle.capacityInTons?.toString() ?? "",
+        bodyType: vehicle.bodyType ?? "",
+        rcValidity: vehicle.rcValidity ? vehicle.rcValidity.slice(0, 10) : "",
+        insuranceExpiry: vehicle.insuranceExpiry
+          ? vehicle.insuranceExpiry.slice(0, 10)
+          : "",
+        fitnessExpiry: vehicle.fitnessExpiry
+          ? vehicle.fitnessExpiry.slice(0, 10)
+          : "",
+        pollutionExpiry: vehicle.pollutionExpiry
+          ? vehicle.pollutionExpiry.slice(0, 10)
+          : "",
+        permitExpiry: vehicle.permitExpiry
+          ? vehicle.permitExpiry.slice(0, 10)
+          : "",
+        roadTaxExpiry: vehicle.roadTaxExpiry
+          ? vehicle.roadTaxExpiry.slice(0, 10)
+          : "",
+        remarks: vehicle.remarks ?? "",
       });
+      const driverId = vehicle.assignedDriver?.id || vehicle.assignedDriverId;
+      setSelected(driverId ? driverId : NO_DRIVER);
+    }
+  }, [vehicle, reset]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (formData: OwnFormType) => {
+      let payload: any = {
+        ...formData,
+        id: vehicle.id,
+        assignedDriverId: selected === "None" ? null : selected,
+      };
+
+      if (!payload.yearOfManufacture?.trim()) {
+        delete payload.yearOfManufacture;
+      }
+
+      if (!payload.capacityInTons?.trim()) {
+        delete payload.capacityInTons;
+      }
+
+      const { data: res } = await axios.put(
+        `/api/vehicles/own/${vehicle.id}`,
+        payload,
+        { withCredentials: true }
+      );
       return res;
     },
-    onSuccess: (data) => {
-      toast.success(data?.message ?? "Vehicle added successfully");
+    onSuccess: () => {
+      toast.success("Own vehicle updated successfully");
       queryClient.invalidateQueries({ queryKey: ["own-vehicles"] });
-      onSuccess();
+      queryClient.invalidateQueries({ queryKey: ["available-drivers"] });
     },
-    onError: async (err: any) => {
+    onError: (err: any) => {
       if (err instanceof AxiosError) {
-        toast.error(err.response?.data.message ?? "Something went wrong");
+        toast.error(err.response?.data?.message ?? "Something went wrong");
       } else {
-        toast.error(err.message ?? "Something went wrong");
+        toast.error("Something went wrong");
       }
     },
   });
 
   const onSubmit = (data: OwnFormType) => {
-    addMutation.mutate({
-      ...data,
-      ownership: "OWN",
-      assignedDriverId: selected,
-    });
+    updateMutation.mutate(data);
   };
 
-  const loading = addMutation.isPending;
+  const loading = updateMutation.isPending;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -195,32 +236,34 @@ export function OwnVehicleForm({ onSuccess }: { onSuccess: () => void }) {
       </div>
 
       {/* Driver */}
-      <div className="flex flex-col space-y-1">
+      {/* <div className="flex flex-col space-y-1">
         <Label>Assigned Driver ID (optional)</Label>
 
         <div className="space-y-3">
           <label className="text-sm font-medium">Select Driver</label>
 
-          <Select onValueChange={setSelected}>
+          <Select value={selected} onValueChange={setSelected}>
             <SelectTrigger>
               <SelectValue placeholder="Choose driver" />
             </SelectTrigger>
+
             <SelectContent>
-              {isLoading ? (
-                <div className="p-2 text-sm text-muted-foreground">
-                  Loading...
-                </div>
-              ) : drivers?.length ? (
-                drivers.map((d: any) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))
-              ) : (
-                <div className="p-2 text-sm text-muted-foreground">
-                  No available drivers
-                </div>
+              {!isLoading && selectedDriverOption && (
+                <SelectItem value={selectedDriverOption.id}>
+                  {selectedDriverOption.name}
+                </SelectItem>
               )}
+
+              {!isLoading &&
+                drivers
+                  .filter((d: any) => d.id !== selectedDriverOption?.id)
+                  .map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+
+              <SelectItem value={NO_DRIVER}>No driver assigned</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -229,7 +272,7 @@ export function OwnVehicleForm({ onSuccess }: { onSuccess: () => void }) {
             {errors.assignedDriverId.message}
           </p>
         )}
-      </div>
+      </div> */}
 
       {/* Remarks */}
       <div className="flex flex-col space-y-1">
@@ -247,4 +290,6 @@ export function OwnVehicleForm({ onSuccess }: { onSuccess: () => void }) {
       </Button>
     </form>
   );
-}
+};
+
+export default EditOwnVehicle;
