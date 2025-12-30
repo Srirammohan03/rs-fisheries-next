@@ -90,25 +90,61 @@ export const POST = apiHandler(async (req: Request) => {
 
 export const GET = apiHandler(async () => {
   const vehicles = await prisma.vehicle.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
+    where: {
+      OR: [
+        { farmerLoadings: { some: { vehicleId: { not: null } } } },
+        { agentLoadings: { some: { vehicleId: { not: null } } } },
+        { clientLoadings: { some: { vehicleId: { not: null } } } },
+      ],
+    },
+    select: {
+      id: true,
+      vehicleNumber: true,
+      ownership: true,
       assignedDriver: {
+        select: { name: true },
+      },
+
+      farmerLoadings: {
+        where: { vehicleId: { not: null } },
+        take: 1,
         select: {
-          assignedVehicle: {
-            select: {
-              vehicleNumber: true,
-              id: true,
-            },
-          },
-          name: true,
-          phone: true,
           id: true,
+          billNo: true,
+          village: true,
+          date: true,
+          FarmerName: true,
+        },
+      },
+
+      agentLoadings: {
+        where: { vehicleId: { not: null } },
+        take: 1,
+        select: {
+          id: true,
+          billNo: true,
+          village: true,
+          date: true,
+          agentName: true,
+        },
+      },
+
+      clientLoadings: {
+        where: { vehicleId: { not: null } },
+        take: 1,
+        select: {
+          id: true,
+          billNo: true,
+          village: true,
+          date: true,
+          clientName: true,
         },
       },
     },
+    orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json(
-    new ApiResponse(200, vehicles, "Vehicles RENT fetched successfully")
+    new ApiResponse(200, vehicles, "Active trips fetched")
   );
 });

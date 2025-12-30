@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { toast } from "sonner";
 import { CheckCircle2, Truck } from "lucide-react";
 
@@ -17,84 +18,70 @@ import {
 } from "@/components/ui/table";
 
 /* ---------------- Types ---------------- */
-type RunningVehicle = {
+
+type ActiveTrip = {
   id: string;
   vehicleNumber: string;
   ownership: "OWN" | "RENT";
   assignedDriver?: { name: string } | null;
-  status: "AVAILABLE" | "RUNNING" | "MAINTENANCE" | "INACTIVE";
-  currentLoadType?: "FORMER" | "AGENT" | "CLIENT" | null;
-  currentBillNo?: string | null;
-  lastAssignedAt?: string | null;
+
+  farmerLoadings: any[];
+  agentLoadings: any[];
+  clientLoadings: any[];
 };
 
-/* ---------------- Dummy JSON Data ---------------- */
-const DUMMY_RUNNING_VEHICLES: RunningVehicle[] = [
-  {
-    id: "1",
-    vehicleNumber: "AP09 AB 1234",
-    ownership: "OWN",
-    assignedDriver: { name: "Ramesh" },
-    status: "RUNNING",
-    currentLoadType: "FORMER",
-    currentBillNo: "RS-F-0012",
-    lastAssignedAt: "2025-01-10T08:30:00Z",
-  },
-  {
-    id: "2",
-    vehicleNumber: "TS08 XY 7788",
-    ownership: "RENT",
-    assignedDriver: { name: "Suresh" },
-    status: "RUNNING",
-    currentLoadType: "AGENT",
-    currentBillNo: "RS-A-0045",
-    lastAssignedAt: "2025-01-10T10:15:00Z",
-  },
-  {
-    id: "3",
-    vehicleNumber: "AP31 MN 4455",
-    ownership: "OWN",
-    assignedDriver: null,
-    status: "RUNNING",
-    currentLoadType: "CLIENT",
-    currentBillNo: "RS-C-0098",
-    lastAssignedAt: "2025-01-10T12:45:00Z",
-  },
-];
+/* ---------------- Helpers ---------------- */
+
+function getActiveLoad(vehicle: ActiveTrip) {
+  if (vehicle.farmerLoadings.length)
+    return {
+      type: "FORMER",
+      billNo: vehicle.farmerLoadings[0].billNo,
+    };
+
+  if (vehicle.agentLoadings.length)
+    return {
+      type: "AGENT",
+      billNo: vehicle.agentLoadings[0].billNo,
+    };
+
+  if (vehicle.clientLoadings.length)
+    return {
+      type: "CLIENT",
+      billNo: vehicle.clientLoadings[0].billNo,
+    };
+
+  return null;
+}
 
 /* ---------------- Component ---------------- */
+
 export function ActiveTripsTable() {
   const qc = useQueryClient();
 
-  /* -------- Fetch (Dummy) -------- */
   const { data, isLoading } = useQuery({
-    queryKey: ["vehicles-running"],
+    queryKey: ["active-trips"],
     queryFn: async () => {
-      // simulate API delay
-      await new Promise((r) => setTimeout(r, 500));
-      return DUMMY_RUNNING_VEHICLES;
+      const res = await axios.get("/api/vehicles");
+      return res.data.data as ActiveTrip[];
     },
   });
 
-  const vehicles = useMemo(() => data ?? [], [data]);
+  const vehicles = data ?? [];
 
-  /* -------- Mutation (Local Update) -------- */
   const markAvailable = useMutation({
-    mutationFn: async (id: string) => {
-      // simulate API delay
-      await new Promise((r) => setTimeout(r, 300));
-      return id;
+    mutationFn: async (vehicleId: string) => {
+      await axios.post("/api/vehicles/mark-available", { vehicleId });
     },
-    onSuccess: (id) => {
-      qc.setQueryData<RunningVehicle[]>(["vehicles-running"], (old = []) =>
-        old.filter((v) => v.id !== id)
-      );
+    onSuccess: () => {
       toast.success("Vehicle marked as AVAILABLE");
+      qc.invalidateQueries({ queryKey: ["active-trips"] });
     },
-    onError: () => toast.error("Failed to update status"),
+    onError: () => {
+      toast.error("Failed to mark vehicle as available");
+    },
   });
 
-  /* -------- Loading -------- */
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-slate-600">
@@ -104,7 +91,6 @@ export function ActiveTripsTable() {
     );
   }
 
-  /* -------- Empty -------- */
   if (!vehicles.length) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
@@ -121,17 +107,13 @@ export function ActiveTripsTable() {
     );
   }
 
-  /* -------- Table -------- */
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="text-lg font-semibold text-slate-900">
-            Active Trips
-          </div>
+          <div className="text-lg font-semibold">Active Trips</div>
           <div className="text-sm text-slate-500">
-            Vehicles currently marked as{" "}
-            <span className="font-semibold">RUNNING</span>
+            Vehicles currently RUNNING
           </div>
         </div>
 
@@ -140,59 +122,61 @@ export function ActiveTripsTable() {
         </Badge>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200">
+      <div className="overflow-x-auto rounded-2xl border">
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
               <TableHead>Vehicle</TableHead>
               <TableHead>Driver</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Bill / Load</TableHead>
+              <TableHead>Ownership</TableHead>
+              <TableHead>Load</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
 
           <TableBody>
-            {vehicles.map((v) => (
-              <TableRow key={v.id} className="hover:bg-slate-50/60">
-                <TableCell className="font-semibold text-slate-900">
-                  {v.vehicleNumber}
-                </TableCell>
+            {vehicles.map((v) => {
+              const load = getActiveLoad(v);
 
-                <TableCell className="text-slate-700">
-                  {v.assignedDriver?.name || "—"}
-                </TableCell>
+              return (
+                <TableRow key={v.id}>
+                  <TableCell className="font-semibold">
+                    {v.vehicleNumber}
+                  </TableCell>
 
-                <TableCell className="text-slate-700">{v.ownership}</TableCell>
+                  <TableCell>{v.assignedDriver?.name || "—"}</TableCell>
 
-                <TableCell className="text-slate-700">
-                  <div className="text-sm font-medium">
-                    {v.currentBillNo || "—"}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {v.currentLoadType || "—"}
-                  </div>
-                </TableCell>
+                  <TableCell>{v.ownership}</TableCell>
 
-                <TableCell>
-                  <Badge className="bg-orange-50 text-orange-700 border border-orange-200">
-                    RUNNING
-                  </Badge>
-                </TableCell>
+                  <TableCell>
+                    <div className="text-sm font-medium">
+                      {load?.billNo || "—"}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {load?.type || "—"}
+                    </div>
+                  </TableCell>
 
-                <TableCell className="text-right">
-                  <Button
-                    onClick={() => markAvailable.mutate(v.id)}
-                    disabled={markAvailable.isPending}
-                    className="rounded-xl bg-[#139BC3] text-white hover:bg-[#1088AA]"
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Mark Available
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                  <TableCell>
+                    <Badge className="bg-orange-50 text-orange-700 border border-orange-200">
+                      RUNNING
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    <Button
+                      onClick={() => markAvailable.mutate(v.id)}
+                      disabled={markAvailable.isPending}
+                      className="rounded-xl bg-[#139BC3] text-white"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Mark Available
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

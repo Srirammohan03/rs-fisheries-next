@@ -58,6 +58,25 @@ export const GET = apiHandler(async () => {
       assignedDriverId: {
         not: null,
       },
+      NOT: {
+        OR: [
+          {
+            farmerLoadings: {
+              some: { vehicleId: { not: null } },
+            },
+          },
+          {
+            agentLoadings: {
+              some: { vehicleId: { not: null } },
+            },
+          },
+          {
+            clientLoadings: {
+              some: { vehicleId: { not: null } },
+            },
+          },
+        ],
+      },
     },
     select: {
       id: true,
