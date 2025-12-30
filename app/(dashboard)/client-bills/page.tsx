@@ -54,7 +54,7 @@ type UIItem = ClientItem & {
   recordTotalKgs: number;
   recordGrandTotal: number;
   netKgsForThisItem: number;
-  loose?: number; // ← Added for display
+  loose?: number;
 };
 
 const fetchClientLoadings = async (): Promise<ClientRecord[]> => {
@@ -81,6 +81,10 @@ export default function ClientBillsPage() {
   const [toDate, setToDate] = useState("");
 
   const [newCount, setNewCount] = useState(0);
+
+  // Pagination
+  const PAGE_SIZE = 15;
+  const [page, setPage] = useState(1);
 
   const refreshRecords = useCallback(async () => {
     const data = await fetchClientLoadings();
@@ -142,7 +146,7 @@ export default function ClientBillsPage() {
           recordTotalKgs,
           recordGrandTotal,
           netKgsForThisItem,
-          loose: it.loose, // ← Pass loose field
+          loose: it.loose,
         };
       });
     });
@@ -168,6 +172,18 @@ export default function ClientBillsPage() {
 
     return result;
   }, [records, searchTerm, sortOrder, fromDate, toDate]);
+
+  // Reset page when filters/sort changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, sortOrder, fromDate, toDate]);
+
+  const totalPages = Math.ceil(items.length / PAGE_SIZE);
+
+  const paginatedItems = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return items.slice(start, start + PAGE_SIZE);
+  }, [items, page]);
 
   const startEdit = useCallback((item: ClientItem) => {
     setEditing((prev) => ({
@@ -386,7 +402,7 @@ export default function ClientBillsPage() {
             <>
               {/* Mobile Cards */}
               <div className="mt-5 grid grid-cols-1 gap-3 md:hidden">
-                {items.map((it) => {
+                {paginatedItems.map((it) => {
                   const edit = editing[it.id];
                   const isEditing = !!edit;
                   const isSaving = !!savingIds[it.id];
@@ -510,7 +526,6 @@ export default function ClientBillsPage() {
                       <th className="p-4">Bill No / Client</th>
                       <th className="p-4">Variety</th>
                       <th className="p-4 text-right">Trays</th>
-                      {/* ← Header unchanged */}
                       <th className="p-4 text-right">Price/Kg</th>
                       <th className="p-4 text-right">Total Price</th>
                       <th className="p-4 text-center">Actions</th>
@@ -518,7 +533,7 @@ export default function ClientBillsPage() {
                   </thead>
 
                   <tbody className="divide-y divide-gray-200">
-                    {items.map((it) => {
+                    {paginatedItems.map((it) => {
                       const edit = editing[it.id];
                       const isEditing = !!edit;
                       const isSaving = !!savingIds[it.id];
@@ -536,7 +551,6 @@ export default function ClientBillsPage() {
 
                           <td className="p-4">{it.varietyCode || "-"}</td>
 
-                          {/* ← Only value changes here */}
                           <td className="p-4 text-right">
                             <TraysDisplay item={it} />
                           </td>
@@ -620,6 +634,65 @@ export default function ClientBillsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination (mobile + desktop) */}
+              {items.length > 0 && totalPages >= 1 && (
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-gray-500">
+                    Showing{" "}
+                    <span className="font-medium text-gray-900">
+                      {(page - 1) * PAGE_SIZE + 1}
+                    </span>{" "}
+                    –{" "}
+                    <span className="font-medium text-gray-900">
+                      {Math.min(page * PAGE_SIZE, items.length)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-medium text-gray-900">
+                      {items.length}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+
+                    {Array.from({ length: totalPages }).map((_, i) => {
+                      const pageNo = i + 1;
+                      return (
+                        <Button
+                          key={pageNo}
+                          size="sm"
+                          variant={page === pageNo ? "default" : "outline"}
+                          onClick={() => setPage(pageNo)}
+                          className={
+                            page === pageNo ? "bg-blue-600 text-white" : ""
+                          }
+                        >
+                          {pageNo}
+                        </Button>
+                      );
+                    })}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === totalPages}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </Card>

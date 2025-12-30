@@ -60,7 +60,7 @@ type UIItem = VendorItem & {
   recordTotalKgs: number;
   recordGrandTotal: number;
   netKgsForThisItem: number;
-  loose?: number; // ← Added for display logic
+  loose?: number; // for display logic
 };
 
 const fetchFarmerLoadings = async (): Promise<LoadingRecord[]> => {
@@ -96,6 +96,10 @@ export default function VendorBillsPage() {
   // Badges
   const [newFarmerCount, setNewFarmerCount] = useState(0);
   const [newAgentCount, setNewAgentCount] = useState(0);
+
+  // Pagination
+  const PAGE_SIZE = 15;
+  const [page, setPage] = useState(1);
 
   const refreshRecords = useCallback(async () => {
     const [farmers, agents] = await Promise.all([
@@ -190,7 +194,7 @@ export default function VendorBillsPage() {
             recordTotalKgs,
             recordGrandTotal,
             netKgsForThisItem,
-            loose: it.loose, // ← Important: pass loose to UI
+            loose: it.loose,
           };
         });
       });
@@ -219,6 +223,51 @@ export default function VendorBillsPage() {
     return result;
   }, [records, activeTab, searchTerm, sortOrder, fromDate, toDate]);
 
+  // reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, searchTerm, sortOrder, fromDate, toDate]);
+
+  // safe total pages
+  const totalPages = useMemo(() => {
+    if (filteredItems.length === 0) return 1;
+    return Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  }, [filteredItems.length]);
+
+  // clamp page if it becomes out of range
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paginatedItems = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredItems.slice(start, start + PAGE_SIZE);
+  }, [filteredItems, page]);
+
+  // smart page buttons
+  const pageNumbers = useMemo(() => {
+    const delta = 1;
+    const range: (number | "...")[] = [];
+
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) range.push(i);
+      return range;
+    }
+
+    const left = Math.max(2, page - delta);
+    const right = Math.min(totalPages - 1, page + delta);
+
+    range.push(1);
+    if (left > 2) range.push("...");
+
+    for (let i = left; i <= right; i++) range.push(i);
+
+    if (right < totalPages - 1) range.push("...");
+    range.push(totalPages);
+
+    return range;
+  }, [page, totalPages]);
+
   const startEdit = useCallback((item: VendorItem) => {
     setEditing((prev) => ({
       ...prev,
@@ -243,9 +292,7 @@ export default function VendorBillsPage() {
 
         const totalKgs = Number(item.totalKgs || 0);
 
-        const updates: Partial<VendorItem> = {
-          pricePerKg: num,
-        };
+        const updates: Partial<VendorItem> = { pricePerKg: num };
 
         if (num !== undefined && totalKgs > 0) {
           const gross = totalKgs * num;
@@ -328,14 +375,12 @@ export default function VendorBillsPage() {
     );
   };
 
-  // Reusable display for both mobile and desktop
   const TraysDisplay = ({ item }: { item: UIItem }) => {
     const trays = item.noTrays ?? 0;
     const looseKgs = Number(item.loose ?? 0);
 
-    if (trays > 0) {
+    if (trays > 0)
       return <span className="font-semibold text-gray-900">{trays}</span>;
-    }
 
     if (looseKgs > 0) {
       return (
@@ -481,7 +526,7 @@ export default function VendorBillsPage() {
             <>
               {/* Mobile View */}
               <div className="mt-5 grid grid-cols-1 gap-3 md:hidden">
-                {filteredItems.map((it) => {
+                {paginatedItems.map((it) => {
                   const edit = editing[it.id];
                   const isEditing = !!edit;
                   const isSaving = !!savingIds[it.id];
@@ -606,7 +651,6 @@ export default function VendorBillsPage() {
                       <th className="p-4">Bill No / Name</th>
                       <th className="p-4">Variety</th>
                       <th className="p-4 text-right">Trays</th>
-                      {/* ← Kept exactly as you wanted */}
                       <th className="p-4 text-right">Price/Kg</th>
                       <th className="p-4 text-right">Total Price</th>
                       <th className="p-4 text-center">Actions</th>
@@ -614,7 +658,7 @@ export default function VendorBillsPage() {
                   </thead>
 
                   <tbody className="divide-y divide-gray-200">
-                    {filteredItems.map((it) => {
+                    {paginatedItems.map((it) => {
                       const edit = editing[it.id];
                       const isEditing = !!edit;
                       const isSaving = !!savingIds[it.id];
@@ -630,7 +674,6 @@ export default function VendorBillsPage() {
 
                           <td className="p-4">{it.varietyCode}</td>
 
-                          {/* ← Only this cell value changes */}
                           <td className="p-4 text-right">
                             <TraysDisplay item={it} />
                           </td>
@@ -713,6 +756,69 @@ export default function VendorBillsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination */}
+              {filteredItems.length > 0 && totalPages >= 1 && (
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-gray-500">
+                    Showing{" "}
+                    <span className="font-medium text-gray-900">
+                      {(page - 1) * PAGE_SIZE + 1}
+                    </span>{" "}
+                    –{" "}
+                    <span className="font-medium text-gray-900">
+                      {Math.min(page * PAGE_SIZE, filteredItems.length)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-medium text-gray-900">
+                      {filteredItems.length}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+
+                    {pageNumbers.map((p, idx) =>
+                      p === "..." ? (
+                        <span
+                          key={`dots-${idx}`}
+                          className="px-2 text-gray-400 select-none"
+                        >
+                          ...
+                        </span>
+                      ) : (
+                        <Button
+                          key={p}
+                          size="sm"
+                          variant={page === p ? "default" : "outline"}
+                          onClick={() => setPage(p)}
+                          className={page === p ? "bg-blue-600 text-white" : ""}
+                        >
+                          {p}
+                        </Button>
+                      )
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === totalPages}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </Card>

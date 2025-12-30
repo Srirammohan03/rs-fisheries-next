@@ -1,7 +1,7 @@
 // app/(dashboard)/receipts/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { CardCustom } from "@/components/ui/card-custom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,6 +123,10 @@ export default function ReceiptsPage() {
   const [dateTo, setDateTo] = useState<string>("");
   const [search, setSearch] = useState<string>("");
 
+  // Pagination
+  const PAGE_SIZE = 15;
+  const [page, setPage] = useState(1);
+
   // Modals
   const [openVendorInvoice, setOpenVendorInvoice] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<VendorReceipt | null>(
@@ -219,6 +223,11 @@ export default function ReceiptsPage() {
     fetchData();
   }, [activeTab, dateFrom, dateTo]);
 
+  // Reset page whenever tab/filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, dateFrom, dateTo, search]);
+
   const getTitle = () => {
     const map: Record<Tab, string> = {
       vendor: "Vendor Payment Receipts",
@@ -284,7 +293,6 @@ export default function ReceiptsPage() {
       return inRange(d) && matchSearch(r);
     });
 
-    // Always latest first even after filtering
     out.sort(
       (a: any, b: any) =>
         new Date(b.date || b.createdAt).getTime() -
@@ -293,6 +301,13 @@ export default function ReceiptsPage() {
 
     return out;
   }, [receipts, search, dateFrom, dateTo, activeTab]);
+
+  const totalPages = Math.ceil(filteredReceipts.length / PAGE_SIZE);
+
+  const paginatedReceipts = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredReceipts.slice(start, start + PAGE_SIZE);
+  }, [filteredReceipts, page]);
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
@@ -384,7 +399,7 @@ export default function ReceiptsPage() {
           <div className="space-y-5">
             {/* MOBILE: Cards */}
             <div className="grid grid-cols-1 gap-3 md:hidden">
-              {filteredReceipts.map((r: any) => (
+              {paginatedReceipts.map((r: any) => (
                 <div
                   key={r.id}
                   className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -626,7 +641,7 @@ export default function ReceiptsPage() {
                   </thead>
 
                   <tbody>
-                    {filteredReceipts.map((r: any) => (
+                    {paginatedReceipts.map((r: any) => (
                       <tr
                         key={r.id}
                         className="border-b border-slate-100 hover:bg-slate-50/70 transition"
@@ -742,7 +757,7 @@ export default function ReceiptsPage() {
                                   const { jsPDF } = await import("jspdf");
                                   await import("jspdf-autotable");
 
-                                  const LOGO_PATH = "/assets/favicon.png"; // ✅ correct for /public/favicon.png
+                                  const LOGO_PATH = "/assets/favicon.png";
 
                                   if (activeTab === "vendor") {
                                     const {
@@ -785,6 +800,11 @@ export default function ReceiptsPage() {
                                       console.error("Failed to load logo:", e);
                                     }
 
+                                    const baseAmount =
+                                      invoice.taxableValue ||
+                                      invoice.amount ||
+                                      0;
+
                                     await generateClientInvoicePDF(
                                       jsPDF,
                                       {
@@ -802,15 +822,9 @@ export default function ReceiptsPage() {
                                           "Supply of fresh fish",
                                         hsn: "0302",
                                         gstPercent: 0,
-                                        taxableValue:
-                                          invoice.taxableValue ||
-                                          invoice.amount ||
-                                          0,
+                                        taxableValue: baseAmount,
                                         gstAmount: 0,
-                                        totalAmount:
-                                          invoice.taxableValue ||
-                                          invoice.amount ||
-                                          0,
+                                        totalAmount: baseAmount,
                                       },
                                       { logoDataUrl }
                                     );
@@ -847,6 +861,63 @@ export default function ReceiptsPage() {
                 </table>
               </div>
             </div>
+
+            {/* Pagination (same style like your bills pages) */}
+            {totalPages >= 1 && (
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-medium text-slate-900">
+                    {(page - 1) * PAGE_SIZE + 1}
+                  </span>{" "}
+                  –{" "}
+                  <span className="font-medium text-slate-900">
+                    {Math.min(page * PAGE_SIZE, filteredReceipts.length)}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-900">
+                    {filteredReceipts.length}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Prev
+                  </Button>
+
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    const pageNo = i + 1;
+                    return (
+                      <Button
+                        key={pageNo}
+                        size="sm"
+                        variant={page === pageNo ? "default" : "outline"}
+                        onClick={() => setPage(pageNo)}
+                        className={
+                          page === pageNo ? "bg-[#139BC3] text-white" : ""
+                        }
+                      >
+                        {pageNo}
+                      </Button>
+                    );
+                  })}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardCustom>
