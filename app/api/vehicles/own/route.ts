@@ -4,6 +4,7 @@ import { apiHandler } from "@/utils/apiHandler";
 import { ApiResponse } from "@/utils/ApiResponse";
 import { NextResponse } from "next/server";
 import { parseDate } from "./types";
+import { Prisma } from "@prisma/client";
 
 export const POST = apiHandler(async (req: Request) => {
   const body = await req.json();
@@ -76,32 +77,100 @@ export const POST = apiHandler(async (req: Request) => {
   );
 });
 
-export const GET = apiHandler(async () => {
-  const vehicles = await prisma.vehicle.findMany({
-    where: { ownership: "OWN" },
-    orderBy: { createdAt: "desc" },
-    include: {
-      assignedDriver: {
-        select: {
-          assignedVehicle: {
-            select: {
-              vehicleNumber: true,
-              id: true,
-            },
-          },
-          name: true,
-          phone: true,
-          id: true,
+export const GET = apiHandler(async (req: Request) => {
+  // GET /api/vehicles/own?page=1&limit=10&search=abc&fuelType=DIESEL
+
+  const { searchParams } = new URL(req.url);
+
+  const page = Number(searchParams.get("page") ?? 1);
+  const limit = Number(searchParams.get("limit") ?? 10);
+  const search = searchParams.get("search")?.trim() || "";
+  const fuelType = searchParams.get("fuelType") || "ALL";
+  const assigned = searchParams.get("assigned") || "ALL";
+  const sortBy = searchParams.get("sortBy") || "NEWEST";
+
+  const skip = (page - 1) * limit;
+
+  const where: any = {
+    ownership: "OWN",
+  };
+
+  if (search) {
+    where.OR = [
+      {
+        vehicleNumber: {
+          contains: search,
+          mode: "insensitive",
         },
       },
-    },
-    omit: {
-      rentalAgency: true,
-      rentalRatePerDay: true,
-    },
-  });
+      {
+        manufacturer: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        assignedDriver: {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      },
+    ];
+  }
+
+  if (fuelType !== "ALL") {
+    where.fuelType = fuelType;
+  }
+
+  if (assigned === "ASSIGNED") {
+    where.assignedDriverId = { not: null };
+  }
+
+  if (assigned === "AVAILABLE") {
+    where.assignedDriverId = null;
+  }
+  const orderBy: Prisma.VehicleOrderByWithRelationInput =
+    sortBy === "OLDEST" ? { createdAt: "asc" } : { createdAt: "desc" };
+
+  const [vehicles, total] = await Promise.all([
+    await prisma.vehicle.findMany({
+      where,
+      orderBy,
+      include: {
+        assignedDriver: {
+          select: {
+            assignedVehicle: {
+              select: {
+                vehicleNumber: true,
+                id: true,
+              },
+            },
+            name: true,
+            phone: true,
+            id: true,
+          },
+        },
+      },
+      omit: {
+        rentalAgency: true,
+        rentalRatePerDay: true,
+      },
+      skip,
+      take: limit,
+    }),
+    await prisma.vehicle.count({
+      where,
+    }),
+  ]);
 
   return NextResponse.json(
-    new ApiResponse(200, vehicles, "Vehicles OWN fetched successfully")
+    new ApiResponse(200, vehicles, "Vehicles OWN fetched successfully", {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    })
   );
 });

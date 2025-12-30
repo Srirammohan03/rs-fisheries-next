@@ -1,9 +1,14 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import axios, { AxiosError } from "axios";
 import { ColumnDef } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -28,9 +33,10 @@ import {
 import { useRouter } from "next/navigation";
 import EditOwnVehicleDialog from "./EditOwnVehicleDialog";
 import { EllipsisVertical, Eye } from "lucide-react";
-import { Vehicle } from "./forms/types";
+import { PaginatedResponse, Vehicle } from "./forms/types";
 import DeleteDialog from "./DeleteDialog";
 import { toast } from "sonner";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const VehicleActions = ({ vehicle }: { vehicle: Vehicle }) => {
   const router = useRouter();
@@ -179,65 +185,49 @@ const columns: ColumnDef<Vehicle>[] = [
 ];
 
 export function OwnVehicleTable() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["own-vehicles"],
-    queryFn: async () => {
-      const { data: res } = await axios.get("/api/vehicles/own");
-      return res.data as Vehicle[];
-    },
-  });
+  const [page, setPage] = useState<number>(1);
+  const limit = 10;
 
   const [filters, setFilters] = useState({
     search: "",
     fuelType: "ALL",
     assigned: "ALL",
-    sortBy: "NONE",
+    sortBy: "NEWEST",
   });
 
-  const filtered = useMemo(() => {
-    if (!data) return [];
-    let list = [...data];
+  const depouncedSearch = useDebouncedValue<string>(filters.search, 400);
 
-    const s = filters.search.trim().toLowerCase();
-
-    if (s) {
-      list = list.filter((v: any) => {
-        return (
-          v.vehicleNumber?.toLowerCase().includes(s) ||
-          v.manufacturer?.toLowerCase().includes(s) ||
-          v.assignedDriver?.name?.toLowerCase().includes(s)
-        );
+  const { data, isLoading } = useQuery<PaginatedResponse<Vehicle>>({
+    queryKey: [
+      "own-vehicles",
+      page,
+      limit,
+      depouncedSearch,
+      filters.fuelType,
+      filters.assigned,
+      filters.sortBy,
+    ],
+    queryFn: async () => {
+      const { data: res } = await axios.get("/api/vehicles/own", {
+        params: {
+          page,
+          limit,
+          search: depouncedSearch,
+          fuelType: filters.fuelType,
+          assigned: filters.assigned,
+          sortBy: filters.sortBy,
+        },
       });
-    }
+      return res;
+    },
+    placeholderData: keepPreviousData,
+  });
 
-    list = list.filter((v: any) =>
-      filters.fuelType === "ALL" ? true : v.fuelType === filters.fuelType
-    );
+  useEffect(() => {
+    setPage(1);
+  }, [filters.search, filters.fuelType, filters.assigned, filters.sortBy]);
 
-    list = list.filter((v: any) => {
-      if (filters.assigned === "ALL") return true;
-      if (filters.assigned === "ASSIGNED") return !!v.assignedDriver;
-      if (filters.assigned === "AVAILABLE") return !v.assignedDriver;
-      return true;
-    });
-
-    if (filters.sortBy === "NEWEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt ?? 0).getTime() -
-          new Date(a.createdAt ?? 0).getTime()
-      );
-    }
-    if (filters.sortBy === "OLDEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(a.createdAt ?? 0).getTime() -
-          new Date(b.createdAt ?? 0).getTime()
-      );
-    }
-
-    return list;
-  }, [data, filters]);
+  const vehicles = data?.data ?? [];
 
   if (isLoading) {
     return <div className="py-10 text-center text-slate-500">Loading...</div>;
@@ -261,7 +251,7 @@ export function OwnVehicleTable() {
               search: "",
               assigned: "ALL",
               fuelType: "ALL",
-              sortBy: "NONE",
+              sortBy: "NEWEST",
             })
           }
           className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
@@ -324,7 +314,6 @@ export function OwnVehicleTable() {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="border-slate-200">
-              <SelectItem value="NONE">None</SelectItem>
               <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
               <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
             </SelectContent>
@@ -334,12 +323,12 @@ export function OwnVehicleTable() {
 
       {/* ✅ Mobile Cards */}
       <div className="grid grid-cols-1 gap-3 md:hidden">
-        {filtered.length === 0 ? (
+        {vehicles.length === 0 ? (
           <div className="text-center py-10 text-slate-500">
             No vehicles found
           </div>
         ) : (
-          filtered.map((v) => (
+          vehicles.map((v) => (
             <div
               key={v.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -377,8 +366,34 @@ export function OwnVehicleTable() {
       </div>
 
       {/* ✅ Desktop Table */}
-      <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200">
-        <DataTable columns={columns} data={filtered} />
+      <div className="hidden md:block overflow-x-auto ">
+        <DataTable columns={columns} data={vehicles} />
+        {data?.meta && (
+          <div className="flex items-center justify-between mt-4 px-2">
+            <span className="text-sm text-slate-600">
+              Page {data.meta.page} of {data.meta.totalPages} •{" "}
+              {data.meta.total} vehicles
+            </span>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+
+              <Button
+                variant="outline"
+                disabled={page === data.meta.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
