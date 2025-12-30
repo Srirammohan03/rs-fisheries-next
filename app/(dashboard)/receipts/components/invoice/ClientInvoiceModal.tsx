@@ -34,7 +34,6 @@ export function ClientInvoiceModal({
 }: Props) {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [billTo, setBillTo] = useState("");
-  const [shipTo, setShipTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [existingInvoiceNo, setExistingInvoiceNo] = useState<string | null>(
     null
@@ -45,6 +44,7 @@ export function ClientInvoiceModal({
 
     setExistingInvoiceNo(null);
     setInvoiceNo("");
+    setBillTo("");
 
     (async () => {
       try {
@@ -55,19 +55,16 @@ export function ClientInvoiceModal({
 
         const inv = res.data.invoice;
 
-        // Existing invoice → reuse number
+        // Existing invoice → reuse number and fill Bill To
         setInvoiceNo(inv.invoiceNo);
         setExistingInvoiceNo(inv.invoiceNo);
         setBillTo(inv.billTo ?? "");
-        setShipTo(inv.shipTo ?? "");
       } catch (err: any) {
-        // 2️⃣ No invoice → preview next invoice number
+        // 2️⃣ No invoice → generate next invoice number
         if (err?.response?.status === 404) {
           const next = await axios.get("/api/invoices/next-number");
-
           setInvoiceNo(next.data.invoiceNumber);
           setBillTo("");
-          setShipTo("");
         } else {
           console.error(err);
         }
@@ -76,8 +73,8 @@ export function ClientInvoiceModal({
   }, [open, paymentId]);
 
   const saveInvoice = async () => {
-    if (!billTo.trim() || !shipTo.trim()) {
-      alert("Please fill both Bill To and Ship To");
+    if (!billTo.trim()) {
+      alert("Please fill Bill To address");
       return;
     }
 
@@ -87,6 +84,7 @@ export function ClientInvoiceModal({
       let finalInvoiceNo = invoiceNo;
 
       if (!existingInvoiceNo) {
+        // Reserve new invoice number
         const reserve = await axios.post("/api/invoices/next-number");
         finalInvoiceNo = reserve.data.invoiceNumber;
       }
@@ -97,7 +95,7 @@ export function ClientInvoiceModal({
         clientName,
         invoiceNo: finalInvoiceNo,
         billTo: billTo.trim(),
-        shipTo: shipTo.trim(),
+        // shipTo removed – no longer sent to backend
         hsn: "0302", // Fixed HSN for fish sales
         gstPercent: 0, // Common GST rate for clients
       });
@@ -134,26 +132,14 @@ export function ClientInvoiceModal({
             </div>
           </div>
 
-          {/* Bill To */}
+          {/* Bill To only */}
           <div>
             <Label>Bill To (Buyer)</Label>
             <Textarea
-              rows={6}
-              placeholder="Client Company Name&#10;Address Line 1&#10;Address Line 2&#10;City, State - PIN&#10;GSTIN: XXAAAAA0000X0XX"
+              rows={8}
+              placeholder="Client Company Name\nAddress Line 1\nAddress Line 2\nCity, State - PIN\nGSTIN: XXAAAAA0000X0XX"
               value={billTo}
               onChange={(e) => setBillTo(e.target.value)}
-              className="resize-none font-mono text-sm"
-            />
-          </div>
-
-          {/* Ship To */}
-          <div>
-            <Label>Consignee (Ship To)</Label>
-            <Textarea
-              rows={6}
-              placeholder="Same as Bill To or different shipping address"
-              value={shipTo}
-              onChange={(e) => setShipTo(e.target.value)}
               className="resize-none font-mono text-sm"
             />
           </div>
@@ -162,7 +148,7 @@ export function ClientInvoiceModal({
         <div className="mt-8">
           <Button
             onClick={saveInvoice}
-            disabled={saving || !invoiceNo || !billTo.trim() || !shipTo.trim()}
+            disabled={saving || !invoiceNo || !billTo.trim()}
             className="w-full"
             size="lg"
           >

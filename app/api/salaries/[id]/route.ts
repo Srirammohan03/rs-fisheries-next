@@ -35,7 +35,7 @@ export const PUT = apiHandler(async (req: Request, context: any) => {
     data: updatedData,
     include: {
       user: {
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, employeeId: true },
       },
     },
   });
@@ -74,7 +74,7 @@ export const GET = apiHandler(async (req: Request, context: any) => {
     where: { id },
     include: {
       user: {
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, employeeId: true },
       },
     },
   });

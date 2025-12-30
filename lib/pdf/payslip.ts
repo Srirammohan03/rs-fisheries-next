@@ -2,17 +2,17 @@
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
-// import { EmployeeReceipt } from "@/types/receipts";
 import {
   safeText,
   formatDate,
   formatAmount,
   amountToWords,
   drawCompanyHeader,
+  loadImageAsBase64,
 } from "@/lib/pdf-utils";
 import { EmployeeReceipt } from "../receipts";
 
-export const generatePayslipPDF = (receipt: EmployeeReceipt) => {
+export const generatePayslipPDF = async (receipt: EmployeeReceipt): Promise<void> => {
   try {
     const r = receipt;
 
@@ -28,8 +28,16 @@ export const generatePayslipPDF = (receipt: EmployeeReceipt) => {
     doc.setLineWidth(0.8);
     doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
+    /* ================= LOAD LOGO ================= */
+    let logoDataUrl: string | null = null;
+    try {
+      logoDataUrl = await loadImageAsBase64("/assets/favicon.png"); // Place your logo here
+    } catch (e) {
+      console.warn("Logo failed to load:", e);
+    }
+
     /* ================= HEADER ================= */
-    drawCompanyHeader(doc, left, right);
+    await drawCompanyHeader(doc, left, right, logoDataUrl);
 
     /* ================= TITLE ================= */
     doc.setFont("helvetica", "bold");
@@ -47,21 +55,23 @@ export const generatePayslipPDF = (receipt: EmployeeReceipt) => {
 
     /* ================= EMPLOYEE DETAILS ================= */
     let y = 96;
-    const labelGap = 45;
+    const labelGap = 50;
 
-    const detailRow = (label: string, value?: string | null) => {
+    const detailRow = (label: string, value?: string | null | number) => {
       doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
       doc.text(label, left, y);
+
       doc.setFont("helvetica", "bold");
-      doc.text(safeText(value), left + labelGap, y);
+      doc.text(safeText(String(value)), left + labelGap, y);
       y += 10;
     };
 
-    detailRow("Role", r.employee?.designation);
-    detailRow("Payment Mode", r.paymentMode);
-    detailRow("Reference", r.reference);
+    detailRow("Role / Designation", r.employee?.designation ?? "—");
+    detailRow("Payment Mode", r.paymentMode ?? "—");
+    detailRow("Reference", r.reference ?? "—");
 
-    /* ================= EARNINGS ================= */
+    /* ================= EARNINGS SECTION ================= */
     y += 8;
     doc.setLineWidth(0.4);
     doc.line(left, y, right, y);
@@ -71,69 +81,61 @@ export const generatePayslipPDF = (receipt: EmployeeReceipt) => {
     doc.setFontSize(13);
     doc.text("EARNINGS", left, y);
 
-    y += 10;
-    doc.setFontSize(11);
+    y += 12;
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
     doc.text("Basic Salary", left, y);
     doc.setFont("helvetica", "bold");
-    doc.text(`Rs. ${formatAmount(r.amount)}`, right, y, {
-      align: "right",
-    });
+    doc.text(`Rs. ${formatAmount(r.amount)}`, right, y, { align: "right" });
 
     /* ================= NET PAY ================= */
-    y += 12;
+    y += 15;
     doc.setLineWidth(0.6);
     doc.line(left, y, right, y);
 
-    y += 12;
+    y += 15;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.text("NET PAY", left, y);
-    doc.text(`Rs. ${formatAmount(r.amount)}`, right, y, {
-      align: "right",
-    });
+    doc.text(`Rs. ${formatAmount(r.amount)}`, right, y, { align: "right" });
 
     /* ================= AMOUNT IN WORDS ================= */
-    y += 14;
+    y += 15;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     doc.text(`Amount in words: ${amountToWords(r.amount)}`, left, y);
 
     /* ================= TERMS & CONDITIONS ================= */
-    y += 18;
+    y += 20;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("Terms & Conditions", left, y);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text(
-      [
-        "1. This payslip is issued for salary payment only.",
-        "2. Salary once paid will not be refundable under any circumstances.",
-      ],
-      left + 2,
-      y + 8,
-      { lineHeightFactor: 1.6 }
-    );
+    const terms = [
+      "1. This payslip is issued for salary payment only.",
+      "2. Salary once paid will not be refundable under any circumstances.",
+    ];
+    doc.text(terms, left + 2, y + 8, { lineHeightFactor: 1.6 });
 
     /* ================= FOOTER ================= */
     const signY = pageHeight - margin - 30;
+    doc.setLineWidth(0.4);
     doc.line(right - 80, signY, right, signY);
     doc.setFontSize(10);
     doc.text("Authorized Signature", right - 80, signY + 6);
 
-    doc.text(
-      "Thank you for your Service!",
-      pageWidth / 2,
-      pageHeight - margin - 10,
-      { align: "center" }
-    );
+    doc.setFont("helvetica", "italic");
+    doc.text("Thank you for your service!", pageWidth / 2, pageHeight - margin - 10, {
+      align: "center",
+    });
 
+    // Save and open
     doc.save(`payslip-${safeText(r.employeeName)}.pdf`);
     window.open(doc.output("bloburl"), "_blank");
   } catch (err) {
-    console.error(err);
+    console.error("Failed to generate payslip:", err);
     toast.error("Failed to generate payslip");
   }
 };

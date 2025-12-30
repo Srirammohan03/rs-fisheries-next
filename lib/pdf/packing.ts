@@ -2,17 +2,17 @@
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
-// import { PackingReceipt } from "@/types/receipts";
 import {
     safeText,
     formatDate,
     formatAmount,
     amountToWords,
     drawCompanyHeader,
+    loadImageAsBase64,
 } from "@/lib/pdf-utils";
 import { PackingReceipt } from "../receipts";
 
-export const generatePackingPDF = (receipt: PackingReceipt) => {
+export const generatePackingPDF = async (receipt: PackingReceipt) => {
     try {
         const doc = new jsPDF("p", "mm", "a4");
 
@@ -28,8 +28,19 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
         doc.setLineWidth(0.8);
         doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
+        /* ================= LOAD LOGO ================= */
+        let logoDataUrl: string | null = null;
+        try {
+            logoDataUrl = await loadImageAsBase64("/assets/favicon.png"); // Change to your actual file
+            if (!logoDataUrl) {
+                console.warn("Logo load returned null (fetch failed or invalid image)");
+            }
+        } catch (e) {
+            console.warn("Logo loading error:", e);
+        }
+
         /* ================= HEADER ================= */
-        drawCompanyHeader(doc, left, right);
+        await drawCompanyHeader(doc, left, right, logoDataUrl);
 
         /* ================= TITLE ================= */
         doc.setFont("helvetica", "bold");
@@ -59,10 +70,8 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
         doc.setLineWidth(0.35);
         doc.rect(left, boxTop, width, rowH * rows);
 
-        // vertical divider
         doc.line(left + half, boxTop, left + half, boxTop + rowH * rows);
 
-        // horizontal dividers
         for (let i = 1; i < rows; i++) {
             doc.line(left, boxTop + rowH * i, right, boxTop + rowH * i);
         }
@@ -71,7 +80,7 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
             col: "L" | "R",
             row: number,
             label: string,
-            value?: string | null
+            value?: string | null | number
         ) => {
             const x = col === "L" ? left : left + half;
             const y = boxTop + row * rowH + 11;
@@ -80,7 +89,7 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
             doc.text(label, x + pad, y);
 
             doc.setFont("helvetica", "bold");
-            doc.text(safeText(value), x + half - pad, y, { align: "right" });
+            doc.text(safeText(String(value)), x + half - pad, y, { align: "right" });
         };
 
         cell("L", 0, "Party Name", receipt.partyName);
@@ -94,14 +103,12 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
         cell("L", 1, "Vehicle No", receipt.vehicleNo);
         cell("R", 1, "Temperature", `${receipt.temperature} °C`);
 
-        cell("L", 2, "No. of Workers", String(receipt.workers));
+        cell("L", 2, "No. of Workers", receipt.workers);
         cell(
             "R",
             2,
             "Payment Mode",
-            receipt.paymentMode === "CHEQUE"
-                ? "Cheque"
-                : receipt.paymentMode
+            receipt.paymentMode === "CHEQUE" ? "Cheque" : receipt.paymentMode
         );
 
         cell("L", 3, "Reference", receipt.reference);
@@ -119,8 +126,10 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
         doc.setFontSize(14);
         doc.text("TOTAL AMOUNT", left + 10, totalTextY);
 
+        const amount = receipt.totalAmount ?? receipt.amount ?? 0;
+
         doc.text(
-            `Rs. ${formatAmount(receipt.amount)}`,
+            `Rs. ${formatAmount(amount)}`,
             right - 10,
             totalTextY,
             { align: "right" }
@@ -131,7 +140,7 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
         doc.setFontSize(11);
         doc.setFont("helvetica", "normal");
         doc.text(
-            `Amount in words: ${amountToWords(receipt.amount)}`,
+            `Amount in words: ${amountToWords(amount)}`,
             left,
             y
         );
@@ -169,7 +178,7 @@ export const generatePackingPDF = (receipt: PackingReceipt) => {
         doc.save(`packing-receipt-${safeText(receipt.billNo)}.pdf`);
         window.open(doc.output("bloburl"), "_blank");
     } catch (error) {
-        console.error(error);
+        console.error("Packing PDF Error:", error);
         toast.error("Failed to generate packing receipt");
     }
 };

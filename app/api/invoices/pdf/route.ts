@@ -107,8 +107,8 @@ export async function GET(req: NextRequest) {
             vendorStateCode: "",
             vendorEmail: "",
 
-            billTo: inv.billTo,
-            shipTo: inv.shipTo,
+            billTo: "",
+            shipTo: "",
 
             hsn: inv.hsn,
             gstPercent: Number(inv.gstPercent),

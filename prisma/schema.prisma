@@ -396,12 +396,12 @@ model PackingAmount {
 }
 
 model InvoiceCounter {
-  id            Int    @id @default(1)
-  count         Int    @default(0)
-  packingCount  Int    @default(0)
+  id            Int     @id @default(1)
+  count         Int     @default(0)
+  packingCount  Int     @default(0)
   financialYear String?
   packingYear   Int?
-  invoiceCount  Int    @default(0)
+  invoiceCount  Int     @default(0)
 }
 
 model Invoice {
@@ -461,26 +461,20 @@ model VendorInvoice {
 }
 
 model ClientInvoice {
-  id         String @id @default(uuid())
-  paymentId  String @unique
-  clientId   String
-  clientName String
-
-  invoiceNo   String   @unique
-  invoiceDate DateTime
-
-  billTo String
-  shipTo String
-
-  hsn        String @default("0302")
-  gstPercent Float  @default(5)
-
+  id           String   @id @default(uuid())
+  paymentId    String   @unique // ← This must be present
+  clientId     String
+  clientName   String
+  invoiceNo    String   @unique
+  invoiceDate  DateTime
+  billTo       String
+  hsn          String   @default("0302")
+  gstPercent   Float    @default(5)
   taxableValue Float
   gstAmount    Float
   totalAmount  Float
-
-  isFinalized Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  isFinalized  Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   payment ClientPayment @relation(fields: [paymentId], references: [id])
 

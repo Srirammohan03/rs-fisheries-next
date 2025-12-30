@@ -6,16 +6,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const { paymentId, clientId, clientName, invoiceNo, billTo, shipTo } = body;
+    const { paymentId, clientId, clientName, invoiceNo, billTo } = body;
 
-    if (
-      !paymentId ||
-      !invoiceNo ||
-      !clientId ||
-      !clientName ||
-      !billTo ||
-      !shipTo
-    ) {
+    // Removed shipTo from required fields
+    if (!paymentId || !invoiceNo || !clientId || !clientName || !billTo) {
       return NextResponse.json(
         { message: "Missing required fields" },
         { status: 400 }
@@ -47,7 +41,7 @@ export async function POST(req: NextRequest) {
         clientName,
         invoiceNo,
         billTo,
-        shipTo,
+        // shipTo removed from update
         hsn,
         gstPercent,
         taxableValue,
@@ -62,7 +56,7 @@ export async function POST(req: NextRequest) {
         invoiceNo,
         invoiceDate: payment.date || new Date(),
         billTo,
-        shipTo,
+        // shipTo removed from create
         hsn,
         gstPercent,
         taxableValue,

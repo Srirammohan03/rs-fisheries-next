@@ -1,66 +1,79 @@
 // lib/pdf-utils.ts
 import jsPDF from "jspdf";
 
-export const safeText = (v?: string | null) => v ?? "—";
+export const safeText = (v?: string | null): string => v ?? "—";
 
-export const formatDate = (date?: string | Date | null) => {
+export const formatDate = (date?: string | Date | null): string => {
     if (!date) return "N/A";
     return new Date(date).toLocaleDateString("en-IN");
 };
 
-export const formatAmount = (value: number) =>
-    value.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+export const formatAmount = (value?: number | null): string => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "0";
+    return num.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+};
 
-export const amountToWords = (amount: number) => {
+export const amountToWords = (amount?: number | null): string => {
+    const num = Math.floor(Number(amount) || 0);
+    if (num === 0) return "Zero only";
+
     const words = require("number-to-words");
     return (
-        words.toWords(amount).replace(/^\w/, (c: string) => c.toUpperCase()) +
-        " only"
+        words.toWords(num).replace(/^\w/, (c: string) => c.toUpperCase()) + " only"
     );
 };
 
-export const drawCompanyHeader = (
+// Async header — supports logo via base64
+export const drawCompanyHeader = async (
     doc: jsPDF,
     left: number,
-    right: number
-) => {
-    try {
-        doc.addImage("/favicon.jpg", "JPEG", left, 18, 30, 30);
-    } catch { }
+    right: number,
+    logoDataUrl?: string | null
+): Promise<void> => {
+    if (logoDataUrl) {
+        try {
+            const format = logoDataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+            doc.addImage(logoDataUrl, format, left, 18, 30, 30);
+        } catch (e) {
+            console.warn("Failed to render logo:", e);
+        }
+    }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("GODAVARI STEELS", right, 24, { align: "right" });
+    doc.text("RS FISHERIES PVT LTD", right, 24, { align: "right" });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text(
         [
-            "D.No 26-2-1272, Shankaran Colony",
-            "Near Ayyappa Temple, GNT Road",
-            "Nellore - 524004",
-            "Phone: +91 98765 43210",
-            "Email: info@rsfisheries.com",
+            "Hyderabad, Telangana - 500072",
+            "Phone: +91 40 1234 5678",
+            "Email: accounts@rsfisheries.com",
         ],
         right,
         30,
         { align: "right", lineHeightFactor: 1.45 }
     );
 };
+
 export const loadImageAsBase64 = async (url: string): Promise<string | null> => {
     try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) return null;
 
         const blob = await res.blob();
-        return await new Promise((resolve) => {
+        return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
             reader.readAsDataURL(blob);
         });
     } catch {
         return null;
     }
 };
-export const isPdfFile = (url: string) =>
+
+export const isPdfFile = (url: string): boolean =>
     url.toLowerCase().endsWith(".pdf");

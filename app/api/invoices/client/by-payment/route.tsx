@@ -1,3 +1,4 @@
+// app\api\invoices\client\by-payment\route.tsx
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 

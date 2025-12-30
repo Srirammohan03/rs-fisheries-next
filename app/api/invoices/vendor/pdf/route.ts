@@ -41,29 +41,23 @@ export async function GET(req: NextRequest) {
             console.error("QR generation failed:", e);
         }
 
-        const buf = await buildVendorInvoicePDF(jsPDF, {
-            invoiceNo: invoice.invoiceNo,
-            invoiceDate: invoice.invoiceDate.toISOString(),
-            vendorName: invoice.vendorName,
-            // billTo: invoice.billTo,
-            // shipTo: invoice.shipTo,
-            description: invoice.description ?? undefined,
-            hsn: invoice.hsn,
-            gstPercent: Number(invoice.gstPercent),
-            taxableValue: Number(invoice.taxableValue),
-            gstAmount: Number(invoice.gstAmount),
-            totalAmount: Number(invoice.totalAmount),
-            qrDataUrl, // This will now be the full URL QR
-            items: [
-                {
-                    description: invoice.description ?? "Goods / Service",
-                    hsn: invoice.hsn,
-                    qty: 1,
-                    uom: "NOS",
-                    amount: Number(invoice.taxableValue),
-                },
-            ],
-        });
+        const buf = await buildVendorInvoicePDF(
+            jsPDF,
+            {
+                invoiceNo: invoice.invoiceNo,
+                invoiceDate: invoice.invoiceDate.toISOString(),
+                vendorName: invoice.vendorName,
+                description: invoice.description ?? undefined,
+                hsn: invoice.hsn,
+                gstPercent: Number(invoice.gstPercent),
+                taxableValue: Number(invoice.taxableValue),
+                gstAmount: Number(invoice.gstAmount),
+                totalAmount: Number(invoice.totalAmount),
+            },
+            {
+                qrDataUrl, // This will now be the full URL QR
+            }
+        );
 
         return new NextResponse(buf, {
             headers: {

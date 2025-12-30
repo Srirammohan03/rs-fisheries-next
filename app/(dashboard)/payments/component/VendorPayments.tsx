@@ -255,8 +255,19 @@ export function VendorPayments() {
     mutationFn: (payload: any) => axios.post("/api/payments/vendor", payload),
     onSuccess: () => {
       toast.success("Payment saved successfully!");
+
+      // ✅ Critical: Invalidate the vendor list query
+      queryClient.invalidateQueries({ queryKey: ["vendors-with-due"] });
       queryClient.invalidateQueries({ queryKey: ["vendor-payments"] });
+
+      // Optional but recommended
+      queryClient.invalidateQueries({ queryKey: ["former-loading"] });
+      queryClient.invalidateQueries({ queryKey: ["agent-loading"] });
+
+      // Reset form and selection
       resetForm();
+      setVendorId("");
+      setPaymentMode("cash");
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || "Failed to save payment");
