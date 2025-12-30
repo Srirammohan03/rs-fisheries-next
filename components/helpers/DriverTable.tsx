@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import axios from "axios";
 import { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
@@ -19,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { DriverDialog } from "./AddDriverDialog";
 import DeleteDialog from "./DeleteDialog";
-import { url } from "inspector/promises";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +31,15 @@ import {
 } from "../ui/dropdown-menu";
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenuItem } from "@radix-ui/react-dropdown-menu";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { PaginatedResponse } from "./forms/types";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "../ui/pagination";
 
 export type DriverRow = {
   id: string;
@@ -51,18 +64,39 @@ type DriverTableProps = {
 export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
   const queryClient = useQueryClient();
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["drivers"],
-    queryFn: async () => {
-      const { data: res } = await axios.get("/api/driver");
-      return res.data as DriverRow[];
-    },
-  });
+  const [page, setPage] = useState<number>(1);
+  const limit = 1;
 
   const [filters, setFilters] = useState({
     search: "",
     assigned: "ALL",
-    sortBy: "NONE",
+    sortBy: "NEWEST",
+  });
+  const debouncedSearch = useDebouncedValue(filters.search, 400);
+  const { data, isLoading, isError, refetch } = useQuery<
+    PaginatedResponse<DriverRow>
+  >({
+    queryKey: [
+      "drivers",
+      page,
+      limit,
+      filters.assigned,
+      debouncedSearch,
+      filters.sortBy,
+    ],
+    queryFn: async () => {
+      const { data: res } = await axios.get("/api/driver", {
+        params: {
+          page,
+          limit,
+          search: debouncedSearch,
+          assigned: filters.assigned,
+          sortBy: filters.sortBy,
+        },
+      });
+      return res;
+    },
+    placeholderData: keepPreviousData,
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,49 +128,7 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
     deleteMutation.mutate(deletedId!);
   };
 
-  const filtered = useMemo(() => {
-    if (!data) return [];
-
-    let list = [...data];
-    const s = filters.search.trim().toLowerCase();
-
-    if (s) {
-      list = list.filter((d: any) => {
-        return (
-          d.name?.toLowerCase().includes(s) ||
-          d.phone?.toLowerCase().includes(s) ||
-          d.licenseNumber?.toLowerCase().includes(s) ||
-          d.aadharNumber?.toLowerCase().includes(s) ||
-          d.assignedVehicle?.vehicleNumber?.toLowerCase().includes(s)
-        );
-      });
-    }
-
-    list = list.filter((d: any) => {
-      if (filters.assigned === "ALL") return true;
-      if (filters.assigned === "ASSIGNED") return !!d.assignedVehicle;
-      if (filters.assigned === "AVAILABLE") return !d.assignedVehicle;
-      return true;
-    });
-
-    if (filters.sortBy === "NEWEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt ?? 0).getTime() -
-          new Date(a.createdAt ?? 0).getTime()
-      );
-    }
-
-    if (filters.sortBy === "OLDEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(a.createdAt ?? 0).getTime() -
-          new Date(b.createdAt ?? 0).getTime()
-      );
-    }
-
-    return list;
-  }, [data, filters]);
+  const drivers = data?.data || [];
 
   const columns: ColumnDef<DriverRow>[] = [
     { accessorKey: "name", header: "Name" },
@@ -304,7 +296,7 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
               setFilters({
                 search: "",
                 assigned: "ALL",
-                sortBy: "NONE",
+                sortBy: "NEWEST",
               })
             }
             className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
@@ -361,7 +353,6 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="border-slate-200">
-              <SelectItem value="NONE">None</SelectItem>
               <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
               <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
             </SelectContent>
@@ -369,202 +360,62 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
         </div>
       </div>
 
-      {/* Mobile Cards */}
-      <div className="grid grid-cols-1 gap-3 md:hidden">
-        {filtered.length === 0 ? (
-          <div className="text-center py-10 text-slate-500">
-            No drivers found
-          </div>
-        ) : (
-          filtered.map((d) => {
-            const vehicle = d.assignedVehicle?.vehicleNumber;
-
-            return (
-              <div
-                key={d.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-base font-extrabold text-slate-900 truncate">
-                      {d.name}
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Phone: <span className="font-semibold">{d.phone}</span>
-                    </div>
-
-                    <div className="mt-1 text-sm text-slate-600">
-                      License:{" "}
-                      <span className="font-semibold">{d.licenseNumber}</span>
-                    </div>
-
-                    <div className="mt-1 text-sm text-slate-600">
-                      Aadhar:{" "}
-                      <span className="font-semibold">{d.aadharNumber}</span>
-                    </div>
-
-                    <div className="mt-1 text-sm text-slate-600">
-                      Age: <span className="font-semibold">{d.age}</span>
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 text-right">
-                    {vehicle ? (
-                      <Badge
-                        variant="outline"
-                        className="text-green-700 border-green-600"
-                      >
-                        {vehicle}
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="text-red-700 border-red-600"
-                      >
-                        None
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                  <div className="font-semibold text-slate-700">Address</div>
-                  <div className="mt-1">{d.address || "-"}</div>
-                </div>
-
-                {/* aadhar Proof in mobile */}
-                {d.aadharProof && (
-                  <div className="mt-3">
-                    <div className="font-semibold text-slate-700 mb-2">
-                      Identity Proof
-                    </div>
-                    {(() => {
-                      const isPdf = d.aadharProof
-                        .toLowerCase()
-                        .endsWith(".pdf");
-                      if (isPdf) {
-                        return (
-                          <div className="p-4 border rounded-lg bg-slate-50 flex items-center justify-between">
-                            <span className="font-medium">PDF Document</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                window.open(
-                                  d.aadharProof!,
-                                  "_blank",
-                                  "noopener,noreferrer"
-                                )
-                              }
-                            >
-                              View PDF
-                            </Button>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="space-y-4">
-                          <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() =>
-                              window.open(
-                                d.aadharProof!,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                            }
-                          >
-                            View Image
-                          </Button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* license Proof in mobile */}
-                {d.licenseProof && (
-                  <div className="mt-3">
-                    <div className="font-semibold text-slate-700 mb-2">
-                      Identity Proof
-                    </div>
-                    {(() => {
-                      const isPdf = d.licenseProof
-                        .toLowerCase()
-                        .endsWith(".pdf");
-                      if (isPdf) {
-                        return (
-                          <div className="p-4 border rounded-lg bg-slate-50 flex items-center justify-between">
-                            <span className="font-medium">PDF Document</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                window.open(
-                                  d.licenseProof!,
-                                  "_blank",
-                                  "noopener,noreferrer"
-                                )
-                              }
-                            >
-                              View PDF
-                            </Button>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="space-y-4">
-                          <Button
-                            variant="outline"
-                            className="w-full"
-                            onClick={() =>
-                              window.open(
-                                d.licenseProof!,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                            }
-                          >
-                            View Image
-                          </Button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Actions in mobile */}
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => onRequestEdit?.(d)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => {
-                      setDeletedId(d.id);
-                      setOpenDeleteDialog(true);
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
       {/* Desktop Table */}
-      <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200">
-        <DataTable columns={columns} data={filtered} />
+      <div className="overflow-x-auto rounded-2xl">
+        <DataTable columns={columns} data={drivers} />
+        {data?.meta && (
+          <div className="flex w-full flex-col items-center justify-between gap-4 border-t py-4 sm:flex-row">
+            <p className="text-sm text-muted-foreground">
+              Page{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.page}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.totalPages}
+              </span>{" "}
+              •{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.total}
+              </span>{" "}
+              vehicles
+            </p>
+            <Pagination className="w-auto mx-0">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) setPage((p) => p - 1);
+                    }}
+                    className={
+                      page === 1
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < data.meta.totalPages) {
+                        setPage((p) => p + 1);
+                      }
+                    }}
+                    className={
+                      page === data.meta.totalPages
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
 
       {/* Reusable Dialog */}

@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import { safeUnlink } from "@/lib/helper";
+import { Prisma } from "@prisma/client";
 
 export const POST = apiHandler(async (req: Request) => {
   const formData = await req.formData();
@@ -126,14 +127,77 @@ export const POST = apiHandler(async (req: Request) => {
   }
 });
 
-export const GET = apiHandler(async () => {
-  const drivers = await prisma.driver.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { assignedVehicle: true },
-  });
+export const GET = apiHandler(async (req: Request) => {
+  const { searchParams } = new URL(req.url);
+
+  const page = Number(searchParams.get("page") ?? 1);
+  const limit = Number(searchParams.get("limit") ?? 10);
+  const search = searchParams.get("search")?.trim() || "";
+  const assigned = searchParams.get("assigned") || "ALL";
+  const sortBy = searchParams.get("sortBy") || "NEWEST";
+
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+
+  if (search) {
+    where.OR = [
+      {
+        name: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        phone: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        assignedVehicle: {
+          vehicleNumber: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      },
+    ];
+  }
+
+  if (assigned === "ASSIGNED") {
+    where.assignedVehicleId = { not: null };
+  }
+
+  if (assigned === "AVAILABLE") {
+    where.assignedVehicleId = null;
+  }
+
+  const orderBy: Prisma.VehicleOrderByWithRelationInput =
+    sortBy === "OLDEST" ? { createdAt: "asc" } : { createdAt: "desc" };
+
+  const [drivers, total] = await Promise.all([
+    prisma.driver.findMany({
+      where,
+      orderBy,
+      include: {
+        assignedVehicle: true,
+      },
+      skip,
+      take: limit,
+    }),
+    prisma.driver.count({
+      where,
+    }),
+  ]);
 
   return NextResponse.json(
-    new ApiResponse(200, drivers, "Drivers fetched successfully")
+    new ApiResponse(200, drivers, "Drivers fetched successfully", {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    })
   );
 });
 

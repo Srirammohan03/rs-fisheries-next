@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { act, useState } from "react";
 
 import { DriverDialog } from "@/components/helpers/AddDriverDialog";
 import { DriverTable } from "@/components/helpers/DriverTable";
@@ -13,6 +13,7 @@ import { DriverRow } from "@/components/helpers/DriverTable";
 export default function Vehicles() {
   const [driverDialogOpen, setDriverDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<DriverRow | null>(null);
+  const [activeTab, setActiveTab] = useState<"OWN" | "RENT" | "DRIVERS">("OWN");
 
   return (
     <div className="space-y-6">
@@ -27,16 +28,24 @@ export default function Vehicles() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Add Vehicle Button */}
-          <div className="[&>button]:bg-[#139BC3] [&>button]:text-white [&>button]:hover:bg-[#1088AA] [&>button]:shadow-sm [&>button]:focus-visible:ring-2 [&>button]:focus-visible:ring-[#139BC3]/40">
-            <VehicleDialog />
+        {activeTab !== "DRIVERS" && (
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Add Vehicle Button */}
+            <div className="[&>button]:bg-[#139BC3] [&>button]:text-white [&>button]:hover:bg-[#1088AA] [&>button]:shadow-sm [&>button]:focus-visible:ring-2 [&>button]:focus-visible:ring-[#139BC3]/40">
+              <VehicleDialog />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Tabs Container */}
-      <Tabs defaultValue="OWN" className="flex flex-col h-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) =>
+          setActiveTab(value as "OWN" | "RENT" | "DRIVERS")
+        }
+        className="flex flex-col h-full"
+      >
         <TabsList className="inline-flex w-fit items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 px-2 py-6 shadow-sm backdrop-blur">
           <TabsTrigger
             value="OWN"

@@ -47,6 +47,19 @@ export interface Vehicle extends OwnFormType {
   } | null;
 }
 
+export interface PaginatedResponse<T> {
+  success: boolean;
+  statusCode: number;
+  message: string;
+  data: T[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export interface Props {
   vehicle: Vehicle;
   open?: boolean;
