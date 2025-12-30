@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import axios from "axios";
 import { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
@@ -26,6 +31,15 @@ import {
 } from "../ui/dropdown-menu";
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenuItem } from "@radix-ui/react-dropdown-menu";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { PaginatedResponse } from "./forms/types";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "../ui/pagination";
 
 export type DriverRow = {
   id: string;
@@ -50,18 +64,39 @@ type DriverTableProps = {
 export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
   const queryClient = useQueryClient();
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["drivers"],
-    queryFn: async () => {
-      const { data: res } = await axios.get("/api/driver");
-      return res.data as DriverRow[];
-    },
-  });
+  const [page, setPage] = useState<number>(1);
+  const limit = 1;
 
   const [filters, setFilters] = useState({
     search: "",
     assigned: "ALL",
-    sortBy: "NONE",
+    sortBy: "NEWEST",
+  });
+  const debouncedSearch = useDebouncedValue(filters.search, 400);
+  const { data, isLoading, isError, refetch } = useQuery<
+    PaginatedResponse<DriverRow>
+  >({
+    queryKey: [
+      "drivers",
+      page,
+      limit,
+      filters.assigned,
+      debouncedSearch,
+      filters.sortBy,
+    ],
+    queryFn: async () => {
+      const { data: res } = await axios.get("/api/driver", {
+        params: {
+          page,
+          limit,
+          search: debouncedSearch,
+          assigned: filters.assigned,
+          sortBy: filters.sortBy,
+        },
+      });
+      return res;
+    },
+    placeholderData: keepPreviousData,
   });
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -93,49 +128,7 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
     deleteMutation.mutate(deletedId!);
   };
 
-  const filtered = useMemo(() => {
-    if (!data) return [];
-
-    let list = [...data];
-    const s = filters.search.trim().toLowerCase();
-
-    if (s) {
-      list = list.filter((d: any) => {
-        return (
-          d.name?.toLowerCase().includes(s) ||
-          d.phone?.toLowerCase().includes(s) ||
-          d.licenseNumber?.toLowerCase().includes(s) ||
-          d.aadharNumber?.toLowerCase().includes(s) ||
-          d.assignedVehicle?.vehicleNumber?.toLowerCase().includes(s)
-        );
-      });
-    }
-
-    list = list.filter((d: any) => {
-      if (filters.assigned === "ALL") return true;
-      if (filters.assigned === "ASSIGNED") return !!d.assignedVehicle;
-      if (filters.assigned === "AVAILABLE") return !d.assignedVehicle;
-      return true;
-    });
-
-    if (filters.sortBy === "NEWEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt ?? 0).getTime() -
-          new Date(a.createdAt ?? 0).getTime()
-      );
-    }
-
-    if (filters.sortBy === "OLDEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(a.createdAt ?? 0).getTime() -
-          new Date(b.createdAt ?? 0).getTime()
-      );
-    }
-
-    return list;
-  }, [data, filters]);
+  const drivers = data?.data || [];
 
   const columns: ColumnDef<DriverRow>[] = [
     { accessorKey: "name", header: "Name" },
@@ -303,7 +296,7 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
               setFilters({
                 search: "",
                 assigned: "ALL",
-                sortBy: "NONE",
+                sortBy: "NEWEST",
               })
             }
             className="border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
@@ -360,7 +353,6 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="border-slate-200">
-              <SelectItem value="NONE">None</SelectItem>
               <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
               <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
             </SelectContent>
@@ -369,8 +361,61 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
       </div>
 
       {/* Desktop Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200">
-        <DataTable columns={columns} data={filtered} />
+      <div className="overflow-x-auto rounded-2xl">
+        <DataTable columns={columns} data={drivers} />
+        {data?.meta && (
+          <div className="flex w-full flex-col items-center justify-between gap-4 border-t py-4 sm:flex-row">
+            <p className="text-sm text-muted-foreground">
+              Page{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.page}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.totalPages}
+              </span>{" "}
+              •{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.total}
+              </span>{" "}
+              vehicles
+            </p>
+            <Pagination className="w-auto mx-0">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) setPage((p) => p - 1);
+                    }}
+                    className={
+                      page === 1
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < data.meta.totalPages) {
+                        setPage((p) => p + 1);
+                      }
+                    }}
+                    className={
+                      page === data.meta.totalPages
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
 
       {/* Reusable Dialog */}
