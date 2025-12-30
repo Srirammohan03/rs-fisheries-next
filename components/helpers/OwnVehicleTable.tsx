@@ -37,6 +37,13 @@ import { PaginatedResponse, Vehicle } from "./forms/types";
 import DeleteDialog from "./DeleteDialog";
 import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "../ui/pagination";
 
 const VehicleActions = ({ vehicle }: { vehicle: Vehicle }) => {
   const router = useRouter();
@@ -322,7 +329,7 @@ export function OwnVehicleTable() {
       </div>
 
       {/* ✅ Mobile Cards */}
-      <div className="grid grid-cols-1 gap-3 md:hidden">
+      {/* <div className="grid grid-cols-1 gap-3 md:hidden">
         {vehicles.length === 0 ? (
           <div className="text-center py-10 text-slate-500">
             No vehicles found
@@ -363,35 +370,62 @@ export function OwnVehicleTable() {
             </div>
           ))
         )}
-      </div>
+      </div> */}
 
       {/* ✅ Desktop Table */}
-      <div className="hidden md:block overflow-x-auto ">
+      <div className=" overflow-x-auto ">
         <DataTable columns={columns} data={vehicles} />
         {data?.meta && (
-          <div className="flex items-center justify-between mt-4 px-2">
-            <span className="text-sm text-slate-600">
-              Page {data.meta.page} of {data.meta.totalPages} •{" "}
-              {data.meta.total} vehicles
-            </span>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-
-              <Button
-                variant="outline"
-                disabled={page === data.meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
+          <div className="flex w-full flex-col items-center justify-between gap-4 border-t py-4 sm:flex-row">
+            <p className="text-sm text-muted-foreground">
+              Page{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.page}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.totalPages}
+              </span>{" "}
+              •{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.total}
+              </span>{" "}
+              vehicles
+            </p>
+            <Pagination className="w-auto mx-0">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) setPage((p) => p - 1);
+                    }}
+                    className={
+                      page === 1
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < data.meta.totalPages) {
+                        setPage((p) => p + 1);
+                      }
+                    }}
+                    className={
+                      page === data.meta.totalPages
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
       </div>

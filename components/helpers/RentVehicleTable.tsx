@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import axios, { AxiosError } from "axios";
 import { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
@@ -27,10 +32,18 @@ import {
 import { useRouter } from "next/navigation";
 import { EllipsisVertical, Eye } from "lucide-react";
 import { UnassignDriverDialog } from "./UnassignDriverDialog";
-import { RentVehicle } from "./forms/types";
+import { PaginatedResponse, RentVehicle } from "./forms/types";
 import EditRentVehicleDialog from "./EditRentVehicleDialog";
 import DeleteDialog from "./DeleteDialog";
 import { toast } from "sonner";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "../ui/pagination";
 
 const columns: ColumnDef<RentVehicle>[] = [
   { accessorKey: "vehicleNumber", header: "Vehicle No" },
@@ -179,63 +192,44 @@ const columns: ColumnDef<RentVehicle>[] = [
 ];
 
 export function RentVehicleTable() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["rent-vehicles"],
-    queryFn: async () => {
-      const { data: res } = await axios.get("/api/vehicles/rent");
-      return res.data as RentVehicle[];
-    },
-  });
+  const [page, setPage] = useState<number>(1);
+  const limit = 10;
 
   const [filters, setFilters] = useState({
     search: "",
     assigned: "ALL",
-    sortBy: "NONE",
+    sortBy: "NEWEST",
   });
-
-  const filtered = useMemo(() => {
-    if (!data) return [];
-    let list = [...data];
-
-    const s = filters.search.trim().toLowerCase();
-    if (s) {
-      list = list.filter((v: any) => {
-        return (
-          v.vehicleNumber?.toLowerCase().includes(s) ||
-          v.rentalAgency?.toLowerCase().includes(s) ||
-          v.assignedDriver?.name?.toLowerCase().includes(s)
-        );
+  const debouncedSearch = useDebouncedValue(filters.search, 400);
+  const { data, isLoading } = useQuery<PaginatedResponse<RentVehicle>>({
+    queryKey: [
+      "rent-vehicles",
+      page,
+      limit,
+      debouncedSearch,
+      filters.assigned,
+      filters.sortBy,
+    ],
+    queryFn: async () => {
+      const { data: res } = await axios.get("/api/vehicles/rent", {
+        params: {
+          page,
+          limit,
+          search: debouncedSearch,
+          assigned: filters.assigned,
+          sortBy: filters.sortBy,
+        },
       });
-    }
-
-    list = list.filter((v: any) => {
-      if (filters.assigned === "ALL") return true;
-      if (filters.assigned === "ASSIGNED") return !!v.assignedDriver;
-      if (filters.assigned === "AVAILABLE") return !v.assignedDriver;
-      return true;
-    });
-
-    if (filters.sortBy === "NEWEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt ?? 0).getTime() -
-          new Date(a.createdAt ?? 0).getTime()
-      );
-    }
-    if (filters.sortBy === "OLDEST") {
-      list.sort(
-        (a: any, b: any) =>
-          new Date(a.createdAt ?? 0).getTime() -
-          new Date(b.createdAt ?? 0).getTime()
-      );
-    }
-
-    return list;
-  }, [data, filters]);
+      return res;
+    },
+    placeholderData: keepPreviousData,
+  });
 
   if (isLoading) {
     return <div className="py-10 text-center text-slate-500">Loading...</div>;
   }
+
+  const vehicles = data?.data ?? [];
 
   return (
     <div className="space-y-4">
@@ -256,7 +250,7 @@ export function RentVehicleTable() {
             setFilters({
               search: "",
               assigned: "ALL",
-              sortBy: "NONE",
+              sortBy: "NEWEST",
             })
           }
           className="w-full sm:w-auto border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
@@ -303,7 +297,6 @@ export function RentVehicleTable() {
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent className="border-slate-200">
-              <SelectItem value="NONE">None</SelectItem>
               <SelectItem value="NEWEST">Newest → Oldest</SelectItem>
               <SelectItem value="OLDEST">Oldest → Newest</SelectItem>
             </SelectContent>
@@ -312,13 +305,13 @@ export function RentVehicleTable() {
       </div>
 
       {/* ✅ Mobile Cards */}
-      <div className="grid grid-cols-1 gap-3 md:hidden">
-        {filtered.length === 0 ? (
+      {/* <div className="grid grid-cols-1 gap-3 md:hidden">
+        {vehicles.length === 0 ? (
           <div className="text-center py-10 text-slate-500">
             No vehicles found
           </div>
         ) : (
-          filtered.map((v) => (
+          vehicles.map((v) => (
             <div
               key={v.id}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -355,11 +348,64 @@ export function RentVehicleTable() {
             </div>
           ))
         )}
-      </div>
+      </div> */}
 
       {/* ✅ Desktop Table */}
-      <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200">
-        <DataTable columns={columns} data={filtered} />
+      <div className="overflow-x-auto">
+        <DataTable columns={columns} data={vehicles} />
+        {data?.meta && (
+          <div className="flex w-full flex-col items-center justify-between gap-4 border-t py-4 sm:flex-row">
+            <p className="text-sm text-muted-foreground">
+              Page{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.page}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.totalPages}
+              </span>{" "}
+              •{" "}
+              <span className="font-medium text-foreground">
+                {data.meta.total}
+              </span>{" "}
+              vehicles
+            </p>
+            <Pagination className="w-auto mx-0">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) setPage((p) => p - 1);
+                    }}
+                    className={
+                      page === 1
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < data.meta.totalPages) {
+                        setPage((p) => p + 1);
+                      }
+                    }}
+                    className={
+                      page === data.meta.totalPages
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </div>
     </div>
   );
