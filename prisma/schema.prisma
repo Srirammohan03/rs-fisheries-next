@@ -24,12 +24,13 @@ model User {
   id       String @id @default(cuid())
   password String
 
+  email String @unique
+
   employeeId String   @unique
   employee   Employee @relation(fields: [employeeId], references: [id])
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  salaries  Salaries[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   packingAmounts  PackingAmount[]
   dispatchCharges DispatchCharge[]
@@ -181,16 +182,6 @@ model ClientItem {
   loading ClientLoading @relation(fields: [clientLoadingId], references: [id], onDelete: Cascade)
 
   @@index([clientLoadingId])
-}
-
-model Salaries {
-  id        String   @id @default(cuid())
-  userId    String
-  month     DateTime
-  amount    Int
-  notes     String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
 }
 
 model VendorPayment {

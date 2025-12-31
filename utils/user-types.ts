@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const UserValidationSchema = z.object({
   employeeId: z.string().min(1, "Please select an employee").uuid(),
-
+  email: z.email().min(1, "Please fill the email"),
   password: z
     .string()
     .optional()
@@ -19,6 +19,6 @@ export interface User {
   id: string;
   employee: Employee;
   employeeId: string;
-
+  email: string;
   createdAt: string;
 }

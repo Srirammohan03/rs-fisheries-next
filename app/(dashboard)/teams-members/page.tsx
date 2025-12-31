@@ -268,7 +268,7 @@ export default function UserPage() {
                           className="hover:bg-slate-50/60"
                         >
                           <TableCell className="text-slate-800">
-                            {user.employee.email}
+                            {user.email}
                           </TableCell>
 
                           <TableCell className="font-medium text-slate-900">
@@ -336,7 +336,7 @@ export default function UserPage() {
         }
         defaultValues={
           mode === "edit" && selectedUser
-            ? { employeeId: selectedUser.employeeId }
+            ? { employeeId: selectedUser.employeeId, email: selectedUser.email }
             : null
         }
       />

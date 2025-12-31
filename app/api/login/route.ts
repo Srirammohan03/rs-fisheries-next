@@ -1,6 +1,5 @@
 // app\api\login\route.ts
 import { NextResponse } from "next/server";
-// import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { createToken } from "@/lib/jwt";
 import prisma from "@/lib/prisma";
@@ -9,28 +8,31 @@ export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
 
-    const employee = await prisma.employee.findUnique({
+    const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        user: true,
+        employee: true,
       },
     });
 
-    if (!employee || !employee.user) {
-      return NextResponse.json({ error: "User not found" }, { status: 400 });
+    if (!user) {
+      return NextResponse.json(
+        { error: "Invalid email or password" },
+        { status: 401 }
+      );
     }
 
-    const valid = await bcrypt.compare(password, employee.user.password);
+    const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
-      return NextResponse.json({ error: "Invalid password" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
 
     // create JWT
     const token = createToken({
-      userId: employee.user.id,
-      employeeId: employee.id,
-      role: mapDesignationToRole(employee.designation),
-      email: employee.email,
+      userId: user.id,
+      employeeId: user.employeeId,
+      role: mapDesignationToRole(user.employee.designation),
+      email: user.email,
     });
 
     const res = NextResponse.json({ message: "Login successful" });
