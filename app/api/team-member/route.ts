@@ -7,9 +7,9 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 
 export const POST = apiHandler(async (req: Request) => {
-  const { employeeId, password } = await req.json();
+  const { employeeId, password, email } = await req.json();
 
-  if (!employeeId || !password)
+  if (!employeeId || !password || !email)
     throw new ApiError(400, "Required Fields are missing");
 
   const existingUser = await prisma.user.findUnique({
@@ -26,6 +26,7 @@ export const POST = apiHandler(async (req: Request) => {
     data: {
       employeeId,
       password: hasedPassowrd,
+      email,
     },
   });
 

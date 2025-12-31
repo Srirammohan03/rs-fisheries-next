@@ -28,7 +28,7 @@ interface Props {
   onClose: () => void;
   onSubmit: (data: UserFormValues) => void;
   mode: "add" | "edit";
-  defaultValues?: { employeeId: string } | null;
+  defaultValues?: { employeeId: string; email: string } | null;
   isLoading: boolean;
 }
 
@@ -44,6 +44,7 @@ export default function UserDialog({
     resolver: zodResolver(UserValidationSchema),
     defaultValues: {
       employeeId: "",
+      email: "",
       password: "",
     },
   });
@@ -67,6 +68,7 @@ export default function UserDialog({
 
       reset({
         employeeId: defaultValues.employeeId,
+        email: defaultValues.email,
         password: "",
       });
 
@@ -74,19 +76,19 @@ export default function UserDialog({
     } else {
       reset({
         employeeId: "",
+        email: "",
         password: "",
       });
       setSelectedEmployee(null);
     }
   }, [open, mode, defaultValues, res?.data, reset]);
 
-  const isSubmitDisabled =
-    isLoading ||
-    (mode === "edit" && (!passwordValue || passwordValue.trim() === ""));
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[560px] rounded-2xl p-0">
+      <DialogContent
+        className="sm:max-w-[560px] rounded-2xl p-0"
+        aria-describedby={undefined}
+      >
         {/* Header */}
         <div className="p-6 border-b">
           <DialogHeader>
@@ -135,14 +137,20 @@ export default function UserDialog({
                     <SelectTrigger
                       className={fieldState.error ? "border-red-500" : ""}
                     >
-                      <SelectValue placeholder="Select employee" />
+                      <SelectValue
+                        placeholder={
+                          selectedEmployee
+                            ? `${selectedEmployee.fullName} (${selectedEmployee.designation})`
+                            : "Select employee"
+                        }
+                      />
                     </SelectTrigger>
 
                     <SelectContent>
                       {res?.data && res.data.length > 0 ? (
                         res.data.map((emp) => (
                           <SelectItem key={emp.id} value={emp.id}>
-                            {emp.fullName} ({emp.email})
+                            {emp.fullName} ({emp.designation})
                           </SelectItem>
                         ))
                       ) : (
@@ -164,25 +172,14 @@ export default function UserDialog({
             />
           </div>
 
-          {/* Employee Details (Read-only) */}
-          {selectedEmployee && (
-            <>
-              <div className="space-y-2">
-                <Label>Employee Name</Label>
-                <Input value={selectedEmployee.fullName} readOnly />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input value={selectedEmployee.email ?? ""} readOnly />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Designation</Label>
-                <Input value={selectedEmployee.designation} readOnly />
-              </div>
-            </>
-          )}
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              {...control.register("email")}
+              placeholder="Enter Email"
+            />
+          </div>
 
           {/* Password */}
           <div className="space-y-2">
@@ -199,14 +196,13 @@ export default function UserDialog({
               {...control.register("password")}
             />
           </div>
-
           {/* Footer */}
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
 
-            <Button type="submit" disabled={isSubmitDisabled}>
+            <Button type="submit" disabled={isLoading}>
               {mode === "add" ? "Create User" : "Update User"}
             </Button>
           </DialogFooter>

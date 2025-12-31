@@ -24,17 +24,45 @@ export const PUT = apiHandler(async (req: Request, context: any) => {
   const { id } = await context.params;
   const body = await req.json();
 
-  if (!id) throw new ApiError(400, "ID is missing");
+  if (!id) {
+    throw new ApiError(400, "User ID is missing");
+  }
 
-  const updateData: any = {};
+  const { email, password } = body;
 
-  if (body.email) updateData.email = body.email;
-  if (body.name) updateData.name = body.name;
-  if (body.role) updateData.role = body.role;
+  const existingUser = await prisma.user.findUnique({
+    where: { id },
+  });
 
-  // ✅ ONLY when password is provided (non-empty)
-  if (typeof body.password === "string" && body.password.trim().length > 0) {
-    updateData.password = await bcrypt.hash(body.password.trim(), 10);
+  if (!existingUser) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const updateData: {
+    email?: string;
+    password?: string;
+  } = {};
+
+  if (typeof email === "string" && email.trim().length > 0) {
+    if (email !== existingUser.email) {
+      const emailExists = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (emailExists) {
+        throw new ApiError(409, "Email already in use");
+      }
+    }
+
+    updateData.email = email.trim();
+  }
+
+  if (typeof password === "string" && password.trim().length > 0) {
+    updateData.password = await bcrypt.hash(password.trim(), 10);
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new ApiError(400, "Nothing to update");
   }
 
   const updatedUser = await prisma.user.update({
@@ -43,7 +71,7 @@ export const PUT = apiHandler(async (req: Request, context: any) => {
   });
 
   return NextResponse.json(
-    new ApiResponse(200, updatedUser, "User updated Successfully")
+    new ApiResponse(200, updatedUser, "User updated successfully")
   );
 });
 
