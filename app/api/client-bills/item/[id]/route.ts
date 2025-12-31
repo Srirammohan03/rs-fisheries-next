@@ -34,6 +34,7 @@ export async function PATCH(
     }
 }
 
+
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -45,13 +46,57 @@ export async function DELETE(
     }
 
     try {
-        await prisma.clientItem.delete({ where: { id } });
-        return NextResponse.json({ success: true, message: "Item deleted" });
-    } catch (error: any) {
-        console.error("DELETE failed:", error);
-        if (error.code === "P2025") {
+        const result = await prisma.$transaction(async (tx) => {
+            const item = await tx.clientItem.findUnique({
+                where: { id },
+                select: { id: true, clientLoadingId: true },
+            });
+
+            if (!item) return null;
+
+            const loadingId = item.clientLoadingId;
+
+            await tx.clientItem.delete({ where: { id } });
+
+            const remaining = await tx.clientItem.count({
+                where: { clientLoadingId: loadingId },
+            });
+
+            if (remaining === 0) {
+                await tx.packingAmount.updateMany({
+                    where: { sourceRecordId: loadingId },
+                    data: { sourceRecordId: null },
+                });
+
+                await tx.dispatchCharge.updateMany({
+                    where: { sourceRecordId: loadingId },
+                    data: { sourceRecordId: null },
+                });
+
+                await tx.clientLoading.delete({ where: { id: loadingId } });
+
+                return { deletedBill: true, loadingId };
+            }
+
+            return { deletedBill: false, loadingId };
+        });
+
+        if (!result) {
             return NextResponse.json({ message: "Item not found" }, { status: 404 });
         }
-        return NextResponse.json({ message: "Delete failed" }, { status: 500 });
+
+        return NextResponse.json({
+            success: true,
+            message: result.deletedBill
+                ? "Item deleted, bill removed (last item)"
+                : "Item deleted",
+            ...result,
+        });
+    } catch (error: any) {
+        console.error("DELETE client item error:", error);
+        return NextResponse.json(
+            { message: "Delete failed", error: error.message },
+            { status: 500 }
+        );
     }
 }

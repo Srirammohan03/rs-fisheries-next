@@ -47,7 +47,6 @@ export async function PATCH(
     }
 }
 
-// DELETE — Permanently delete the item
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ itemId: string }> }
@@ -59,24 +58,112 @@ export async function DELETE(
     }
 
     try {
-        // Try FormerItem first
-        const former = await prisma.formerItem.findUnique({ where: { id: itemId } });
-        if (former) {
-            await prisma.formerItem.delete({ where: { id: itemId } });
-            return NextResponse.json({ success: true, message: "Item deleted" });
-        }
+        const result = await prisma.$transaction(async (tx) => {
+            // 1) Try farmer item
+            const former = await tx.formerItem.findUnique({
+                where: { id: itemId },
+                select: { id: true, formerLoadingId: true },
+            });
 
-        // Then AgentItem
-        const agent = await prisma.agentItem.findUnique({ where: { id: itemId } });
-        if (!agent) {
+            if (former) {
+                const loadingId = former.formerLoadingId;
+
+                await tx.formerItem.delete({ where: { id: itemId } });
+
+                const remaining = await tx.formerItem.count({
+                    where: { formerLoadingId: loadingId },
+                });
+
+                // if no more items, delete bill
+                if (remaining === 0) {
+                    // clean legacy references (optional but safe)
+                    await tx.packingAmount.updateMany({
+                        where: { sourceRecordId: loadingId },
+                        data: { sourceRecordId: null },
+                    });
+
+                    await tx.dispatchCharge.updateMany({
+                        where: { sourceRecordId: loadingId },
+                        data: { sourceRecordId: null },
+                    });
+
+                    await tx.formerLoading.delete({ where: { id: loadingId } });
+
+                    return {
+                        source: "farmer" as const,
+                        deletedBill: true,
+                        loadingId,
+                    };
+                }
+
+                return {
+                    source: "farmer" as const,
+                    deletedBill: false,
+                    loadingId,
+                };
+            }
+
+            // 2) Try agent item
+            const agent = await tx.agentItem.findUnique({
+                where: { id: itemId },
+                select: { id: true, agentLoadingId: true },
+            });
+
+            if (!agent) {
+                return null;
+            }
+
+            const loadingId = agent.agentLoadingId;
+
+            await tx.agentItem.delete({ where: { id: itemId } });
+
+            const remaining = await tx.agentItem.count({
+                where: { agentLoadingId: loadingId },
+            });
+
+            if (remaining === 0) {
+                await tx.packingAmount.updateMany({
+                    where: { sourceRecordId: loadingId },
+                    data: { sourceRecordId: null },
+                });
+
+                await tx.dispatchCharge.updateMany({
+                    where: { sourceRecordId: loadingId },
+                    data: { sourceRecordId: null },
+                });
+
+                await tx.agentLoading.delete({ where: { id: loadingId } });
+
+                return {
+                    source: "agent" as const,
+                    deletedBill: true,
+                    loadingId,
+                };
+            }
+
+            return {
+                source: "agent" as const,
+                deletedBill: false,
+                loadingId,
+            };
+        });
+
+        if (!result) {
             return NextResponse.json({ message: "Item not found" }, { status: 404 });
         }
 
-        await prisma.agentItem.delete({ where: { id: itemId } });
-
-        return NextResponse.json({ success: true, message: "Item deleted" });
+        return NextResponse.json({
+            success: true,
+            message: result.deletedBill
+                ? "Item deleted, bill removed (last item)"
+                : "Item deleted",
+            ...result,
+        });
     } catch (error: any) {
-        console.error("DELETE error:", error);
-        return NextResponse.json({ message: "Delete failed", error: error.message }, { status: 500 });
+        console.error("DELETE vendor item error:", error);
+        return NextResponse.json(
+            { message: "Delete failed", error: error.message },
+            { status: 500 }
+        );
     }
 }

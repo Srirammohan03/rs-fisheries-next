@@ -16,6 +16,7 @@ import {
 import { Edit, Check, X, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import LoadingDeleteDialog from "@/components/helpers/LoadingDeleteDialog";
 
 interface VendorItem {
   id: string;
@@ -96,6 +97,10 @@ export default function VendorBillsPage() {
   // Badges
   const [newFarmerCount, setNewFarmerCount] = useState(0);
   const [newAgentCount, setNewAgentCount] = useState(0);
+
+  const [deleteItemOpen, setDeleteItemOpen] = useState(false);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<UIItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState(false);
 
   // Pagination
   const PAGE_SIZE = 15;
@@ -358,22 +363,57 @@ export default function VendorBillsPage() {
   //     toast.error(error?.response?.data?.message || "Delete failed");
   //   }
   // };
-  const handleDeleteBill = async (row: UIItem) => {
-    if (!confirm("Delete this bill and all its items?")) return;
+  // const handleDeleteBill = async (row: UIItem) => {
+  //   if (!confirm("Delete this bill and all its items?")) return;
 
-    try {
-      if (row.source === "farmer") {
-        await axios.delete(`/api/former-loading/${row.loadingId}`);
-      } else {
-        await axios.delete(`/api/agent-loading/${row.loadingId}`);
-      }
-      await refreshRecords();
-      toast.success("Bill deleted");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Delete failed");
-    }
+  //   try {
+  //     if (row.source === "farmer") {
+  //       await axios.delete(`/api/former-loading/${row.loadingId}`);
+  //     } else {
+  //       await axios.delete(`/api/agent-loading/${row.loadingId}`);
+  //     }
+  //     await refreshRecords();
+  //     toast.success("Bill deleted");
+  //   } catch (err: any) {
+  //     toast.error(err?.response?.data?.message || "Delete failed");
+  //   }
+  // };
+  const openDeleteItemDialog = (row: UIItem) => {
+    setDeleteItemTarget(row);
+    setDeleteItemOpen(true);
   };
 
+  const closeDeleteItemDialog = () => {
+    if (deletingItem) return;
+    setDeleteItemOpen(false);
+    setDeleteItemTarget(null);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!deleteItemTarget?.id) return;
+
+    try {
+      setDeletingItem(true);
+
+      const res = await axios.delete(
+        `/api/vendor-bills/item/${deleteItemTarget.id}`
+      );
+
+      await refreshRecords();
+
+      if (res.data?.deletedBill) {
+        toast.success("Item deleted ✅ Bill also removed (last item)");
+      } else {
+        toast.success("Item deleted");
+      }
+
+      closeDeleteItemDialog();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Delete failed");
+    } finally {
+      setDeletingItem(false);
+    }
+  };
   const exportData = (type: "farmer" | "agent") => {
     const data = records
       .filter((r) => r.source === type)
@@ -612,7 +652,7 @@ export default function VendorBillsPage() {
                               size="sm"
                               variant="ghost"
                               className="text-red-600 hover:bg-red-50"
-                              onClick={() => handleDeleteBill(it)}
+                              onClick={() => openDeleteItemDialog(it)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -791,7 +831,7 @@ export default function VendorBillsPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-red-600 hover:bg-red-50"
-                                  onClick={() => handleDeleteBill(it)}
+                                  onClick={() => openDeleteItemDialog(it)}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -893,6 +933,17 @@ export default function VendorBillsPage() {
           )}
         </Card>
       </div>
+      <LoadingDeleteDialog
+        open={deleteItemOpen}
+        onClose={closeDeleteItemDialog}
+        onConfirm={confirmDeleteItem}
+        loading={deletingItem}
+        title="Delete Item"
+        description={`Delete this item from bill ${
+          deleteItemTarget?.billNo ? `(${deleteItemTarget.billNo})` : ""
+        }? If this is the last item, the bill will be deleted automatically.`}
+        confirmText="Delete Item"
+      />
     </div>
   );
 }
