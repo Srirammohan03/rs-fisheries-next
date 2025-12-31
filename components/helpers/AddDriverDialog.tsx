@@ -276,19 +276,25 @@ export function DriverDialog({
                     onClick={() => {
                       const url = selectedAadharFile
                         ? URL.createObjectURL(selectedAadharFile)
-                        : driver!.aadharProof!;
-                      window.open(url, "_blank");
+                        : driver?.aadharProof;
+
+                      if (url) window.open(url, "_blank");
                     }}
                   >
                     View PDF
                   </Button>
                 </div>
               ) : (
-                <img
-                  src={driver!.aadharProof!}
-                  alt="Current Aadhar proof"
-                  className="max-h-72 rounded-lg border object-contain"
-                />
+                !previewAadharUrl &&
+                !isAadharPdf &&
+                driver?.aadharProof &&
+                !isRemovingAadhar && (
+                  <img
+                    src={driver.aadharProof}
+                    alt="Current Aadhar proof"
+                    className="max-h-72 rounded-lg border object-contain"
+                  />
+                )
               )}
 
               <div className="flex gap-2">
@@ -364,19 +370,25 @@ export function DriverDialog({
                     onClick={() => {
                       const url = selectedLicenseFile
                         ? URL.createObjectURL(selectedLicenseFile)
-                        : driver!.licenseProof!;
-                      window.open(url, "_blank");
+                        : driver?.licenseProof;
+
+                      if (url) window.open(url, "_blank");
                     }}
                   >
                     View PDF
                   </Button>
                 </div>
               ) : (
-                <img
-                  src={driver!.licenseProof!}
-                  alt="Current License proof"
-                  className="max-h-72 rounded-lg border object-contain"
-                />
+                !previewLicenseUrl &&
+                !isLicensePdf &&
+                driver?.licenseProof &&
+                !isRemovingLicense && (
+                  <img
+                    src={driver.licenseProof}
+                    alt="Current License proof"
+                    className="max-h-72 rounded-lg border object-contain"
+                  />
+                )
               )}
 
               <div className="flex gap-2">

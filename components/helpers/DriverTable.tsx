@@ -65,7 +65,7 @@ export function DriverTable({ onRequestEdit }: DriverTableProps = {}) {
   const queryClient = useQueryClient();
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [page, setPage] = useState<number>(1);
-  const limit = 1;
+  const limit = 10;
 
   const [filters, setFilters] = useState({
     search: "",
