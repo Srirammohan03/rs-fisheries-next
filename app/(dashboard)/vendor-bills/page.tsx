@@ -286,7 +286,19 @@ export default function VendorBillsPage() {
   const onChangeField = useCallback(
     (itemId: string, value: string) => {
       setEditing((prev) => {
-        const num = value === "" ? undefined : Number(value);
+        // allow empty input
+        if (value === "") {
+          return {
+            ...prev,
+            [itemId]: { pricePerKg: undefined, totalPrice: undefined },
+          };
+        }
+
+        // ✅ clamp negatives to 0
+        let num = Number(value);
+        if (!Number.isFinite(num)) num = 0;
+        if (num < 0) num = 0;
+
         const item = filteredItems.find((i) => i.id === itemId);
         if (!item) return prev;
 
@@ -294,10 +306,12 @@ export default function VendorBillsPage() {
 
         const updates: Partial<VendorItem> = { pricePerKg: num };
 
-        if (num !== undefined && totalKgs > 0) {
+        if (totalKgs > 0) {
           const gross = totalKgs * num;
           const net = Math.round(gross * 0.95);
           updates.totalPrice = net;
+        } else {
+          updates.totalPrice = 0;
         }
 
         return { ...prev, [itemId]: updates };
@@ -333,15 +347,30 @@ export default function VendorBillsPage() {
     }
   };
 
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm("Delete this item permanently?")) return;
+  // const handleDeleteItem = async (id: string) => {
+  //   if (!confirm("Delete this item permanently?")) return;
+  //   try {
+  //     await axios.delete(`/api/vendor-bills/item/${id}`);
+  //     await refreshRecords();
+  //     toast.success("Deleted");
+  //   } catch (error: any) {
+  //     console.error("Delete error:", error);
+  //     toast.error(error?.response?.data?.message || "Delete failed");
+  //   }
+  // };
+  const handleDeleteBill = async (row: UIItem) => {
+    if (!confirm("Delete this bill and all its items?")) return;
+
     try {
-      await axios.delete(`/api/vendor-bills/item/${id}`);
+      if (row.source === "farmer") {
+        await axios.delete(`/api/former-loading/${row.loadingId}`);
+      } else {
+        await axios.delete(`/api/agent-loading/${row.loadingId}`);
+      }
       await refreshRecords();
-      toast.success("Deleted");
-    } catch (error: any) {
-      console.error("Delete error:", error);
-      toast.error(error?.response?.data?.message || "Delete failed");
+      toast.success("Bill deleted");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Delete failed");
     }
   };
 
@@ -404,7 +433,7 @@ export default function VendorBillsPage() {
               </h2>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
-                <div className="bg-gray-100 rounded-full px-3.5 py-2 flex items-center gap-2 shadow-sm w-full sm:w-auto overflow-x-auto no-scrollbar">
+                <div className="bg-gray-100 rounded-full px-4 py-2 flex items-center gap-2 shadow-sm w-full sm:w-auto overflow-x-auto no-scrollbar">
                   <button
                     onClick={() => handleTabClick("farmer")}
                     className={`relative shrink-0 px-6 sm:px-8 py-2.5 sm:py-3 rounded-full font-medium text-sm transition-all duration-200 ${
@@ -496,7 +525,7 @@ export default function VendorBillsPage() {
                   </SelectContent>
                 </Select>
 
-                <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full sm:w-auto">
                   <Input
                     type="date"
                     value={fromDate}
@@ -509,6 +538,22 @@ export default function VendorBillsPage() {
                     onChange={(e) => setToDate(e.target.value)}
                     className="w-full"
                   />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setSortOrder("newest");
+                      setFromDate("");
+                      setToDate("");
+                      setPage(1);
+                      toast.success("Filters cleared");
+                    }}
+                    className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Clear Filters
+                  </Button>
                 </div>
               </div>
             </div>
@@ -567,7 +612,7 @@ export default function VendorBillsPage() {
                               size="sm"
                               variant="ghost"
                               className="text-red-600 hover:bg-red-50"
-                              onClick={() => handleDeleteItem(it.id)}
+                              onClick={() => handleDeleteBill(it)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -607,12 +652,23 @@ export default function VendorBillsPage() {
                             <Input
                               value={edit.pricePerKg ?? ""}
                               onChange={(e) =>
-                                onChangeField(it.id, e.target.value)
+                                onChangeField(
+                                  it.id,
+                                  Math.max(0, Number(e.target.value)).toString()
+                                )
                               }
+                              onKeyDown={(e) => {
+                                if (
+                                  e.key === "-" ||
+                                  e.key === "e" ||
+                                  e.key === "E"
+                                )
+                                  e.preventDefault();
+                              }}
                               className="mt-2 w-full text-right"
                               type="number"
                               step="0.01"
-                              min="0"
+                              min={0}
                             />
                           ) : (
                             <div className="font-semibold text-gray-900">
@@ -683,12 +739,26 @@ export default function VendorBillsPage() {
                               <Input
                                 value={edit.pricePerKg ?? ""}
                                 onChange={(e) =>
-                                  onChangeField(it.id, e.target.value)
+                                  onChangeField(
+                                    it.id,
+                                    Math.max(
+                                      0,
+                                      Number(e.target.value)
+                                    ).toString()
+                                  )
                                 }
+                                onKeyDown={(e) => {
+                                  if (
+                                    e.key === "-" ||
+                                    e.key === "e" ||
+                                    e.key === "E"
+                                  )
+                                    e.preventDefault();
+                                }}
                                 className="w-24 text-right"
                                 type="number"
                                 step="0.01"
-                                min="0"
+                                min={0}
                               />
                             ) : (
                               <span>{(it.pricePerKg ?? 0).toFixed(2)}</span>
@@ -721,7 +791,7 @@ export default function VendorBillsPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-red-600 hover:bg-red-50"
-                                  onClick={() => handleDeleteItem(it.id)}
+                                  onClick={() => handleDeleteBill(it)}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>

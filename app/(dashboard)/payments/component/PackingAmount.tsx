@@ -44,26 +44,12 @@ export function PackingAmount() {
   // Separate reusable function to load and filter available bills
   const loadBills = async () => {
     setIsLoading(true);
+
     try {
       let allBills: Bill[] = [];
       let usedPackingBillIds = new Set<string>();
 
-      // Fetch all possible bills based on mode
-      if (mode === "loading") {
-        const res = await fetch("/api/client-loading");
-        const json = await res.json();
-        allBills = json.data || [];
-      } else {
-        const [formerRes, agentRes] = await Promise.all([
-          fetch("/api/former-loading"),
-          fetch("/api/agent-loading"),
-        ]);
-        const f = await formerRes.json();
-        const a = await agentRes.json();
-        allBills = [...(f.data || []), ...(a.data || [])];
-      }
-
-      // Fetch all existing PackingAmounts to determine used bills
+      // 1️⃣ Fetch packing amounts first
       const packingRes = await fetch("/api/payments/packing-amount");
       if (packingRes.ok) {
         const packingJson = await packingRes.json();
@@ -76,9 +62,30 @@ export function PackingAmount() {
         });
       }
 
-      // Filter out bills that already have a packing amount
+      // 2️⃣ Fetch ONLY existing loadings
+      if (mode === "loading") {
+        // CLIENT LOADINGS
+        const res = await fetch("/api/client-loading");
+        const json = await res.json();
+        allBills = json.data || [];
+      } else {
+        // UNLOADING = FARMER + AGENT
+        const [formerRes, agentRes] = await Promise.all([
+          fetch("/api/former-loading"),
+          fetch("/api/agent-loading"),
+        ]);
+
+        const formerJson = await formerRes.json();
+        const agentJson = await agentRes.json();
+
+        allBills = [...(formerJson.data || []), ...(agentJson.data || [])];
+      }
+
+      // 3️⃣ Filter out:
+      // ❌ bills already used in packing
+      // ❌ bills that were deleted (not returned by API)
       const availableBills = allBills.filter(
-        (bill) => !usedPackingBillIds.has(bill.id)
+        (bill) => bill?.id && !usedPackingBillIds.has(bill.id)
       );
 
       setBills(availableBills);
@@ -113,6 +120,10 @@ export function PackingAmount() {
 
     if (paymentMode !== "CASH" && !reference.trim()) {
       toast.error("Reference number is required for non-cash payments");
+      return;
+    }
+    if (selectedBillId && !bills.some((b) => b.id === selectedBillId)) {
+      toast.error("Selected bill no longer exists");
       return;
     }
 

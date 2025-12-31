@@ -375,9 +375,9 @@ model PackingAmount {
   clientLoadingId String?
 
   // Clean relations using dedicated FKs
-  formerLoading FormerLoading? @relation("FormerPackingAmounts", fields: [formerLoadingId], references: [id], onDelete: SetNull)
-  agentLoading  AgentLoading?  @relation("AgentPackingAmounts", fields: [agentLoadingId], references: [id], onDelete: SetNull)
-  clientLoading ClientLoading? @relation("ClientPackingAmounts", fields: [clientLoadingId], references: [id], onDelete: SetNull)
+  formerLoading FormerLoading? @relation("FormerPackingAmounts", fields: [formerLoadingId], references: [id], onDelete: Cascade)
+  agentLoading  AgentLoading?  @relation("AgentPackingAmounts", fields: [agentLoadingId], references: [id], onDelete: Cascade)
+  clientLoading ClientLoading? @relation("ClientPackingAmounts", fields: [clientLoadingId], references: [id], onDelete: Cascade)
 
   @@index([sourceType, sourceRecordId])
   @@index([createdAt])
@@ -504,9 +504,9 @@ model DispatchCharge {
   clientLoadingId String?
 
   // Relations using dedicated FK fields
-  formerLoading FormerLoading? @relation("FormerDispatchCharges", fields: [formerLoadingId], references: [id], onDelete: SetNull)
-  agentLoading  AgentLoading?  @relation("AgentDispatchCharges", fields: [agentLoadingId], references: [id], onDelete: SetNull)
-  clientLoading ClientLoading? @relation("ClientDispatchCharges", fields: [clientLoadingId], references: [id], onDelete: SetNull)
+  formerLoading FormerLoading? @relation("FormerDispatchCharges", fields: [formerLoadingId], references: [id], onDelete: Cascade)
+  agentLoading  AgentLoading?  @relation("AgentDispatchCharges", fields: [agentLoadingId], references: [id], onDelete: Cascade)
+  clientLoading ClientLoading? @relation("ClientDispatchCharges", fields: [clientLoadingId], references: [id], onDelete: Cascade)
 
   @@index([sourceType, sourceRecordId])
   @@index([type])

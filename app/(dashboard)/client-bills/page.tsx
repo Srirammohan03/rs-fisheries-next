@@ -254,15 +254,28 @@ export default function ClientBillsPage() {
     }
   };
 
-  const deleteItem = async (id: string) => {
-    if (!confirm("Delete this item?")) return;
+  // const deleteItem = async (id: string) => {
+  //   if (!confirm("Delete this item?")) return;
+  //   try {
+  //     await axios.delete(`/api/client-bills/item/${id}`);
+  //     await refreshRecords();
+  //     toast.success("Deleted");
+  //   } catch (e) {
+  //     console.error(e);
+  //     toast.error("Delete failed");
+  //   }
+  // };
+  const deleteBill = async (loadingId?: string) => {
+    if (!loadingId) return toast.error("Loading ID missing");
+    if (!confirm("Delete this bill and all items?")) return;
+
     try {
-      await axios.delete(`/api/client-bills/item/${id}`);
+      await axios.delete(`/api/client-loading/${loadingId}`);
       await refreshRecords();
-      toast.success("Deleted");
-    } catch (e) {
+      toast.success("Bill deleted");
+    } catch (e: any) {
       console.error(e);
-      toast.error("Delete failed");
+      toast.error(e?.response?.data?.message || "Delete failed");
     }
   };
 
@@ -372,7 +385,7 @@ export default function ClientBillsPage() {
                   </SelectContent>
                 </Select>
 
-                <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full sm:w-auto">
                   <Input
                     type="date"
                     value={fromDate}
@@ -385,6 +398,22 @@ export default function ClientBillsPage() {
                     onChange={(e) => setToDate(e.target.value)}
                     className="w-full"
                   />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setSortOrder("newest");
+                      setFromDate("");
+                      setToDate("");
+                      setPage(1);
+                      toast.success("Filters cleared");
+                    }}
+                    className="w-full sm:w-auto border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Clear Filters
+                  </Button>
                 </div>
               </div>
             </div>
@@ -443,7 +472,7 @@ export default function ClientBillsPage() {
                               size="sm"
                               variant="ghost"
                               className="text-red-600 hover:bg-red-50"
-                              onClick={() => deleteItem(it.id)}
+                              onClick={() => deleteBill(it.loadingId)}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -483,7 +512,10 @@ export default function ClientBillsPage() {
                             <Input
                               value={edit.pricePerKg ?? ""}
                               onChange={(e) =>
-                                onPriceChange(it.id, e.target.value)
+                                onPriceChange(
+                                  it.id,
+                                  Math.max(0, Number(e.target.value)).toString()
+                                )
                               }
                               className="mt-2 w-full text-right"
                               type="number"
@@ -560,7 +592,13 @@ export default function ClientBillsPage() {
                               <Input
                                 value={edit.pricePerKg ?? ""}
                                 onChange={(e) =>
-                                  onPriceChange(it.id, e.target.value)
+                                  onPriceChange(
+                                    it.id,
+                                    Math.max(
+                                      0,
+                                      Number(e.target.value)
+                                    ).toString()
+                                  )
                                 }
                                 className="w-28 text-right"
                                 type="number"
@@ -599,7 +637,7 @@ export default function ClientBillsPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-red-600 hover:bg-red-50"
-                                  onClick={() => deleteItem(it.id)}
+                                  onClick={() => deleteBill(it.loadingId)}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
