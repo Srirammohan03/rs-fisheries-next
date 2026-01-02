@@ -24,6 +24,9 @@ export const GET = apiHandler(async (req: Request, context: any) => {
           totalPrice: true,
           grandTotal: true,
           createdAt: true,
+          tripStatus: true,
+          startedAt: true,
+          completedAt: true,
           dispatchCharges: {
             where: { type: "TRANSPORT" },
             select: { amount: true },
@@ -43,6 +46,9 @@ export const GET = apiHandler(async (req: Request, context: any) => {
           totalPrice: true,
           grandTotal: true,
           createdAt: true,
+          tripStatus: true,
+          startedAt: true,
+          completedAt: true,
           dispatchCharges: {
             where: { type: "TRANSPORT" },
             select: { amount: true },
@@ -62,6 +68,9 @@ export const GET = apiHandler(async (req: Request, context: any) => {
           totalPrice: true,
           grandTotal: true,
           createdAt: true,
+          tripStatus: true,
+          startedAt: true,
+          completedAt: true,
           dispatchCharges: {
             where: { type: "TRANSPORT" },
             select: { amount: true },
@@ -91,6 +100,9 @@ export const GET = apiHandler(async (req: Request, context: any) => {
       transportCharges: sumTransport(l.dispatchCharges),
       grandTotal: l.grandTotal,
       createdAt: l.createdAt,
+      status: l.tripStatus,
+      startedAt: l.startedAt,
+      completedAt: l.completedAt,
     })),
 
     ...vehicle.agentLoadings.map((l) => ({
@@ -106,6 +118,9 @@ export const GET = apiHandler(async (req: Request, context: any) => {
       transportCharges: sumTransport(l.dispatchCharges),
       grandTotal: l.grandTotal,
       createdAt: l.createdAt,
+      status: l.tripStatus,
+      startedAt: l.startedAt,
+      completedAt: l.completedAt,
     })),
 
     ...vehicle.clientLoadings.map((l) => ({
@@ -121,6 +136,9 @@ export const GET = apiHandler(async (req: Request, context: any) => {
       transportCharges: sumTransport(l.dispatchCharges),
       grandTotal: l.grandTotal,
       createdAt: l.createdAt,
+      status: l.tripStatus,
+      startedAt: l.startedAt,
+      completedAt: l.completedAt,
     })),
   ].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

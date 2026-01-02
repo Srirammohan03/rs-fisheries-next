@@ -55,6 +55,29 @@ const formatCurrency = (amount: number) => {
     maximumFractionDigits: 0,
   }).format(amount);
 };
+type TripStatus = "RUNNING" | "COMPLETED";
+
+export function getTripStatusBadge(status: TripStatus) {
+  switch (status) {
+    case "RUNNING":
+      return {
+        label: "Running",
+        className: "border-amber-500 text-amber-700 bg-amber-50",
+      };
+
+    case "COMPLETED":
+      return {
+        label: "Completed",
+        className: "border-emerald-500 text-emerald-700 bg-emerald-50",
+      };
+
+    default:
+      return {
+        label: status,
+        className: "border-slate-300 text-slate-700 bg-slate-50",
+      };
+  }
+}
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return "N/A";
@@ -450,10 +473,14 @@ export default function VehicleDetailsPage() {
                   <TableHead className="text-right">
                     Transport Charges
                   </TableHead>
-                  {/* <TableHead className="text-right pr-6">
-                    Total Amount
-                  </TableHead> */}
                   <TableHead className="text-right pr-6">Load Type</TableHead>
+                  <TableHead className="text-right pr-6">Trip Status</TableHead>
+                  <TableHead className="text-right pr-6">
+                    Trip Start Date
+                  </TableHead>
+                  <TableHead className="text-right pr-6">
+                    Trip Complete Date
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -482,13 +509,29 @@ export default function VehicleDetailsPage() {
                       <TableCell className="text-right text-muted-foreground">
                         {formatCurrency(trip.transportCharges)}
                       </TableCell>
-                      {/* <TableCell className="text-right font-medium text-gray-900 pr-6">
-                        {formatCurrency(trip.grandTotal)}
-                      </TableCell> */}
                       <TableCell className="text-right font-medium text-gray-900 pr-6">
                         <Badge variant="secondary" className="font-medium">
                           {trip.loadType}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-gray-900 pr-6">
+                        {(() => {
+                          const badge = getTripStatusBadge(trip.status);
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={`font-medium ${badge.className}`}
+                            >
+                              {badge.label}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-gray-900 pr-6">
+                        {formatDate(trip.startedAt)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-gray-900 pr-6">
+                        {formatDate(trip.completedAt)}
                       </TableCell>
                     </TableRow>
                   ))

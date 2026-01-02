@@ -43,6 +43,11 @@ model FishVariety {
   createdAt DateTime @default(now())
 }
 
+enum TripStatus {
+  RUNNING
+  COMPLETED
+}
+
 model FormerLoading {
   id         String   @id @default(uuid())
   fishCode   String
@@ -54,6 +59,10 @@ model FormerLoading {
   vehicleId String?
   vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
   vehicleNo String?
+
+  tripStatus  TripStatus @default(RUNNING)
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
 
   totalTrays    Int   @default(0)
   totalLooseKgs Float @default(0)
@@ -100,6 +109,10 @@ model AgentLoading {
   vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
   vehicleNo String?
 
+  tripStatus  TripStatus @default(RUNNING)
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+
   totalTrays    Int   @default(0)
   totalLooseKgs Float @default(0)
   totalTrayKgs  Float @default(0)
@@ -142,6 +155,10 @@ model ClientLoading {
   vehicleId String?
   vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
   vehicleNo String?
+
+  tripStatus  TripStatus @default(RUNNING)
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
 
   fishCode      String
   village       String

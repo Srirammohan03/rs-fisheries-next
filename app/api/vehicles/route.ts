@@ -92,11 +92,12 @@ export const GET = apiHandler(async () => {
   const vehicles = await prisma.vehicle.findMany({
     where: {
       OR: [
-        { farmerLoadings: { some: { vehicleId: { not: null } } } },
-        { agentLoadings: { some: { vehicleId: { not: null } } } },
-        { clientLoadings: { some: { vehicleId: { not: null } } } },
+        { farmerLoadings: { some: { tripStatus: "RUNNING" } } },
+        { agentLoadings: { some: { tripStatus: "RUNNING" } } },
+        { clientLoadings: { some: { tripStatus: "RUNNING" } } },
       ],
     },
+
     select: {
       id: true,
       vehicleNumber: true,
@@ -105,8 +106,9 @@ export const GET = apiHandler(async () => {
         select: { name: true },
       },
 
+      // Only the ACTIVE farmer trip (if exists)
       farmerLoadings: {
-        where: { vehicleId: { not: null } },
+        where: { tripStatus: "RUNNING" },
         take: 1,
         select: {
           id: true,
@@ -117,8 +119,9 @@ export const GET = apiHandler(async () => {
         },
       },
 
+      // Only the ACTIVE agent trip (if exists)
       agentLoadings: {
-        where: { vehicleId: { not: null } },
+        where: { tripStatus: "RUNNING" },
         take: 1,
         select: {
           id: true,
@@ -129,8 +132,9 @@ export const GET = apiHandler(async () => {
         },
       },
 
+      // Only the ACTIVE client trip (if exists)
       clientLoadings: {
-        where: { vehicleId: { not: null } },
+        where: { tripStatus: "RUNNING" },
         take: 1,
         select: {
           id: true,
@@ -141,6 +145,7 @@ export const GET = apiHandler(async () => {
         },
       },
     },
+
     orderBy: { createdAt: "desc" },
   });
 

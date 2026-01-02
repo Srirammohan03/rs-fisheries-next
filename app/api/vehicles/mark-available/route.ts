@@ -7,43 +7,36 @@ import { NextResponse } from "next/server";
 export const POST = apiHandler(async (req: Request) => {
   const { vehicleId } = await req.json();
 
+  if (!vehicleId) {
+    throw new ApiError(400, "vehicleId is required");
+  }
+
   await prisma.$transaction(async (tx) => {
-    const farmer = await tx.formerLoading.findFirst({
-      where: { vehicleId },
-    });
+    const updateData = {
+      tripStatus: "COMPLETED" as const,
+      completedAt: new Date(),
+    };
 
-    const agent = !farmer
-      ? await tx.agentLoading.findFirst({ where: { vehicleId } })
-      : null;
+    const [formerResult, agentResult, clientResult] = await Promise.all([
+      tx.formerLoading.updateMany({
+        where: { vehicleId, tripStatus: "RUNNING" },
+        data: updateData,
+      }),
+      tx.agentLoading.updateMany({
+        where: { vehicleId, tripStatus: "RUNNING" },
+        data: updateData,
+      }),
+      tx.clientLoading.updateMany({
+        where: { vehicleId, tripStatus: "RUNNING" },
+        data: updateData,
+      }),
+    ]);
 
-    const client =
-      !farmer && !agent
-        ? await tx.clientLoading.findFirst({ where: { vehicleId } })
-        : null;
+    const updatedCount =
+      formerResult.count + agentResult.count + clientResult.count;
 
-    if (!farmer && !agent && !client) {
+    if (updatedCount === 0) {
       throw new ApiError(400, "No active trip found for this vehicle");
-    }
-
-    if (farmer) {
-      await tx.formerLoading.update({
-        where: { id: farmer.id },
-        data: { vehicleId: null, vehicleNo: null },
-      });
-    }
-
-    if (agent) {
-      await tx.agentLoading.update({
-        where: { id: agent.id },
-        data: { vehicleId: null, vehicleNo: null },
-      });
-    }
-
-    if (client) {
-      await tx.clientLoading.update({
-        where: { id: client.id },
-        data: { vehicleId: null, vehicleNo: null },
-      });
     }
   });
 
