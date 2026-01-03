@@ -62,12 +62,12 @@ export async function POST(req: Request) {
     const vehicleId = asTrim(body.vehicleId) || null;
     const vehicleNo = asTrim(body.vehicleNo) || null;
 
-    if (!vehicleId && !vehicleNo) {
-      return NextResponse.json(
-        { success: false, message: "Vehicle is required" },
-        { status: 400 }
-      );
-    }
+    // if (!vehicleId && !vehicleNo) {
+    //   return NextResponse.json(
+    //     { success: false, message: "Vehicle is required" },
+    //     { status: 400 }
+    //   );
+    // }
 
     const items = body.items.map((it) => {
       const varietyCode = asTrim(it.varietyCode);
@@ -99,7 +99,9 @@ export async function POST(req: Request) {
 
     const totalPrice = round2(items.reduce((s, i) => s + i.totalPrice, 0));
 
-    const createData: Parameters<typeof prisma.formerLoading.create>[0]["data"] = {
+    const createData: Parameters<
+      typeof prisma.formerLoading.create
+    >[0]["data"] = {
       fishCode: asTrim(body.fishCode) || "NA",
       billNo,
       FarmerName: asTrim(body.FarmerName) || null,
@@ -192,7 +194,9 @@ export async function GET() {
 
       const packingTotal = toNum(l.packingAmountTotal);
 
-      const grandTotal = round2(totalPrice + breakdown.dispatchChargesTotal + packingTotal);
+      const grandTotal = round2(
+        totalPrice + breakdown.dispatchChargesTotal + packingTotal
+      );
 
       return {
         ...l,

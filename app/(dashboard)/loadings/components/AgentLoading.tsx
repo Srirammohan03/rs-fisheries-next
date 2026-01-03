@@ -17,6 +17,7 @@ import {
 import { PlusCircle, Save, Trash2 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { fi } from "date-fns/locale";
+import { Textarea } from "@/components/ui/textarea";
 
 const TRAY_WEIGHT = 35;
 const DEDUCTION_PERCENT = 5;
@@ -39,11 +40,7 @@ const cleanAgentName = (v: string) =>
     .replace(/\s{2,}/g, " ")
     .trimStart();
 
-const cleanVillage = (v: string) =>
-  v
-    .replace(/[^A-Za-z ]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimStart();
+const cleanVillage = (v: string) => v.trimStart();
 
 const safeNum = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(v);
@@ -204,6 +201,15 @@ export default function AgentLoading() {
     [items]
   );
 
+  const totalTrays = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        sum = sum + safeNum(item.noTrays);
+        return sum;
+      }, 0),
+    [items]
+  );
+
   const grandTotal = useMemo(() => {
     const after = totalKgs * (1 - DEDUCTION_PERCENT / 100);
     return Math.round(after);
@@ -245,17 +251,17 @@ export default function AgentLoading() {
         toast.error("Agent Name should contain only letters and spaces"), false
       );
 
-    const vil = village.trim();
-    if (vil && !VILLAGE_REGEX.test(vil))
-      return (
-        toast.error("Village should contain only letters and spaces"), false
-      );
+    // const vil = village.trim();
+    // if (vil && !VILLAGE_REGEX.test(vil))
+    //   return (
+    //     toast.error("Village should contain only letters and spaces"), false
+    //   );
 
     if (!date.trim()) return toast.error("Select Date"), false;
 
-    if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
-    if (isOtherVehicle && !otherVehicleNo.trim())
-      return toast.error("Enter Vehicle Number"), false;
+    // if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
+    // if (isOtherVehicle && !otherVehicleNo.trim())
+    //   return toast.error("Enter Vehicle Number"), false;
 
     // active rows = any qty
     const activeRows = items.filter(
@@ -395,11 +401,11 @@ export default function AgentLoading() {
           </Field>
 
           <Field>
-            <FieldLabel>Village</FieldLabel>
-            <Input
+            <FieldLabel>Address</FieldLabel>
+            <Textarea
               value={village}
               onChange={(e) => setVillage(cleanVillage(e.target.value))}
-              placeholder="Enter village"
+              placeholder="Enter full address"
               className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
@@ -415,7 +421,7 @@ export default function AgentLoading() {
           </Field>
 
           <Field className="sm:col-span-2 md:col-span-1">
-            <FieldLabel>Select Vehicle *</FieldLabel>
+            <FieldLabel>Select Vehicle</FieldLabel>
             <Select
               value={vehicleId}
               onValueChange={(v) => {
@@ -573,9 +579,9 @@ export default function AgentLoading() {
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Variety *
                 </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                {/* <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Name
-                </th>
+                </th> */}
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Trays
                 </th>
@@ -619,9 +625,9 @@ export default function AgentLoading() {
                     </Select>
                   </td>
 
-                  <td className="px-3 py-3 text-slate-700">
+                  {/* <td className="px-3 py-3 text-slate-700">
                     {row.name || "—"}
-                  </td>
+                  </td> */}
 
                   <td className="px-3 py-3">
                     <Input
@@ -684,14 +690,25 @@ export default function AgentLoading() {
         </div>
 
         {/* GRAND TOTAL */}
-        <div className="flex justify-end">
-          <div className="text-right">
-            <p className="text-sm text-slate-500">
-              Grand Total (after 5% deduction)
-            </p>
-            <p className="text-2xl font-bold text-slate-900">
-              {grandTotal} <span className="text-slate-500">Kgs</span>
-            </p>
+        <div className="text-right">
+          <div className="space-y-1">
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">Total Trays:</span>
+              <span className="text-2xl font-bold">
+                {totalTrays.toFixed(1)}
+                <span className="text-lg text-slate-500 ml-1">Trays</span>
+              </span>
+            </div>
+
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">
+                Grand Total (after 5% deduction):
+              </span>
+              <span className="text-2xl font-bold">
+                {grandTotal}
+                <span className="text-lg text-slate-500 ml-1">Kgs</span>
+              </span>
+            </div>
           </div>
         </div>
       </CardContent>

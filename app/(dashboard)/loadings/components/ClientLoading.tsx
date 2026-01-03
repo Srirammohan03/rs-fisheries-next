@@ -165,6 +165,15 @@ export default function ClientLoadingForm() {
     return m;
   }, [availableVarieties]);
 
+  const totalTrays = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        sum = sum + safeNum(item.noTrays);
+        return sum;
+      }, 0),
+    [items]
+  );
+
   const getVarietyName = (code: string) =>
     availableVarieties.find((v) => v.code === code)?.name || "";
 
@@ -311,7 +320,7 @@ export default function ClientLoadingForm() {
 
     if (!date.trim()) return toast.error("Select Date"), false;
 
-    if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
+    // if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
     if (isOtherVehicle && !otherVehicleNo.trim())
       return toast.error("Enter Vehicle Number"), false;
 
@@ -633,9 +642,9 @@ export default function ClientLoadingForm() {
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Variety *
                 </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                {/* <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Name
-                </th>
+                </th> */}
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Trays
                 </th>
@@ -682,9 +691,9 @@ export default function ClientLoadingForm() {
                     </Select>
                   </td>
 
-                  <td className="px-3 py-3 text-slate-700">
+                  {/* <td className="px-3 py-3 text-slate-700">
                     {row.name || "—"}
-                  </td>
+                  </td> */}
 
                   <td className="px-3 py-3">
                     <Input
@@ -753,13 +762,22 @@ export default function ClientLoadingForm() {
         </div>
 
         {/* FOOTER */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="hidden md:block" />
-          <div className="text-left sm:text-right">
-            <p className="text-sm text-slate-500">Grand Total</p>
-            <p className="text-2xl font-bold text-slate-900">
-              {grandTotal} <span className="text-slate-500">Kgs</span>
-            </p>
+        <div className="text-right">
+          <div className="space-y-1">
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">Total Trays:</span>
+              <span className="text-2xl font-bold">
+                {totalTrays.toFixed(1)}
+                <span className="text-lg text-slate-500 ml-1">Trays</span>
+              </span>
+            </div>
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">Grand Total:</span>
+              <span className="text-2xl font-bold">
+                {grandTotal}
+                <span className="text-lg text-slate-500 ml-1">Kgs</span>
+              </span>
+            </div>
           </div>
         </div>
       </CardContent>

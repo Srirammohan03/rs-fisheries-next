@@ -30,13 +30,22 @@ async function getNetKgsByCodes(codes: string[]) {
   };
 
   const formerMap = Object.fromEntries(
-    inFormer.map((x: GroupedResult) => [x.varietyCode, Number(x._sum.totalKgs ?? 0)])
+    inFormer.map((x: GroupedResult) => [
+      x.varietyCode,
+      Number(x._sum.totalKgs ?? 0),
+    ])
   );
   const agentMap = Object.fromEntries(
-    inAgent.map((x: GroupedResult) => [x.varietyCode, Number(x._sum.totalKgs ?? 0)])
+    inAgent.map((x: GroupedResult) => [
+      x.varietyCode,
+      Number(x._sum.totalKgs ?? 0),
+    ])
   );
   const clientMap = Object.fromEntries(
-    outClient.map((x: GroupedResult) => [x.varietyCode, Number(x._sum.totalKgs ?? 0)])
+    outClient.map((x: GroupedResult) => [
+      x.varietyCode,
+      Number(x._sum.totalKgs ?? 0),
+    ])
   );
 
   const netMap: Record<string, number> = {};
@@ -52,31 +61,58 @@ export async function POST(req: Request) {
   // Your existing POST logic — unchanged
   try {
     const body = await req.json();
-    const { clientName, billNo, date, vehicleId, vehicleNo, village, fishCode, items } = body;
+    const {
+      clientName,
+      billNo,
+      date,
+      vehicleId,
+      vehicleNo,
+      village,
+      fishCode,
+      items,
+    } = body;
 
     if (!clientName?.trim()) {
-      return NextResponse.json({ success: false, message: "Client name is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Client name is required" },
+        { status: 400 }
+      );
     }
 
     if (!billNo?.trim()) {
-      return NextResponse.json({ success: false, message: "Bill number is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Bill number is required" },
+        { status: 400 }
+      );
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ success: false, message: "At least one item is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "At least one item is required" },
+        { status: 400 }
+      );
     }
 
     const loadingDate = date ? new Date(date) : new Date();
     if (isNaN(loadingDate.getTime())) {
-      return NextResponse.json({ success: false, message: "Invalid date provided" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Invalid date provided" },
+        { status: 400 }
+      );
     }
 
-    const normalizedVehicleId = typeof vehicleId === "string" && vehicleId.trim() ? vehicleId.trim() : null;
-    const normalizedVehicleNo = typeof vehicleNo === "string" && vehicleNo.trim() ? vehicleNo.trim() : null;
+    const normalizedVehicleId =
+      typeof vehicleId === "string" && vehicleId.trim()
+        ? vehicleId.trim()
+        : null;
+    const normalizedVehicleNo =
+      typeof vehicleNo === "string" && vehicleNo.trim()
+        ? vehicleNo.trim()
+        : null;
 
-    if (!normalizedVehicleId && !normalizedVehicleNo) {
-      return NextResponse.json({ success: false, message: "Vehicle is required" }, { status: 400 });
-    }
+    // if (!normalizedVehicleId && !normalizedVehicleNo) {
+    //   return NextResponse.json({ success: false, message: "Vehicle is required" }, { status: 400 });
+    // }
 
     const processedItems = items.map((item: any) => {
       const trays = Number(item.noTrays) || 0;
@@ -102,7 +138,10 @@ export async function POST(req: Request) {
 
     const codes = Object.keys(reqMap);
     if (codes.length === 0) {
-      return NextResponse.json({ success: false, message: "Select at least one variety" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Select at least one variety" },
+        { status: 400 }
+      );
     }
 
     const netMap = await getNetKgsByCodes(codes);
@@ -125,7 +164,9 @@ export async function POST(req: Request) {
     const totalTrayKgs = processedItems.reduce((sum, i) => sum + i.trayKgs, 0);
     const totalKgs = processedItems.reduce((sum, i) => sum + i.totalKgs, 0);
 
-    const grandTotal = Number((totalKgs * (1 - DEDUCTION_PERCENT / 100)).toFixed(2));
+    const grandTotal = Number(
+      (totalKgs * (1 - DEDUCTION_PERCENT / 100)).toFixed(2)
+    );
 
     const createData: any = {
       clientName: clientName.trim(),
@@ -172,7 +213,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, data: saved }, { status: 201 });
   } catch (e) {
     console.error("ClientLoading POST error:", e);
-    return NextResponse.json({ success: false, message: "Failed to save loading" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Failed to save loading" },
+      { status: 500 }
+    );
   }
 }
 
@@ -245,6 +289,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ success: true, data: formatted });
   } catch (error) {
     console.error("ClientLoading GET error:", error);
-    return NextResponse.json({ success: false, message: "Failed to fetch data" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Failed to fetch data" },
+      { status: 500 }
+    );
   }
 }

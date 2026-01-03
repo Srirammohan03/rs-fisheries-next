@@ -19,6 +19,7 @@ import {
 import { Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { set } from "zod";
+import { Textarea } from "@/components/ui/textarea";
 
 const TRAY_WEIGHT = 35;
 
@@ -103,6 +104,15 @@ export default function FormerLoading() {
     [items]
   );
 
+  const totalTrays = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        sum = sum + safeNum(item.noTrays);
+        return sum;
+      }, 0),
+    [items]
+  );
+
   const resetForm = () => {
     setFarmerName("");
     setVillage("");
@@ -182,15 +192,15 @@ export default function FormerLoading() {
       return false;
     }
 
-    if (!vehicleId) {
-      toast.error("Select Vehicle");
-      return false;
-    }
+    // if (!vehicleId) {
+    //   toast.error("Select Vehicle");
+    //   return false;
+    // }
 
-    if (isOtherVehicle && !otherVehicleNo.trim()) {
-      toast.error("Enter Vehicle Number");
-      return false;
-    }
+    // if (isOtherVehicle && !otherVehicleNo.trim()) {
+    //   toast.error("Enter Vehicle Number");
+    //   return false;
+    // }
 
     // rows with any qty entered
     const activeRows = items.filter(
@@ -292,11 +302,7 @@ export default function FormerLoading() {
       .replace(/\s{2,}/g, " ")
       .trimStart();
 
-  const cleanVillage = (value: string) =>
-    value
-      .replace(/[^A-Za-z ]/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trimStart();
+  const cleanVillage = (value: string) => value.trimStart();
 
   return (
     <Card className="p-4 sm:p-6 rounded-2xl space-y-6 border border-[#139BC3]/15 bg-white shadow-[0_18px_45px_-30px_rgba(19,155,195,0.35)]">
@@ -342,12 +348,11 @@ export default function FormerLoading() {
         </Field>
 
         <Field>
-          <FieldLabel>Village</FieldLabel>
-          <Input
-            type="text"
+          <FieldLabel>Address</FieldLabel>
+          <Textarea
             value={village}
             onChange={(e) => setVillage(cleanVillage(e.target.value))}
-            placeholder="Enter village"
+            placeholder="Enter full address"
             inputMode="text"
           />
         </Field>
@@ -362,7 +367,7 @@ export default function FormerLoading() {
         </Field>
 
         <Field className="sm:col-span-2 md:col-span-1">
-          <FieldLabel>Select Vehicle *</FieldLabel>
+          <FieldLabel>Select Vehicle</FieldLabel>
           <Select
             value={vehicleId}
             onValueChange={(v) => {
@@ -387,7 +392,7 @@ export default function FormerLoading() {
 
         {isOtherVehicle && (
           <Field>
-            <FieldLabel>Other Vehicle Number *</FieldLabel>
+            <FieldLabel>Other Vehicle Number</FieldLabel>
             <Input
               value={otherVehicleNo}
               onChange={(e) => setOtherVehicleNo(e.target.value.toUpperCase())}
@@ -492,7 +497,7 @@ export default function FormerLoading() {
             <tr>
               <th className="px-4 py-3 text-left">S.No</th>
               <th className="px-4 py-3 text-left">Variety *</th>
-              <th className="px-4 py-3 text-left">Name</th>
+              {/* <th className="px-4 py-3 text-left">Name</th> */}
               <th className="px-4 py-3 text-left">Trays</th>
               <th className="px-4 py-3 text-left">Loose</th>
               <th className="px-4 py-3 text-left">Total Kgs</th>
@@ -523,9 +528,9 @@ export default function FormerLoading() {
                   </Select>
                 </td>
 
-                <td className="px-4 py-3">
+                {/* <td className="px-4 py-3">
                   {getVarietyName(item.varietyCode)}
-                </td>
+                </td> */}
 
                 <td className="px-4 py-3">
                   <Input
@@ -581,14 +586,23 @@ export default function FormerLoading() {
         </Button>
 
         <div className="text-right">
-          <p className="text-sm text-slate-500">Total Weight</p>
-          <p className="text-2xl font-bold">
-            {(totalKgs * 0.95).toFixed(2)}{" "}
-            <span className="text-lg text-slate-500">Kgs</span>
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            * 5% deduction applied on final payment in Vendor Bills
-          </p>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-slate-500">Total Trays:</span>
+              <span className="text-2xl font-bold">
+                {totalTrays.toFixed(1)}
+                <span className="text-lg text-slate-500 ml-1">Trays</span>
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-slate-500">Total Weight:</span>
+              <span className="text-2xl font-bold">
+                {(totalKgs * 0.95).toFixed(2)}
+                <span className="text-lg text-slate-500 ml-1">Kgs</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </Card>
