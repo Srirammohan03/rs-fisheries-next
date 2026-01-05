@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       date?: string;
       village?: string;
       fishCode?: string;
-
+      clientId?: string;
       useVehicle?: boolean; // ✅ checkbox flag
       vehicleId?: string | null;
       vehicleNo?: string | null;
@@ -67,6 +67,8 @@ export async function POST(req: Request) {
     const billNo = body.billNo?.trim() || "";
     const village = body.village?.trim() || "";
     const fishCode = body.fishCode?.trim() || "";
+    const clientId = body.clientId?.trim() || "";
+
     const useVehicle = Boolean(body.useVehicle);
 
     if (!clientName) {
@@ -163,6 +165,7 @@ export async function POST(req: Request) {
       totalKgs,
       totalPrice: 0,
       grandTotal,
+      clientId,
 
       // ✅ IMPORTANT: to avoid DB null violation, keep vehicleNo always string
       vehicleNo: "",

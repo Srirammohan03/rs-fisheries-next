@@ -940,11 +940,150 @@ export default function VendorBillsPage() {
                   </tbody>
                 </table>
               </div>
+              {/* Mobile List */}
+              <div className="mt-6 md:hidden space-y-4">
+                {paginatedItems.map((it) => {
+                  const edit = editing[it.id];
+                  const isEditing = !!edit;
+                  const isSaving = !!savingIds[it.id];
+
+                  return (
+                    <div
+                      key={it.id}
+                      className="bg-white rounded-xl shadow-sm p-4 space-y-3 hover:shadow-md"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{it.billNo}</span>
+                          <span className="text-xs text-gray-500">
+                            {it.name}
+                          </span>
+                        </div>
+
+                        {!isEditing && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startEdit(it)}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => openDeleteItemDialog(it)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-gray-600">Variety: </span>
+                          <span className="font-medium">{it.varietyCode}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Trays: </span>
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              value={editing[it.id]?.noTrays || ""}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [it.id]: {
+                                    ...prev[it.id],
+                                    noTrays: Number(e.target.value),
+                                  },
+                                }))
+                              }
+                              className="w-20"
+                            />
+                          ) : (
+                            <span className="font-medium">{it.noTrays}</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Loose: </span>
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              value={editing[it.id]?.loose || ""}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [it.id]: {
+                                    ...prev[it.id],
+                                    loose: Number(e.target.value),
+                                  },
+                                }))
+                              }
+                              className="w-20"
+                            />
+                          ) : (
+                            <span className="font-medium">{it.loose}</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Price/kg: </span>
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              value={editing[it.id]?.pricePerKg || ""}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [it.id]: {
+                                    ...prev[it.id],
+                                    pricePerKg: Number(e.target.value),
+                                  },
+                                }))
+                              }
+                              className="w-24"
+                            />
+                          ) : (
+                            <span className="font-medium">{it.pricePerKg}</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Total Price: </span>
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              value={editing[it.id]?.totalPrice || ""}
+                              onChange={(e) =>
+                                setEditing((prev) => ({
+                                  ...prev,
+                                  [it.id]: {
+                                    ...prev[it.id],
+                                    totalPrice: Number(e.target.value),
+                                  },
+                                }))
+                              }
+                              className="w-24"
+                            />
+                          ) : (
+                            <span className="font-medium">{it.totalPrice}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* Pagination */}
-              {filteredItems.length > 0 && totalPages >= 1 && (
-                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-sm text-gray-500">
+              {totalPages > 1 && (
+                <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="text-sm text-gray-700">
                     Showing{" "}
                     <span className="font-medium text-gray-900">
                       {(page - 1) * PAGE_SIZE + 1}

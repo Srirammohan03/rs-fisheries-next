@@ -1,4 +1,3 @@
-// app/(dashboard)/loadings/components/ClientLoading.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -21,11 +20,14 @@ import { Field, FieldLabel } from "@/components/ui/field";
 
 const TRAY_KG = 35;
 const DEDUCTION_PERCENT = 5;
+
 const OTHER_VEHICLE_VALUE = "__OTHER__";
+const OTHER_CLIENT_VALUE = "__CLIENT_OTHER__";
 
 // ✅ Text validation + sanitization
 const CLIENT_NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
-const VILLAGE_REGEX = /^[A-Za-z][A-Za-z ]*$/;
+// address allows numbers, commas, slash, hyphen etc.
+const ADDRESS_REGEX = /^[A-Za-z0-9][A-Za-z0-9 ,./#()-]*$/;
 
 const cleanClientName = (v: string) =>
   v
@@ -33,9 +35,9 @@ const cleanClientName = (v: string) =>
     .replace(/\s{2,}/g, " ")
     .trimStart();
 
-const cleanVillage = (v: string) =>
+const cleanAddress = (v: string) =>
   v
-    .replace(/[^A-Za-z ]/g, "")
+    .replace(/[^A-Za-z0-9 ,./#()-]/g, "")
     .replace(/\s{2,}/g, " ")
     .trimStart();
 
@@ -68,6 +70,20 @@ type VehicleRow = {
   assignedDriver?: { name?: string | null } | null;
 };
 
+type ClientRow = {
+  id: string;
+  partyName: string;
+  phone: string;
+  billingAddress: string;
+
+  accountNumber?: string | null;
+  ifsc?: string | null;
+  bankName?: string | null;
+  bankAddress?: string | null;
+
+  isActive?: boolean;
+};
+
 const todayYMD = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -79,21 +95,27 @@ const todayYMD = () => {
 export default function ClientLoadingForm() {
   const queryClient = useQueryClient();
 
-  const [village, setVillage] = useState("");
+  // NOTE: you currently store address in `village` field in API/model.
+  // Keeping same name for compatibility.
+  const [village, setVillage] = useState(""); // used as Address
   const [date, setDate] = useState("");
   const [billNo, setBillNo] = useState("");
+
+  // client selection
+  const [clientSelectId, setClientSelectId] = useState<string>("");
+  const isOtherClient = clientSelectId === OTHER_CLIENT_VALUE;
+
+  // manual entry (only when "Other")
   const [clientName, setClientName] = useState("");
 
   // ✅ NEW: vehicle toggle checkbox
   const [useVehicle, setUseVehicle] = useState(false);
-
   const [vehicleId, setVehicleId] = useState("");
   const [otherVehicleNo, setOtherVehicleNo] = useState("");
+  const isOtherVehicle = vehicleId === OTHER_VEHICLE_VALUE;
 
   const [grandTotal, setGrandTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-
-  const isOtherVehicle = vehicleId === OTHER_VEHICLE_VALUE;
 
   // ✅ hide used vehicles without reload
   const [usedVehicleIds, setUsedVehicleIds] = useState<Set<string>>(
@@ -117,22 +139,87 @@ export default function ClientLoadingForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Available varieties
-  const { data: availableVarieties = [] } = useQuery<AvailableVariety[]>({
+  // ✅ Clients list
+  const {
+    data: clients = [],
+    isLoading: clientsLoading,
+    isError: clientsError,
+    refetch: refetchClients,
+  } = useQuery<ClientRow[]>({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const res = await axios.get("/api/client");
+      return res.data?.data || [];
+    },
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 2,
+  });
+
+  const activeClients = useMemo(() => {
+    return (clients || []).filter((c) => c?.isActive !== false);
+  }, [clients]);
+
+  const selectedClient = useMemo(() => {
+    if (!clientSelectId || clientSelectId === OTHER_CLIENT_VALUE) return null;
+    return activeClients.find((c) => c.id === clientSelectId) ?? null;
+  }, [activeClients, clientSelectId]);
+
+  // Auto-fill when client selected
+  useEffect(() => {
+    if (selectedClient) {
+      setClientName(selectedClient.partyName || "");
+      // Auto-fill address into "village"
+      setVillage(selectedClient.billingAddress || "");
+    }
+  }, [selectedClient]);
+
+  // If other selected, clear name/address for manual entry
+  useEffect(() => {
+    if (isOtherClient) {
+      setClientName("");
+      setVillage("");
+    }
+  }, [isOtherClient]);
+
+  useEffect(() => {
+    if (clientsError) toast.error("Failed to load clients");
+  }, [clientsError]);
+
+  // ✅ Available varieties (make it robust)
+  const {
+    data: availableVarieties = [],
+    isError: varietiesError,
+    refetch: refetchVarieties,
+    isFetching: varietiesFetching,
+  } = useQuery<AvailableVariety[]>({
     queryKey: ["available-varieties"],
     queryFn: async () => {
       const res = await axios.get("/api/stocks/available-varieties");
-      return res.data.data || [];
+      return res.data?.data || [];
     },
+    staleTime: 0,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 3,
   });
+
+  useEffect(() => {
+    if (varietiesError) toast.error("Failed to load varieties");
+  }, [varietiesError]);
 
   // ✅ Vehicles
   const { data: vehicles = [] } = useQuery<VehicleRow[]>({
     queryKey: ["assigned-vehicles"],
     queryFn: async () => {
       const res = await axios.get("/api/vehicles/assign-driver");
-      return res.data.data || [];
+      return res.data?.data || [];
     },
+    staleTime: 0,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 2,
   });
 
   const availableVehicles = useMemo(() => {
@@ -152,10 +239,16 @@ export default function ClientLoadingForm() {
   } = useQuery({
     queryKey: ["client-bill-no"],
     queryFn: async () => {
-      const res = await fetch("/api/client-loading/next-bill-no");
+      const res = await fetch("/api/client-loading/next-bill-no", {
+        cache: "no-store",
+      });
       const data = await res.json();
       return data.billNo as string;
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: true,
+    retry: 2,
   });
 
   useEffect(() => {
@@ -249,8 +342,6 @@ export default function ClientLoadingForm() {
   };
 
   // ✅ Grand total:
-  // If useVehicle checked => NO 5% cut
-  // Else => apply 5% deduction
   useEffect(() => {
     const total = items.reduce((a, b) => a + safeNum(b.totalKgs), 0);
     if (useVehicle) {
@@ -291,6 +382,7 @@ export default function ClientLoadingForm() {
   };
 
   const resetForm = () => {
+    setClientSelectId("");
     setClientName("");
     setVillage("");
     setDate(todayYMD());
@@ -313,6 +405,8 @@ export default function ClientLoadingForm() {
 
     setGrandTotal(0);
     refetchBillNo();
+    refetchVarieties();
+    refetchClients();
   };
 
   const validateForm = () => {
@@ -321,28 +415,43 @@ export default function ClientLoadingForm() {
       return false;
     }
 
+    // client validation
+    if (!clientSelectId) {
+      toast.error("Select Client");
+      return false;
+    }
+
     const name = clientName.trim();
-    if (!name) return toast.error("Enter Client Name"), false;
-    if (!CLIENT_NAME_REGEX.test(name))
-      return (
-        toast.error("Client Name should contain only letters and spaces"), false
-      );
+    if (!name) {
+      toast.error("Enter Client Name");
+      return false;
+    }
+    if (!CLIENT_NAME_REGEX.test(name)) {
+      toast.error("Client Name should contain only letters and spaces");
+      return false;
+    }
 
-    const vil = village.trim();
-    if (vil && !VILLAGE_REGEX.test(vil))
-      return (
-        toast.error("Village should contain only letters and spaces"), false
-      );
+    const addr = village.trim();
+    if (!addr) {
+      toast.error("Address is required");
+      return false;
+    }
+    if (!ADDRESS_REGEX.test(addr)) {
+      toast.error("Address contains invalid characters");
+      return false;
+    }
 
-    if (!date.trim()) return toast.error("Select Date"), false;
+    if (!date.trim()) {
+      toast.error("Select Date");
+      return false;
+    }
 
-    // ✅ vehicle validation only if checkbox is checked
+    // vehicle validation
     if (useVehicle) {
       if (isOtherVehicle && !otherVehicleNo.trim()) {
         toast.error("Enter Vehicle Number");
         return false;
       }
-      // If not other, vehicleId should exist
       if (!isOtherVehicle && !vehicleId.trim()) {
         toast.error("Select Vehicle");
         return false;
@@ -389,34 +498,36 @@ export default function ClientLoadingForm() {
       (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0
     );
 
+    const payload = {
+      billNo,
+      // If selected existing client -> send clientId, else null
+      clientId: !isOtherClient && clientSelectId ? clientSelectId : null,
+
+      clientName: clientName.trim(),
+      village: village.trim(), // address in your schema
+      date,
+
+      useVehicle,
+      vehicleId: useVehicle && !isOtherVehicle ? vehicleId : null,
+      vehicleNo: useVehicle && isOtherVehicle ? otherVehicleNo.trim() : null,
+
+      fishCode: firstCode,
+
+      items: activeRows.map((r) => ({
+        varietyCode: r.varietyCode,
+        noTrays: safeNum(r.noTrays),
+        loose: safeNum(r.loose),
+      })),
+    };
+
     try {
-      await axios.post("/api/client-loading", {
-        billNo,
-        clientName: clientName.trim(),
-        village: village.trim(),
-        date,
-
-        // ✅ NEW: send useVehicle flag
-        useVehicle,
-
-        // send vehicle only if checkbox enabled
-        vehicleId: useVehicle && !isOtherVehicle ? vehicleId : null,
-        vehicleNo: useVehicle && isOtherVehicle ? otherVehicleNo.trim() : null,
-
-        fishCode: firstCode,
-
-        items: activeRows.map((r) => ({
-          varietyCode: r.varietyCode,
-          noTrays: safeNum(r.noTrays),
-          loose: safeNum(r.loose),
-        })),
-      });
+      await axios.post("/api/client-loading", payload);
 
       toast.success("Client loading saved!");
 
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicles"] });
 
-      // hide vehicle instantly without reload (only when using a selected vehicleId)
+      // hide vehicle instantly without reload
       if (useVehicle && !isOtherVehicle && vehicleId) {
         setUsedVehicleIds((prev) => {
           const next = new Set(prev);
@@ -428,6 +539,7 @@ export default function ClientLoadingForm() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["available-varieties"] }),
         queryClient.invalidateQueries({ queryKey: ["client-bill-no"] }),
+        queryClient.invalidateQueries({ queryKey: ["clients"] }),
       ]);
 
       resetForm();
@@ -475,22 +587,64 @@ export default function ClientLoadingForm() {
             />
           </Field>
 
+          {/* ✅ CLIENT DROPDOWN */}
           <Field>
-            <FieldLabel>Client Name *</FieldLabel>
-            <Input
-              value={clientName}
-              onChange={(e) => setClientName(cleanClientName(e.target.value))}
-              placeholder="Enter client name"
-              className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
-            />
+            <FieldLabel>Client *</FieldLabel>
+            <Select
+              value={clientSelectId}
+              onValueChange={(v) => setClientSelectId(v)}
+            >
+              <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
+                <SelectValue
+                  placeholder={
+                    clientsLoading ? "Loading clients..." : "Select client"
+                  }
+                />
+              </SelectTrigger>
+
+              <SelectContent className="max-h-72">
+                {activeClients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.partyName} — {c.phone}
+                  </SelectItem>
+                ))}
+
+                <SelectItem value={OTHER_CLIENT_VALUE}>
+                  Other / New Client
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
 
+          {/* If Other -> manual name */}
+          {isOtherClient ? (
+            <Field>
+              <FieldLabel>Client Name *</FieldLabel>
+              <Input
+                value={clientName}
+                onChange={(e) => setClientName(cleanClientName(e.target.value))}
+                placeholder="Enter client name"
+                className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
+          ) : (
+            <Field>
+              <FieldLabel>Client Name</FieldLabel>
+              <Input
+                value={clientName}
+                readOnly
+                className="bg-slate-50 border-slate-200"
+              />
+            </Field>
+          )}
+
+          {/* Address / Village field */}
           <Field>
-            <FieldLabel>Village</FieldLabel>
+            <FieldLabel>{isOtherClient ? "Address *" : "Address"}</FieldLabel>
             <Input
               value={village}
-              onChange={(e) => setVillage(cleanVillage(e.target.value))}
-              placeholder="Enter village"
+              onChange={(e) => setVillage(cleanAddress(e.target.value))}
+              placeholder="Auto filled address (editable)"
               className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
@@ -505,7 +659,7 @@ export default function ClientLoadingForm() {
             />
           </Field>
 
-          {/* ✅ NEW: Checkbox */}
+          {/* ✅ Vehicle checkbox */}
           <Field className="sm:col-span-2 md:col-span-1">
             <FieldLabel>Vehicle</FieldLabel>
             <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
@@ -519,7 +673,6 @@ export default function ClientLoadingForm() {
             </label>
           </Field>
 
-          {/* ✅ Vehicle fields only when checkbox checked */}
           {useVehicle && (
             <Field className="sm:col-span-2 md:col-span-1">
               <FieldLabel>Select Vehicle</FieldLabel>
@@ -587,7 +740,7 @@ export default function ClientLoadingForm() {
               <div className="mt-3 space-y-3">
                 <div>
                   <div className="text-xs font-semibold text-slate-500 mb-1">
-                    Variety *
+                    Variety * {varietiesFetching ? "(refreshing...)" : ""}
                   </div>
 
                   <Select
@@ -602,7 +755,7 @@ export default function ClientLoadingForm() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
 
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                       {availableVarieties.map((v) => (
                         <SelectItem key={v.code} value={v.code}>
                           {v.code} ({v.netTrays} trays)
@@ -725,7 +878,7 @@ export default function ClientLoadingForm() {
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
 
-                      <SelectContent>
+                      <SelectContent className="max-h-72">
                         {availableVarieties.map((v) => (
                           <SelectItem key={v.code} value={v.code}>
                             {v.code} ({v.netTrays} trays)
@@ -789,7 +942,7 @@ export default function ClientLoadingForm() {
             </tbody>
           </table>
 
-          <div className="p-4">
+          <div className="p-4 flex items-center gap-2">
             <Button
               onClick={addRow}
               variant="outline"
@@ -797,6 +950,18 @@ export default function ClientLoadingForm() {
             >
               <PlusCircle className="w-4 h-4" />
               Add Row
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                refetchVarieties();
+                toast.success("Varieties refreshed");
+              }}
+              className="rounded-xl border-slate-200"
+            >
+              Refresh Varieties
             </Button>
           </div>
         </div>

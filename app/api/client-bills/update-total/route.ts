@@ -1,59 +1,82 @@
-// app/api/client-bills/update-total/route.ts
+// app\api\client-bills\update-total\route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-const TRAY_KG = 35;
 const DEDUCTION_PERCENT = 5;
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
     try {
-        const { loadingId } = (await request.json()) as { loadingId?: string };
+        const body = (await req.json()) as { loadingId?: string };
+        const loadingId = (body.loadingId || "").trim();
 
         if (!loadingId) {
-            return NextResponse.json({ error: "loadingId required" }, { status: 400 });
+            return NextResponse.json({ success: false, message: "loadingId required" }, { status: 400 });
         }
 
         const loading = await prisma.clientLoading.findUnique({
             where: { id: loadingId },
-            select: { id: true, vehicleId: true, vehicleNo: true },
+            include: { items: true, vehicle: { select: { vehicleNumber: true } } },
         });
 
         if (!loading) {
-            return NextResponse.json({ error: "Loading not found" }, { status: 404 });
+            return NextResponse.json({ success: false, message: "Bill not found" }, { status: 404 });
         }
 
-        const items = await prisma.clientItem.findMany({
-            where: { clientLoadingId: loadingId },
-            select: { noTrays: true, loose: true, totalKgs: true, totalPrice: true },
-        });
+        const hasVehicle =
+            Boolean(loading.vehicleId) ||
+            Boolean((loading.vehicleNo || "").trim()) ||
+            Boolean((loading.vehicle?.vehicleNumber || "").trim());
 
-        const totalTrays = items.reduce((sum, i) => sum + (i.noTrays ?? 0), 0);
-        const totalLooseKgs = items.reduce((sum, i) => sum + Number(i.loose ?? 0), 0);
-        const totalTrayKgs = totalTrays * TRAY_KG;
-        const totalKgs = items.reduce((sum, i) => sum + Number(i.totalKgs ?? 0), 0);
+        const totalTrays = loading.items.reduce((s, i) => s + Number(i.noTrays || 0), 0);
+        const totalKgs = loading.items.reduce((s, i) => s + Number(i.totalKgs || 0), 0);
 
-        const hasVehicle = Boolean(loading.vehicleId) || Boolean((loading.vehicleNo || "").trim());
         const grandTotal = hasVehicle
             ? Number(totalKgs.toFixed(2))
             : Number((totalKgs * (1 - DEDUCTION_PERCENT / 100)).toFixed(2));
 
-        const totalPrice = items.reduce((sum, i) => sum + Number(i.totalPrice ?? 0), 0);
+        // ✅ distribute effective kgs per item proportionally to bill grand total
+        const updates = loading.items.map((it) => {
+            const itemKgs = Number(it.totalKgs || 0);
 
-        await prisma.clientLoading.update({
-            where: { id: loadingId },
-            data: {
-                totalTrays,
-                totalLooseKgs,
-                totalTrayKgs,
-                totalKgs,
-                grandTotal,
-                totalPrice,
-            },
+            const effectiveKgs =
+                totalKgs > 0 ? Number(((itemKgs / totalKgs) * grandTotal).toFixed(3)) : itemKgs;
+
+            const pricePerKg = Number(it.pricePerKg || 0);
+            const totalPrice = Number((effectiveKgs * pricePerKg).toFixed(2));
+
+            return { id: it.id, totalPrice };
         });
 
-        return NextResponse.json({ success: true, totalPrice, totalKgs, grandTotal });
-    } catch (error) {
-        console.error("Update total failed:", error);
-        return NextResponse.json({ error: "Failed to update total" }, { status: 500 });
+        const totalPrice = updates.reduce((s, u) => s + Number(u.totalPrice || 0), 0);
+
+        await prisma.$transaction(async (tx) => {
+            // update each item totalPrice
+            for (const u of updates) {
+                await tx.clientItem.update({
+                    where: { id: u.id },
+                    data: { totalPrice: u.totalPrice },
+                });
+            }
+
+            // update parent totals
+            await tx.clientLoading.update({
+                where: { id: loadingId },
+                data: {
+                    totalTrays,
+                    totalKgs,
+                    grandTotal,
+                    totalPrice,
+                },
+            });
+        });
+
+        return NextResponse.json({
+            success: true,
+            message: "Totals updated",
+            data: { loadingId, totalTrays, totalKgs, grandTotal, totalPrice, hasVehicle },
+        });
+    } catch (e) {
+        console.error("client-bills update-total error:", e);
+        return NextResponse.json({ success: false, message: "Failed to update totals" }, { status: 500 });
     }
 }

@@ -15,6 +15,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import type { DashboardMetrics } from "@/lib/dashboard";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -47,6 +55,7 @@ import {
   Fish,
   CalendarIcon,
   Download,
+  Trash2,
 } from "lucide-react";
 
 import { AnimatePresence, motion } from "framer-motion";
@@ -357,7 +366,60 @@ export default function DashboardClient({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [varietyToDelete, setVarietyToDelete] = useState<{
+    code: string;
+    name: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteStatus, setDeleteStatus] = useState<
+    "idle" | "success" | "error"
+  >("idle");
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const openDeleteDialog = (variety: { code: string; name: string }) => {
+    setVarietyToDelete(variety);
+    setDeleteStatus("idle");
+    setDeleteMessage("");
+    setDeleteDialogOpen(true);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!varietyToDelete) return;
+
+    setIsDeleting(true);
+    setDeleteStatus("idle");
+
+    try {
+      const res = await fetch("/api/fish-varieties", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: varietyToDelete.code }),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        setDeleteStatus("success");
+        setDeleteMessage(
+          `Variety ${varietyToDelete.code} deleted successfully`
+        );
+        router.refresh(); // Refresh server data
+        // Close dialog after short delay
+        setTimeout(() => {
+          setDeleteDialogOpen(false);
+          setVarietyToDelete(null);
+        }, 1500);
+      } else {
+        setDeleteStatus("error");
+        setDeleteMessage(json.message || "Failed to delete variety");
+      }
+    } catch (err) {
+      setDeleteStatus("error");
+      setDeleteMessage("Network error. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   const safeFrom = new Date(initialFrom);
   const safeTo = new Date(initialTo);
 
@@ -887,14 +949,15 @@ export default function DashboardClient({
 
           <motion.div
             className="lg:col-span-3"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25 }}
+            transition={{ duration: 0.4 }}
           >
-            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2 px-4 sm:px-6 flex flex-row items-center justify-between">
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              {/* HEADER */}
+              <CardHeader className="flex flex-row items-center justify-between px-4 sm:px-6 pb-2">
                 <div>
-                  <CardTitle className="text-slate-900 text-base sm:text-lg">
+                  <CardTitle className="text-base sm:text-lg text-slate-900">
                     Fish Varieties
                   </CardTitle>
                   <p className="text-xs text-slate-500 mt-1">
@@ -902,29 +965,103 @@ export default function DashboardClient({
                   </p>
                 </div>
 
-                <div
-                  className="h-10 w-10 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: "rgba(19,155,195,.10)" }}
-                >
-                  <Fish style={{ color: THEME }} />
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-[rgba(19,155,195,0.12)]">
+                  <Fish className="h-5 w-5 text-[#139BC3]" />
                 </div>
               </CardHeader>
 
-              <CardContent className="px-4 sm:px-6 pb-5">
-                <div className="flex flex-wrap gap-2">
-                  {data.fishVarieties.map((v) => (
-                    <span
-                      key={v.code}
-                      className="max-w-full truncate px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-sm font-medium text-slate-800 hover:bg-slate-100 transition-colors"
-                      title={v.name}
-                    >
-                      {v.code}
-                    </span>
-                  ))}
-                </div>
+              {/* CONTENT */}
+              <CardContent className="px-4 sm:px-6 pb-6">
+                {data.fishVarieties.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-slate-500">
+                    No fish varieties found.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 sm:gap-3">
+                    {data.fishVarieties.map((v) => (
+                      <div
+                        key={v.code}
+                        className="group relative flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm shadow-sm transition-all hover:border-red-300 hover:bg-red-50"
+                      >
+                        {/* CODE */}
+                        <span className="font-semibold text-slate-800">
+                          {v.code}
+                        </span>
+
+                        {/* DELETE */}
+                        <button
+                          onClick={() => openDeleteDialog(v)}
+                          className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:text-red-600 focus:outline-none"
+                          aria-label={`Delete ${v.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+
+                        {/* SINGLE TOOLTIP */}
+                        <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+                          {v.name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Delete Confirmation Dialog */}
+          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Delete Fish Variety</DialogTitle>
+                <DialogDescription className="pt-2">
+                  Are you sure you want to delete{" "}
+                  <strong>
+                    {varietyToDelete?.code}{" "}
+                    {varietyToDelete?.name !== varietyToDelete?.code &&
+                      `- ${varietyToDelete?.name}`}
+                  </strong>
+                  ?
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4">
+                {deleteStatus === "success" && (
+                  <p className="text-green-600 text-center font-medium">
+                    {deleteMessage}
+                  </p>
+                )}
+                {deleteStatus === "error" && (
+                  <p className="text-red-600 text-center font-medium">
+                    {deleteMessage}
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setVarietyToDelete(null);
+                    setDeleteStatus("idle");
+                  }}
+                  disabled={isDeleting || deleteStatus === "success"}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteConfirm}
+                  disabled={isDeleting || deleteStatus === "success"}
+                  className="min-w-24"
+                >
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </AnimatePresence>
