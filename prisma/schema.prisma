@@ -223,6 +223,8 @@ model VendorPayment {
   referenceNo       String?
   vendorInvoice     VendorInvoice[]
 
+  sourceRecordId String?
+
   @@index([vendorId])
   @@index([vendorKey])
   @@index([source])

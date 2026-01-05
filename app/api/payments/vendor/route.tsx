@@ -147,6 +147,7 @@ export async function POST(req: NextRequest) {
         isInstallment,
         installments,
         installmentNumber,
+        sourceRecordId: resolvedId,
       },
       include: {
         vendorInvoice: true,

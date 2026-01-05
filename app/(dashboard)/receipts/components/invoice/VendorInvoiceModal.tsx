@@ -36,7 +36,7 @@ export function VendorInvoiceModal({
 }: Props) {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [description, setDescription] = useState("");
-  const [vendorAddress, setVendorAddress] = useState("");
+  // const [vendorAddress, setVendorAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [existingInvoiceNo, setExistingInvoiceNo] = useState<string | null>(
@@ -59,7 +59,7 @@ export function VendorInvoiceModal({
         setInvoiceNo(inv.invoiceNo);
         setExistingInvoiceNo(inv.invoiceNo);
         setDescription(inv.description ?? "");
-        setVendorAddress(inv.vendorAddress ?? "");
+        // setVendorAddress(inv.vendorAddress ?? "");
       } catch (err: any) {
         if (err?.response?.status === 404) {
           // New invoice - fetch next number
@@ -72,7 +72,7 @@ export function VendorInvoiceModal({
 
           // Reset fields
           setDescription("");
-          setVendorAddress("");
+          // setVendorAddress("");
         } else {
           console.error(err);
           setInvoiceNo("");
@@ -106,7 +106,7 @@ export function VendorInvoiceModal({
         hsn: "0303", // Fixed for fish
         gstPercent: 0, // 0% GST
         description,
-        vendorAddress: vendorAddress.trim() || null,
+        // vendorAddress: vendorAddress.trim() || null,
         // No other optional fields sent
       });
 
@@ -156,7 +156,7 @@ export function VendorInvoiceModal({
           </div>
 
           {/* Vendor Address */}
-          <div>
+          {/* <div>
             <Label>Vendor Address</Label>
             <Textarea
               rows={5}
@@ -165,7 +165,7 @@ export function VendorInvoiceModal({
               onChange={(e) => setVendorAddress(e.target.value)}
               className="resize-none"
             />
-          </div>
+          </div> */}
         </div>
 
         <div className="mt-8">

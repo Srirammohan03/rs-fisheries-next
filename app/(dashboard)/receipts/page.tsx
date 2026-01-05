@@ -322,7 +322,7 @@ export default function ReceiptsPage() {
     const json = await res.json();
     const invoice = json?.invoice;
     const payment = json?.payment; // may be undefined for vendor if you didn't add it
-
+    console.log("invoice", invoice);
     const { jsPDF } = await import("jspdf");
     await import("jspdf-autotable");
 
