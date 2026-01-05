@@ -5,7 +5,7 @@ import { ApiResponse } from "@/utils/ApiResponse";
 import { GstType, BalanceType } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-export const PUT = apiHandler(async (req: Request, context: any) => {
+export const PATCH = apiHandler(async (req: Request, context: any) => {
   const { id } = await context.params;
 
   if (!id) {
@@ -107,6 +107,23 @@ export const PUT = apiHandler(async (req: Request, context: any) => {
 
   return NextResponse.json(
     new ApiResponse(200, updatedClient, "Client updated successfully"),
+    { status: 200 }
+  );
+});
+
+export const GET = apiHandler(async (_req: Request, context: any) => {
+  const { id } = await context.params;
+
+  if (!id) {
+    throw new ApiError(400, "Client ID not received");
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id },
+  });
+
+  return NextResponse.json(
+    new ApiResponse(200, client, "Client fetched successfully"),
     { status: 200 }
   );
 });

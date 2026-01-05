@@ -174,7 +174,6 @@ export default function ClientsPage() {
       enableHiding: false,
       cell: ({ row }) => {
         const client = row.original;
-
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -191,10 +190,16 @@ export default function ClientsPage() {
                 Copy ID
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => router.push(`/client/${client.id}`)}
+              >
                 <Eye className="mr-2 h-4 w-4" /> View Details
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => router.push(`/client/${client.id}/edit`)}
+              >
                 <FileEdit className="mr-2 h-4 w-4" /> Edit
               </DropdownMenuItem>
               <DropdownMenuItem
