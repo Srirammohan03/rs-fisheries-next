@@ -659,3 +659,26 @@ model Counter {
   id    String @id
   value Int
 }
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  userId   String
+  userRole String
+
+  module   String // Customer, Vehicle, Invoice
+  action   String // CREATE | UPDATE | DELETE | STATUS_CHANGE
+  recordId String
+
+  oldValues Json?
+  newValues Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([module, recordId])
+  @@index([userId])
+  @@index([createdAt])
+}

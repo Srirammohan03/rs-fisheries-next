@@ -16,6 +16,7 @@ import {
   Users,
   User2,
   IdCard,
+  Logs,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,7 @@ const menuItems = [
   { href: "/client", label: "Clients", icon: IdCard },
   { href: "/employee", label: "Employee", icon: User2 },
   { href: "/teams-members", label: "Team Members", icon: Users },
+  { href: "/audit-logs", label: "Audit Logs", icon: Logs },
 ];
 
 export default function AppSidebar() {
