@@ -64,7 +64,7 @@ export function ClientPayments() {
     queryKey: ["clients-for-payment"],
     queryFn: async () => {
       const [loadingsRes, paymentsRes] = await Promise.all([
-        axios.get("/api/client-loading"), // ← No stage filter
+        axios.get("/api/client-loading"),
         axios.get("/api/payments/client"),
       ]);
 
@@ -73,7 +73,7 @@ export function ClientPayments() {
 
       if (loadings.length === 0) return [];
 
-      // Group by master client (clientId = Client.id)
+      // Group by master clientId
       const clientMap = new Map<
         string,
         {
@@ -87,10 +87,11 @@ export function ClientPayments() {
       >();
 
       loadings.forEach((load: any) => {
-        const masterId = load.clientId;
+        const masterId = load.clientId?.toString();
         const name = (load.clientName || "").trim();
         if (!masterId || !name) return;
 
+        // Use grandTotal which already includes dispatch + packing charges
         const billed = Number(load.grandTotal || 0);
 
         if (!clientMap.has(masterId)) {
@@ -105,28 +106,43 @@ export function ClientPayments() {
         } else {
           const existing = clientMap.get(masterId)!;
           existing.totalBilled += billed;
+
+          // Keep best bank details
+          if (!existing.accountNumber && load.accountNumber) {
+            existing.accountNumber = load.accountNumber;
+            existing.ifsc = load.ifsc;
+            existing.bankName = load.bankName;
+            existing.bankAddress = load.bankAddress;
+          }
         }
       });
 
       // Total paid per client
       const paidMap = new Map<string, number>();
       payments.forEach((p: any) => {
-        const masterId = p.clientDetailsId;
-        if (masterId) {
-          paidMap.set(
-            masterId,
-            (paidMap.get(masterId) || 0) + Number(p.amount || 0)
-          );
+        const clientId = p.clientDetailsId?.toString();
+        if (clientId) {
+          const amt = Number(p.amount || 0);
+          paidMap.set(clientId, (paidMap.get(clientId) || 0) + amt);
         }
       });
 
-      // Only clients with remaining > 0
       const result: ClientRow[] = [];
+
       for (const [id, client] of clientMap) {
         const totalPaid = paidMap.get(id) || 0;
         const remaining = client.totalBilled - totalPaid;
 
-        if (remaining > 0) {
+        // Must have some remaining AND either:
+        // - Decent amount (≥ ₹20,000) OR
+        // - Has dispatch/packing charges (real trip)
+        const hasCharges = loadings
+          .filter((l: any) => l.clientId?.toString() === id)
+          .some(
+            (l: any) => l.dispatchChargesTotal > 0 || l.packingAmountTotal > 0
+          );
+
+        if (remaining > 0 && (client.totalBilled >= 20000 || hasCharges)) {
           result.push({
             id,
             name: client.name,
@@ -143,9 +159,9 @@ export function ClientPayments() {
 
       return result.sort((a, b) => a.name.localeCompare(b.name));
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
-
   const selectedClient = clientData.find((c) => c.id === clientDetailsId);
 
   const totalBilled = selectedClient?.totalBilled || 0;

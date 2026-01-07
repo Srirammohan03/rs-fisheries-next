@@ -499,7 +499,7 @@ export default function StocksPage() {
 
   const availabilityPreview = useMemo(() => {
     const rows = [...availableVarieties].sort((a, b) => b.netKgs - a.netKgs);
-    const top = rows.slice(0, 9);
+    const top = rows.slice(0, 30);
     const remaining = Math.max(0, rows.length - top.length);
     return { top, remaining };
   }, [availableVarieties]);
@@ -635,6 +635,7 @@ export default function StocksPage() {
                 </div>
               </div>
 
+              {/* Removed this entire block to hide "+X more" */}
               {availabilityPreview.remaining > 0 && (
                 <p className="mt-3 text-xs text-gray-500">
                   +{availabilityPreview.remaining} more

@@ -65,12 +65,12 @@ export async function POST(req: NextRequest) {
         }
 
         const ref = asString(reference);
-        if (paymentMode !== "CASH" && !ref) {
-            return NextResponse.json(
-                { error: "reference is required for non-CASH payments" },
-                { status: 400 }
-            );
-        }
+        // if (paymentMode !== "CASH" && !ref) {
+        //     return NextResponse.json(
+        //         { error: "reference is required for non-CASH payments" },
+        //         { status: 400 }
+        //     );
+        // }
 
         let validatedSourceType: DispatchSourceType | undefined = undefined;
         let validatedSourceId: string | undefined = undefined;

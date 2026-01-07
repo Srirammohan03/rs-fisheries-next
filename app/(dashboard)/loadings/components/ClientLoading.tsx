@@ -25,21 +25,13 @@ const OTHER_VEHICLE_VALUE = "__OTHER__";
 const OTHER_CLIENT_VALUE = "__CLIENT_OTHER__";
 
 // ✅ Text validation + sanitization
-const CLIENT_NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
+// const CLIENT_NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
 // address allows numbers, commas, slash, hyphen etc.
-const ADDRESS_REGEX = /^[A-Za-z0-9][A-Za-z0-9 ,./#()-]*$/;
+// const ADDRESS_REGEX = /^[A-Za-z0-9][A-Za-z0-9 ,./#()-]*$/;
 
-const cleanClientName = (v: string) =>
-  v
-    .replace(/[^A-Za-z .'-]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimStart();
+const cleanClientName = (v: string) => v.trimStart();
 
-const cleanAddress = (v: string) =>
-  v
-    .replace(/[^A-Za-z0-9 ,./#()-]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimStart();
+const cleanAddress = (v: string) => v.trimStart();
 
 const safeNum = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(v);
@@ -426,20 +418,20 @@ export default function ClientLoadingForm() {
       toast.error("Enter Client Name");
       return false;
     }
-    if (!CLIENT_NAME_REGEX.test(name)) {
-      toast.error("Client Name should contain only letters and spaces");
-      return false;
-    }
+    // if (!CLIENT_NAME_REGEX.test(name)) {
+    //   toast.error("Client Name should contain only letters and spaces");
+    //   return false;
+    // }
 
-    const addr = village.trim();
-    if (!addr) {
-      toast.error("Address is required");
-      return false;
-    }
-    if (!ADDRESS_REGEX.test(addr)) {
-      toast.error("Address contains invalid characters");
-      return false;
-    }
+    // const addr = village.trim();
+    // if (!addr) {
+    //   toast.error("Address is required");
+    //   return false;
+    // }
+    // if (!ADDRESS_REGEX.test(addr)) {
+    //   toast.error("Address contains invalid characters");
+    //   return false;
+    // }
 
     if (!date.trim()) {
       toast.error("Select Date");

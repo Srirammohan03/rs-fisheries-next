@@ -1060,7 +1060,7 @@ export default function ClientBillsPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
+              {/* <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
                 <div className="text-sm text-slate-600">Total</div>
                 <div className="text-lg font-extrabold text-slate-900">
                   {(
@@ -1070,7 +1070,7 @@ export default function ClientBillsPage() {
                     addLoose
                   ).toFixed(2)}
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
 

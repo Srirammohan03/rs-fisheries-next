@@ -6,7 +6,7 @@ import { ClientPayments } from "./component/ClientPayments";
 import { EmployeePayments } from "./component/EmployeePayments";
 // import { PackingAmount } from "./component/PackingAmount";
 import { DispatchPayment } from "./component/DispatchPayment";
-import PackingAmount from "./component/PackingAmount";
+// import PackingAmount from "./component/PackingAmount";
 
 type TabId = "dispatch" | "vendor" | "client" | "employee" | "packing";
 
@@ -118,7 +118,7 @@ function TabsContent({
 }
 
 export default function Payments() {
-  const [tab, setTab] = useState<TabId>("packing");
+  const [tab, setTab] = useState<TabId>("dispatch");
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
@@ -135,9 +135,9 @@ export default function Payments() {
         {/* ✅ Tabs: mobile grid, desktop pill */}
         <TabsRoot value={tab} onValueChange={setTab}>
           <TabsList>
-            <TabsTrigger value="packing" activeValue={tab} onClick={setTab}>
+            {/* <TabsTrigger value="packing" activeValue={tab} onClick={setTab}>
               Ice
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger value="dispatch" activeValue={tab} onClick={setTab}>
               Dispatch
             </TabsTrigger>
@@ -156,9 +156,9 @@ export default function Payments() {
       </header>
 
       <main className="w-full">
-        <TabsContent activeValue={tab} value="packing">
+        {/* <TabsContent activeValue={tab} value="packing">
           <PackingAmount />
-        </TabsContent>
+        </TabsContent> */}
         <TabsContent activeValue={tab} value="dispatch">
           <DispatchPayment />
         </TabsContent>
