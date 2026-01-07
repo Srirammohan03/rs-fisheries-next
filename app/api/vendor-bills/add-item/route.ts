@@ -151,7 +151,7 @@ export const POST = withAuth(async (req: Request) => {
       await logAudit({
         user: (req as any).user,
         action: "CREATE",
-        module: "Vendor Bill",
+        module: "Vendor Bills",
         recordId: item.id,
         request: req,
         oldValues: null,

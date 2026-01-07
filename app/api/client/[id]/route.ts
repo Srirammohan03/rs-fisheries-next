@@ -146,6 +146,58 @@ export const GET = apiHandler(async (_req: Request, context: any) => {
 
   const client = await prisma.client.findUnique({
     where: { id },
+    include: {
+      payments: {
+        select: {
+          clientKey: true,
+          clientName: true,
+          date: true,
+          amount: true,
+          paymentMode: true,
+          isInstallment: true,
+          client: {
+            select: {
+              billNo: true,
+            },
+          },
+        },
+      },
+      loadings: {
+        select: {
+          billNo: true,
+          date: true,
+          vehicle: {
+            select: {
+              ownership: true,
+              vehicleNumber: true,
+            },
+          },
+          tripStatus: true,
+          vehicleNo: true,
+          startedAt: true,
+          completedAt: true,
+          totalTrays: true,
+          totalLooseKgs: true,
+          totalTrayKgs: true,
+          totalKgs: true,
+          totalPrice: true,
+          dispatchChargesTotal: true,
+          packingAmountTotal: true,
+          grandTotal: true,
+          items: {
+            select: {
+              varietyCode: true,
+              noTrays: true,
+              trayKgs: true,
+              loose: true,
+              totalKgs: true,
+              pricePerKg: true,
+              totalPrice: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   return NextResponse.json(

@@ -62,6 +62,7 @@ export const PATCH = withAuth(
 
         const fItem = await tx.formerItem.findUnique({
           where: { id: itemId },
+          include: { loading: { select: { billNo: true } } },
         });
 
         if (fItem) {
@@ -121,12 +122,6 @@ export const PATCH = withAuth(
           /* ---------- AUDIT (FARMER ITEM UPDATE) ---------- */
           const { oldValues, newValues } = diffObjects(fItem, updatedItem);
 
-          const updatedValues = {
-            ...newValues,
-            billNo: updatedItem.loading.billNo,
-            name: updatedItem.loading.FarmerName,
-          };
-
           if (Object.keys(newValues).length > 0) {
             await logAudit({
               user: (req as any).user,
@@ -135,7 +130,8 @@ export const PATCH = withAuth(
               recordId: updatedItem.id,
               request: req,
               oldValues,
-              newValues: updatedValues,
+              newValues,
+              label: `Vender Bills updated for bill: ${fItem.loading.billNo}`,
             });
           }
 

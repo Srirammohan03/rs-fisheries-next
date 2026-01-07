@@ -9,6 +9,7 @@ type LogAuditParams = {
     role: string;
   };
   module: string;
+  label?: string;
   action: AuditAction;
   recordId: string;
   oldValues?: Prisma.InputJsonValue | null;
@@ -24,6 +25,7 @@ export async function logAudit({
   oldValues,
   newValues,
   request,
+  label,
 }: LogAuditParams) {
   await prisma.auditLog.create({
     data: {
@@ -38,6 +40,7 @@ export async function logAudit({
         request.headers.get("x-forwarded-for") ??
         request.headers.get("x-real-ip"),
       userAgent: request.headers.get("user-agent"),
+      label,
     },
   });
 }

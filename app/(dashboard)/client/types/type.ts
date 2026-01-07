@@ -68,4 +68,49 @@ export type ClientFormValues = z.infer<typeof clientSchema>;
 
 export interface Client extends ClientFormValues {
   id: string;
+  createdAt: string;
+  updatedAt?: string;
+  payments?: ClientPayment[];
+  loadings?: ClientLoading[];
+}
+
+export interface ClientPayment {
+  clientKey: string;
+  clientName: string;
+  date: string; // ISO string
+  amount: number;
+  paymentMode: "CASH" | "AC" | "UPI" | "CHEQUE";
+  isInstallment: boolean;
+  client: {
+    billNo: string;
+  };
+}
+
+export interface ClientLoading {
+  billNo: string;
+  date: string; // ISO string
+  vehicle: null;
+  tripStatus: "RUNNING" | "COMPLETED" | "CANCELLED";
+  vehicleNo: string;
+  startedAt: string; // ISO string
+  completedAt: string | null;
+  totalTrays: number;
+  totalLooseKgs: number;
+  totalTrayKgs: number;
+  totalKgs: number;
+  totalPrice: number;
+  dispatchChargesTotal: number;
+  packingAmountTotal: number;
+  grandTotal: number;
+  items: LoadingItem[];
+}
+
+export interface LoadingItem {
+  varietyCode: string;
+  noTrays: number;
+  trayKgs: number;
+  loose: number;
+  totalKgs: number;
+  pricePerKg: number;
+  totalPrice: number;
 }
