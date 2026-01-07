@@ -34,7 +34,15 @@ import {
   ArrowUpDown,
   Check,
   RefreshCw,
+  Tag,
 } from "lucide-react";
+
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // --- Shadcn UI Imports ---
 import { Button } from "@/components/ui/button";
@@ -66,16 +74,37 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 // --- Types ---
+interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
 interface AuditLog {
   id: string;
   userId: string;
   userRole: string;
+  email: string;
   module: string;
   action: "CREATE" | "UPDATE" | "DELETE" | "STATUS_CHANGE";
   recordId: string;
+  label?: string;
   oldValues: Record<string, any> | null;
   newValues: Record<string, any> | null;
   ipAddress: string | null;
@@ -177,26 +206,42 @@ const multiSelectFilter: FilterFn<AuditLog> = (
 
 const AuditLogsPage = () => {
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [fromDate, setFromDate] = useState<Date | null>(null);
+  const [toDate, setToDate] = useState<Date | null>(null);
 
   // Table State
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [globalFilter, setGlobalFilter] = useState("");
-
+  const [page, setPage] = useState(1);
+  const limit = 15;
+  const debouncedSearch = useDebouncedValue(globalFilter, 500);
   // --- Data Fetching ---
-  const {
-    data: logs = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery<AuditLog[]>({
-    queryKey: ["audit-logs"],
+  const { data, isLoading, isError, error, refetch } = useQuery<
+    PaginatedResponse<AuditLog>
+  >({
+    queryKey: [
+      "audit-logs",
+      limit,
+      page,
+      debouncedSearch,
+      fromDate?.toISOString(),
+      toDate?.toISOString(),
+    ],
     queryFn: async () => {
-      // Replace with your actual API endpoint
-      const { data } = await axios.get("/api/audit-logs");
-      return data.data;
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        search: debouncedSearch,
+      });
+
+      if (fromDate)
+        params.append("fromDate", fromDate.toISOString().split("T")[0]);
+      if (toDate) params.append("toDate", toDate.toISOString().split("T")[0]);
+
+      const { data } = await axios.get(`/api/audit-logs?${params.toString()}`);
+      return data;
     },
     placeholderData: keepPreviousData,
   });
@@ -243,9 +288,6 @@ const AuditLogsPage = () => {
               {(row.original.userRole || "U").substring(0, 2).toUpperCase()}
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-sm">
-                User {row.original.userId.substring(0, 4)}...
-              </span>
               <RoleBadge role={row.getValue("userRole")} />
             </div>
           </div>
@@ -268,13 +310,16 @@ const AuditLogsPage = () => {
         ),
       },
       {
-        accessorKey: "recordId",
-        header: "Record ID",
-        cell: ({ row }) => (
-          <code className="bg-muted px-2 py-1 rounded text-xs font-mono">
-            {String(row.getValue("recordId")).substring(0, 15)}
-          </code>
-        ),
+        accessorKey: "email",
+        header: "Changed By",
+        cell: ({ row }) => {
+          console.log(row);
+          return (
+            <code className="bg-muted px-2 py-1 rounded text-xs font-mono">
+              {String(row.getValue("email"))}
+            </code>
+          );
+        },
       },
       //   {
       //     id: "actions",
@@ -308,12 +353,14 @@ const AuditLogsPage = () => {
     []
   );
 
+  const logs = data?.data ?? [];
+  const meta = data?.meta;
+
   // --- Table Instance ---
   const table = useReactTable({
     data: logs,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onSortingChange: setSorting,
@@ -421,125 +468,161 @@ const AuditLogsPage = () => {
               Track and monitor all system changes and user activities.
             </p>
           </div>
-          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
+          {/* <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
             <Download className="w-4 h-4" />
             Export CSV
-          </Button>
+          </Button> */}
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="flex gap-3">
-            <div className="relative flex-1 w-full max-w-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          {/* LEFT SIDE */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <div className="relative w-full sm:w-[260px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search all columns..."
+                placeholder="Search logs..."
                 value={globalFilter}
-                onChange={(e) => setGlobalFilter(e.target.value)}
-                className="pl-9 w-full bg-background"
+                onChange={(e) => {
+                  setGlobalFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="pl-9"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              {/* Refresh */}
+
+            {/* Date Filter */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Clock className="h-4 w-4" />
+                  {fromDate && toDate
+                    ? `${fromDate.toLocaleDateString()} → ${toDate.toLocaleDateString()}`
+                    : "Date range"}
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent align="start" className="w-auto p-2">
+                <Calendar
+                  mode="range"
+                  selected={{
+                    from: fromDate ?? undefined,
+                    to: toDate ?? undefined,
+                  }}
+                  onSelect={(range) => {
+                    setFromDate(range?.from ?? null);
+                    setToDate(range?.to ?? null);
+                    setPage(1);
+                  }}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {/* Clear Date */}
+            {(fromDate || toDate) && (
               <Button
-                variant="outline"
-                onClick={() => refetch()}
-                disabled={isLoading}
-                className="gap-2"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFromDate(null);
+                  setToDate(null);
+                  setPage(1);
+                }}
               >
-                <RefreshCw className={isLoading ? "animate-spin" : ""} />
-                <span className="hidden sm:inline">Refresh</span>
+                Clear
               </Button>
-            </div>
+            )}
+
+            {/* Refresh */}
+            <Button
+              variant="outline"
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="gap-2"
+            >
+              <RefreshCw className={isLoading ? "animate-spin" : ""} />
+              <span className="hidden sm:inline">Refresh</span>
+            </Button>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* Filter Dropdown */}
+          {/* RIGHT SIDE */}
+          <div className="flex items-center gap-2">
+            {/* Action Filter */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2 border-dashed">
-                  <Filter className="w-4 h-4" />
-                  Filter Action
+                  <Filter className="h-4 w-4" />
+                  Action
                   {columnFilters.length > 0 && (
                     <Badge
                       variant="secondary"
-                      className="ml-1 px-1 h-5 rounded-sm"
+                      className="ml-1 h-5 px-1 rounded-sm"
                     >
                       {columnFilters.length}
                     </Badge>
                   )}
                 </Button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent align="end" className="w-[200px]">
                 <DropdownMenuLabel>Filter by Action</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {uniqueActions.map((action) => {
-                  const currentFilter =
+                  const current =
                     (table.getColumn("action")?.getFilterValue() as string[]) ||
                     [];
-                  const isSelected = currentFilter.includes(action);
+                  const checked = current.includes(action);
+
                   return (
                     <DropdownMenuCheckboxItem
                       key={action}
-                      checked={isSelected}
-                      onCheckedChange={(checked) => {
-                        const newFilter = checked
-                          ? [...currentFilter, action]
-                          : currentFilter.filter((f) => f !== action);
+                      checked={checked}
+                      onCheckedChange={(value) => {
+                        const next = value
+                          ? [...current, action]
+                          : current.filter((a) => a !== action);
+
                         table
                           .getColumn("action")
-                          ?.setFilterValue(
-                            newFilter.length ? newFilter : undefined
-                          );
+                          ?.setFilterValue(next.length ? next : undefined);
                       }}
                     >
                       {action}
                     </DropdownMenuCheckboxItem>
                   );
                 })}
-                {columnFilters.length > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => table.resetColumnFilters()}
-                      className="justify-center text-center font-medium"
-                    >
-                      Clear Filters
-                    </DropdownMenuItem>
-                  </>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Column Visibility Dropdown */}
+            {/* Columns */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2">
-                  <LayoutGrid className="w-4 h-4" />
+                  <LayoutGrid className="h-4 w-4" />
                   Columns
-                  <ChevronDown className="w-3 h-3 opacity-50" />
+                  <ChevronDown className="h-3 w-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[150px]">
+
+              <DropdownMenuContent align="end" className="w-[160px]">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {table
                   .getAllColumns()
                   .filter((column) => column.getCanHide())
-                  .map((column) => {
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        className="capitalize"
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) =>
-                          column.toggleVisibility(!!value)
-                        }
-                      >
-                        {column.id}
-                      </DropdownMenuCheckboxItem>
-                    );
-                  })}
+                  .map((column) => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={column.getIsVisible()}
+                      onCheckedChange={(value) =>
+                        column.toggleVisibility(!!value)
+                      }
+                    >
+                      {column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -609,29 +692,70 @@ const AuditLogsPage = () => {
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-end space-x-2 py-4">
-          <div className="flex-1 text-sm text-muted-foreground">
-            Showing {table.getRowModel().rows.length} entries
+        {meta && meta.totalPages > 1 && (
+          <div className="flex justify-end py-4">
+            <Pagination>
+              <PaginationContent>
+                {/* Previous */}
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className={
+                      page <= 1
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+
+                {/* Page Numbers */}
+                {Array.from({ length: meta.totalPages })
+                  .slice(
+                    Math.max(0, page - 3),
+                    Math.min(meta.totalPages, page + 2)
+                  )
+                  .map((_, idx) => {
+                    const pageNumber = idx + Math.max(1, page - 2);
+
+                    return (
+                      <PaginationItem key={pageNumber}>
+                        <PaginationLink
+                          isActive={page === pageNumber}
+                          onClick={() => setPage(pageNumber)}
+                          className="cursor-pointer"
+                        >
+                          {pageNumber}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+
+                {/* Ellipsis (optional, UX polish) */}
+                {meta.totalPages > 5 && page < meta.totalPages - 2 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+
+                {/* Next */}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() =>
+                      setPage((p) =>
+                        meta ? Math.min(meta.totalPages, p + 1) : p
+                      )
+                    }
+                    className={
+                      page >= meta.totalPages
+                        ? "pointer-events-none opacity-50"
+                        : "cursor-pointer"
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
-          <div className="space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Details Sheet (Drawer) */}
@@ -683,15 +807,26 @@ const AuditLogsPage = () => {
                   </div>
                   <div className="space-y-1">
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Actor
+                      Changed By
                     </span>
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-muted-foreground" />
                       <span className="font-mono text-sm">
-                        {selectedLog.userRole}
+                        {selectedLog.email}
                       </span>
                     </div>
                   </div>
+                  {selectedLog.label !== null && (
+                    <div className="col-span-full">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Label
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-3 h-3 text-muted-foreground" />
+                        {selectedLog.label}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -712,7 +847,7 @@ const AuditLogsPage = () => {
                         {selectedLog.ipAddress || "N/A"}
                       </div>
                     </div>
-                    <div>
+                    {/* <div>
                       <span className="text-muted-foreground block text-xs">
                         Record ID
                       </span>
@@ -720,7 +855,7 @@ const AuditLogsPage = () => {
                         <FileJson className="w-3 h-3 text-muted-foreground" />
                         {selectedLog.recordId}
                       </div>
-                    </div>
+                    </div> */}
                     <div className="col-span-full">
                       <span className="text-muted-foreground block text-xs">
                         User Agent

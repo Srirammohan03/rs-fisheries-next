@@ -51,6 +51,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import DeleteDialog from "@/components/helpers/DeleteDialog";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -185,9 +186,17 @@ export default function ClientsPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(client.id)}
+                onClick={() => {
+                  if (!client.email) {
+                    toast.error("Email not available");
+                    return;
+                  }
+
+                  navigator.clipboard.writeText(client.email);
+                  toast.success("Email copied to clipboard");
+                }}
               >
-                Copy ID
+                Copy Email
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -279,7 +288,84 @@ export default function ClientsPage() {
   }
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="w-full p-6 space-y-6">
+        {/* Page Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        {/* Toolbar Skeleton */}
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 w-80" />
+          <Skeleton className="h-10 w-28 ml-auto" />
+        </div>
+
+        {/* Table Skeleton */}
+        <div className="rounded-md border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {columns.map((_, i) => (
+                  <TableHead key={i}>
+                    <Skeleton className="h-4 w-24" />
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {Array.from({ length: 5 }).map((_, rowIndex) => (
+                <TableRow key={rowIndex}>
+                  {/* Party Name */}
+                  <TableCell>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </TableCell>
+
+                  {/* Contact */}
+                  <TableCell>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-3 w-36" />
+                    </div>
+                  </TableCell>
+
+                  {/* GST */}
+                  <TableCell>
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </TableCell>
+
+                  {/* Credit Limit */}
+                  <TableCell className="text-right">
+                    <Skeleton className="h-4 w-24 ml-auto" />
+                  </TableCell>
+
+                  {/* Status */}
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-2.5 w-2.5 rounded-full" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                  </TableCell>
+
+                  {/* Actions */}
+                  <TableCell className="text-right">
+                    <Skeleton className="h-8 w-8 rounded-md ml-auto" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    );
   }
 
   return (

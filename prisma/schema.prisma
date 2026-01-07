@@ -696,6 +696,8 @@ model AuditLog {
   userId   String
   userRole String
 
+  email String?
+
   module   String
   action   String
   recordId String

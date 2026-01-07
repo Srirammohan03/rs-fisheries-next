@@ -7,6 +7,7 @@ type LogAuditParams = {
   user: {
     id: string;
     role: string;
+    email: string;
   };
   module: string;
   label?: string;
@@ -31,6 +32,7 @@ export async function logAudit({
     data: {
       userId: user.id,
       userRole: user.role,
+      email: user.email ?? null,
       module,
       action,
       recordId,

@@ -102,7 +102,7 @@ const ClientViewPage = () => {
           >
             Edit Profile
           </Button>
-          <Button>Create New Invoice</Button>
+          {/* <Button>Create New Invoice</Button> */}
         </div>
       </div>
 
@@ -247,7 +247,7 @@ const ClientViewPage = () => {
                         <th className="px-4 py-3 font-medium">Bill No</th>
                         <th className="px-4 py-3 font-medium">Date</th>
                         <th className="px-4 py-3 font-medium">Payment Mode</th>
-                        <th className="px-4 py-3 font-medium">Type</th>
+                        {/* <th className="px-4 py-3 font-medium">Type</th> */}
                         <th className="px-4 py-3 font-medium text-right">
                           Amount
                         </th>
@@ -275,7 +275,7 @@ const ClientViewPage = () => {
                                   {payment.paymentMode}
                                 </Badge>
                               </td>
-                              <td className="px-4 py-3">
+                              {/* <td className="px-4 py-3">
                                 {payment.isInstallment ? (
                                   <Badge
                                     variant="secondary"
@@ -288,7 +288,7 @@ const ClientViewPage = () => {
                                     Full Payment
                                   </span>
                                 )}
-                              </td>
+                              </td> */}
                               <td className="px-4 py-3 text-right font-medium text-green-600">
                                 {formatCurrency(payment.amount)}
                               </td>
