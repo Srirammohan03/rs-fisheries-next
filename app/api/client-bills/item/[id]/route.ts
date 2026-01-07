@@ -68,7 +68,14 @@ export const PATCH = withAuth(
       };
 
       const updated = await prisma.$transaction(async (tx) => {
-        const existing = await tx.clientItem.findUnique({ where: { id } });
+        const existing = await tx.clientItem.findUnique({
+          where: { id },
+          include: {
+            loading: {
+              select: { billNo: true },
+            },
+          },
+        });
         if (!existing) {
           throw new Error("Item not found");
         }
@@ -144,11 +151,12 @@ export const PATCH = withAuth(
           await logAudit({
             user: (request as any).user,
             action: "UPDATE",
-            module: "Client Item",
+            module: "Client Bills",
             recordId: result.id,
             request,
             oldValues,
             newValues,
+            label: `Client Bills updated for bill: ${existing.loading.billNo}`,
           });
         }
 

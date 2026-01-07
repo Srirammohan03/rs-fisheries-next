@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PaymentMode } from "@prisma/client";
+import { withAuth } from "@/lib/withAuth";
+import { logAudit } from "@/lib/auditLogger";
 
 export const runtime = "nodejs";
 
@@ -46,7 +48,7 @@ type PostBody = {
 };
 
 /* ================= POST ================= */
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = (await req.json()) as PostBody;
 
@@ -58,12 +60,24 @@ export async function POST(req: NextRequest) {
     const paymentModeStr = asString(body.paymentMode)?.toUpperCase() || null;
     const paymentMode = paymentModeStr as PaymentMode | null;
 
-    if (!clientDetailsId || !clientName || !dateStr || !totalAmount || !paymentMode) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (
+      !clientDetailsId ||
+      !clientName ||
+      !dateStr ||
+      !totalAmount ||
+      !paymentMode
+    ) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
     if (!Object.values(PaymentMode).includes(paymentMode)) {
-      return NextResponse.json({ error: "Invalid payment mode" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid payment mode" },
+        { status: 400 }
+      );
     }
 
     const date = new Date(dateStr);
@@ -83,7 +97,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (loadings.length === 0) {
-      return NextResponse.json({ error: "No bills found for this client" }, { status: 404 });
+      return NextResponse.json(
+        { error: "No bills found for this client" },
+        { status: 404 }
+      );
     }
 
     // ✅ Paid per loading
@@ -112,14 +129,33 @@ export async function POST(req: NextRequest) {
 
     // basic installment validation (optional fields)
     if (isInstallment) {
-      if (installments !== null && (!Number.isInteger(installments) || installments < 1)) {
-        return NextResponse.json({ error: "Invalid total installments" }, { status: 400 });
+      if (
+        installments !== null &&
+        (!Number.isInteger(installments) || installments < 1)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid total installments" },
+          { status: 400 }
+        );
       }
-      if (installmentNumber !== null && (!Number.isInteger(installmentNumber) || installmentNumber < 1)) {
-        return NextResponse.json({ error: "Invalid installment number" }, { status: 400 });
+      if (
+        installmentNumber !== null &&
+        (!Number.isInteger(installmentNumber) || installmentNumber < 1)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid installment number" },
+          { status: 400 }
+        );
       }
-      if (installments !== null && installmentNumber !== null && installmentNumber > installments) {
-        return NextResponse.json({ error: "Installment number exceeds total installments" }, { status: 400 });
+      if (
+        installments !== null &&
+        installmentNumber !== null &&
+        installmentNumber > installments
+      ) {
+        return NextResponse.json(
+          { error: "Installment number exceeds total installments" },
+          { status: 400 }
+        );
       }
     }
 
@@ -140,7 +176,7 @@ export async function POST(req: NextRequest) {
 
         const p = await tx.clientPayment.create({
           data: {
-            clientId: l.id,                 // ✅ ClientLoading FK
+            clientId: l.id, // ✅ ClientLoading FK
             clientDetailsId: clientDetailsId, // ✅ Client master FK
             clientKey: `client:${clientName}`,
             clientName,
@@ -166,7 +202,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, data: createdPayments }, { status: 201 });
+    for (const payment of createdPayments) {
+      await logAudit({
+        user: (req as any).user,
+        module: "Client Payments",
+        action: "CREATE",
+        recordId: payment.id,
+        label: `Client payment created for bill ${payment.billNo}`,
+        oldValues: null,
+        newValues: {
+          clientName: payment.clientName,
+          clientKey: payment.clientKey,
+          billNo: payment.billNo,
+          amount: payment.amount,
+          paymentMode: payment.paymentMode,
+          date: payment.date,
+        },
+        request: req,
+      });
+    }
+
+    return NextResponse.json(
+      { success: true, data: createdPayments },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("ClientPayment POST error:", error);
     return NextResponse.json(
@@ -174,7 +233,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /* ================= GET ================= */
 export async function GET(req: NextRequest) {

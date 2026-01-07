@@ -3,7 +3,7 @@
 import React from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import {
   ArrowLeft,
   Building2,
@@ -18,6 +18,9 @@ import {
   ShieldCheck,
   TrendingUp,
   TrendingDown,
+  Calendar,
+  Truck,
+  Package,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,30 +30,32 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Client, ClientPayment } from "../types/type";
 
 // --- Page Component ---
 const ClientViewPage = () => {
   const { id } = useParams();
   const router = useRouter();
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["client", id],
     queryFn: async () => {
       const { data } = await axios.get(`/api/client/${id}`);
-      return data.data;
+      return data.data as Client;
     },
     enabled: !!id,
   });
 
   if (isLoading) return <LoadingSkeleton />;
-  if (isError) return <ErrorState />;
+  if (isError) return <ErrorState error={error} />;
 
-  const client = data;
+  const client = data!;
 
   // Formatting helpers
   const formatCurrency = (val: number) =>
@@ -58,6 +63,15 @@ const ClientViewPage = () => {
       style: "currency",
       currency: "INR",
     }).format(val);
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -128,10 +142,11 @@ const ClientViewPage = () => {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full md:w-[400px] grid-cols-3">
+        <TabsList className="grid w-full md:w-[400px] grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="banking">Banking</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="loadings">Loadings</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -189,7 +204,7 @@ const ClientViewPage = () => {
         </TabsContent>
 
         {/* Banking Tab */}
-        <TabsContent value="banking">
+        <TabsContent value="banking" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -213,17 +228,217 @@ const ClientViewPage = () => {
         </TabsContent>
 
         {/* History Tab (Placeholder for relations) */}
-        <TabsContent value="history">
+        <TabsContent value="history" className="space-y-4">
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <History className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No Recent Transactions</h3>
-              <p className="text-muted-foreground max-w-sm">
-                Transactions and loading history for {client.partyName} will
-                appear here.
-              </p>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" /> Payment History
+              </CardTitle>
+              <CardDescription>
+                Recent payment records and transactions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {client.payments && client.payments.length > 0 ? (
+                <div className="rounded-md border">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Bill No</th>
+                        <th className="px-4 py-3 font-medium">Date</th>
+                        <th className="px-4 py-3 font-medium">Payment Mode</th>
+                        <th className="px-4 py-3 font-medium">Type</th>
+                        <th className="px-4 py-3 font-medium text-right">
+                          Amount
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {client &&
+                        client.payments &&
+                        client.payments.map(
+                          (payment: ClientPayment, idx: number) => (
+                            <tr key={idx} className="hover:bg-muted/10">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  {payment.client.billNo}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <Calendar className="h-3 w-3 text-muted-foreground" />
+                                  {formatDate(payment.date)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant="outline">
+                                  {payment.paymentMode}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3">
+                                {payment.isInstallment ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs h-5"
+                                  >
+                                    Installment
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">
+                                    Full Payment
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-green-600">
+                                {formatCurrency(payment.amount)}
+                              </td>
+                            </tr>
+                          )
+                        )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<CreditCard className="h-10 w-10" />}
+                  title="No Payments Recorded"
+                  desc="No payment history found for this client."
+                />
+              )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="loadings" className="space-y-4">
+          {client.loadings && client.loadings.length > 0 ? (
+            client.loadings.map((loading: any) => (
+              <Card key={loading.billNo} className="overflow-hidden">
+                <div className="bg-muted/30 p-4 border-b flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-lg">
+                        Bill #{loading.billNo}
+                      </span>
+                      <Badge
+                        variant={
+                          loading.tripStatus === "COMPLETED"
+                            ? "default"
+                            : "outline"
+                        }
+                      >
+                        {loading.tripStatus}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />{" "}
+                        {formatDate(loading.date)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Truck className="h-3 w-3" />{" "}
+                        {loading.vehicle?.vehicleNumber ||
+                          loading.vehicleNo ||
+                          "Vehicle not assigned"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Grand Total</p>
+                    <p className="text-xl font-bold text-primary">
+                      {formatCurrency(loading.grandTotal)}
+                    </p>
+                  </div>
+                </div>
+
+                <CardContent className="p-0">
+                  {/* Items Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Variety</th>
+                          <th className="px-4 py-3 font-medium text-right">
+                            Trays
+                          </th>
+                          <th className="px-4 py-3 font-medium text-right">
+                            Loose
+                          </th>
+                          <th className="px-4 py-3 font-medium text-right">
+                            Total Kgs
+                          </th>
+                          <th className="px-4 py-3 font-medium text-right">
+                            Rate/Kg
+                          </th>
+                          <th className="px-4 py-3 font-medium text-right">
+                            Total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {loading.items.map((item: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-muted/10">
+                            <td className="px-4 py-3 font-medium">
+                              {item.varietyCode}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {item.noTrays}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {item.loose}
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium">
+                              {item.totalKgs}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {formatCurrency(item.pricePerKg)}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {formatCurrency(item.totalPrice)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="bg-muted/10 p-4 flex flex-wrap justify-between items-end gap-4 text-sm">
+                  <div className="space-y-1 text-muted-foreground">
+                    <p>
+                      Started: {formatDate(loading.startedAt)} | Completed:{" "}
+                      {formatDate(loading.completedAt)}
+                    </p>
+                    <p>
+                      Total Trays: {loading.totalTrays} | Total Weight:{" "}
+                      {loading.totalKgs}kg
+                    </p>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <div className="flex justify-between gap-8">
+                      <span>Subtotal (Price):</span>
+                      <span>{formatCurrency(loading.totalPrice)}</span>
+                    </div>
+                    <div className="flex justify-between gap-8 text-muted-foreground">
+                      <span>Dispatch Charges:</span>
+                      <span>
+                        +{formatCurrency(loading.dispatchChargesTotal)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-8 text-muted-foreground">
+                      <span>Ice:</span>
+                      <span>+{formatCurrency(loading.packingAmountTotal)}</span>
+                    </div>
+                  </div>
+                </CardFooter>
+              </Card>
+            ))
+          ) : (
+            <EmptyState
+              icon={<Package className="h-10 w-10" />}
+              title="No Loadings Found"
+              desc="This client has no loadings associated yet."
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>
@@ -296,11 +511,33 @@ function LoadingSkeleton() {
   );
 }
 
-function ErrorState() {
+function ErrorState({ error }: { error: Error | AxiosError }) {
   return (
     <div className="h-screen flex flex-col items-center justify-center space-y-4">
-      <h2 className="text-xl font-bold">Client not found</h2>
+      <h2 className="text-xl font-bold">
+        {axios.isAxiosError(error)
+          ? error.response?.data.message
+          : error.message || "Client not found"}
+      </h2>
       <Button onClick={() => window.history.back()}>Go Back</Button>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+      <div className="bg-muted p-3 rounded-full mb-4">{icon}</div>
+      <h3 className="text-lg font-medium text-foreground">{title}</h3>
+      <p className="text-sm max-w-xs">{desc}</p>
     </div>
   );
 }

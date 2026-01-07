@@ -696,9 +696,11 @@ model AuditLog {
   userId   String
   userRole String
 
-  module   String // Customer, Vehicle, Invoice
-  action   String // CREATE | UPDATE | DELETE | STATUS_CHANGE
+  module   String
+  action   String
   recordId String
+
+  label String?
 
   oldValues Json?
   newValues Json?

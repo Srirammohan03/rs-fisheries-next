@@ -1,6 +1,8 @@
 // app/api/payments/vendor/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withAuth } from "@/lib/withAuth";
+import { logAudit } from "@/lib/auditLogger";
 
 export const runtime = "nodejs";
 
@@ -20,7 +22,7 @@ function asPositiveInt(value: unknown): number | null {
   return Number.isInteger(num) && num > 0 ? num : null;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   try {
     const body = await req.json();
 
@@ -128,30 +130,52 @@ export async function POST(req: NextRequest) {
 
     const paymentMode = paymentModeRaw?.toUpperCase() ?? "CASH";
 
-    const payment = await prisma.vendorPayment.create({
-      data: {
-        vendorId,
-        vendorKey,
-        vendorName,
-        source,
-        date,
-        amount,
-        paymentMode,
-        referenceNo,
-        paymentRef,
-        accountNumber,
-        ifsc,
-        bankName,
-        bankAddress,
-        paymentdetails,
-        isInstallment,
-        installments,
-        installmentNumber,
-        sourceRecordId: resolvedId,
-      },
-      include: {
-        vendorInvoice: true,
-      },
+    const payment = await prisma.$transaction(async (tx) => {
+      const createdPayments = await tx.vendorPayment.create({
+        data: {
+          vendorId,
+          vendorKey,
+          vendorName,
+          source,
+          date,
+          amount,
+          paymentMode,
+          referenceNo,
+          paymentRef,
+          accountNumber,
+          ifsc,
+          bankName,
+          bankAddress,
+          paymentdetails,
+          isInstallment,
+          installments,
+          installmentNumber,
+          sourceRecordId: resolvedId,
+        },
+        include: {
+          vendorInvoice: true,
+        },
+      });
+
+      await logAudit({
+        action: "CREATE",
+        module: "Vendor Payments",
+        request: req,
+        user: (req as any).user,
+        recordId: createdPayments.id,
+        oldValues: null,
+        newValues: {
+          vendorName: createdPayments.vendorName,
+          vendorKey: createdPayments.vendorKey,
+          source: createdPayments.source,
+          date: createdPayments.date,
+          amount: createdPayments.amount,
+          paymentMode: createdPayments.paymentMode,
+        },
+        label: `Vendor payment created for bill ${billNo ?? undefined}`,
+      });
+
+      return createdPayments;
     });
 
     return NextResponse.json({ success: true, data: payment }, { status: 201 });
@@ -162,7 +186,7 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 export async function GET(req: NextRequest) {
   try {
