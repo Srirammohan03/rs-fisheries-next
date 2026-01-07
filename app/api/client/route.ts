@@ -1,3 +1,4 @@
+// app\api\client\route.ts
 import { logAudit } from "@/lib/auditLogger";
 import prisma from "@/lib/prisma";
 import { withAuth } from "@/lib/withAuth";

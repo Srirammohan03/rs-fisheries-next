@@ -2,47 +2,33 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-/* ---------------- TYPES ---------------- */
-
 export interface ClientInvoiceData {
   invoiceNo: string;
   invoiceDate: string;
 
   clientName: string;
-  billTo?: string;
-  shipTo?: string;
-
-  /** This will be shown in table under "Description" */
-  description?: string;
-
-  hsn: string;
-
-  /** For client invoice you are forcing GST to 0 in rendering */
-  gstPercent: number;
-  taxableValue: number;
-  gstAmount: number;
-  totalAmount: number;
-
-  // Payment details (show inside left empty box under Tax Summary)
-  paymentMode?: string;
-  referenceNo?: string;
-  paymentRef?: string;
-  paymentdetails?: string;
-
-  placeOfSupply?: string;
+  billTo: string; // Full multi-line address
   contactNo?: string;
   state?: string;
   gstin?: string;
 
-  irn?: string;
-  ackNo?: string;
-  ackDate?: string;
+  description: string; // Required from dropdown
+  hsn: string; // Required from dropdown
+
+  gstPercent: number; // 0 for fisheries
+  taxableValue: number;
+
+  // Optional (we will compute if missing)
+  gstAmount?: number;
+  totalAmount?: number;
+
+  paymentMode?: string; // Optional – only show if exists
+  placeOfSupply?: string;
 }
 
 type Doc = InstanceType<typeof jsPDF>;
 
 export type ClientInvoiceAssets = {
-  /** Must be DataURL: data:image/jpeg;base64,... or data:image/png;base64,... */
   logoDataUrl?: string;
   logoWidth?: number;
   logoHeight?: number;
@@ -50,8 +36,7 @@ export type ClientInvoiceAssets = {
   signatureDataUrl?: string;
 };
 
-/* ---------------- COMPANY (EDIT HERE) ---------------- */
-
+/* ---------------- COMPANY DETAILS ---------------- */
 const COMPANY = {
   name: "RS FISHERIES PVT LTD",
   title: "Tax Invoice",
@@ -72,7 +57,6 @@ const COMPANY = {
 };
 
 /* ---------------- HELPERS ---------------- */
-
 const money = (n?: number) =>
   (n ?? 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
@@ -122,26 +106,36 @@ function amountToWords(num: number): string {
     "Ninety",
   ];
 
-  if (!num || num === 0) return "INR Zero Only";
-
   const inWords = (n: number): string => {
     if (n < 20) return a[n];
-    if (n < 100) return (b[Math.floor(n / 10)] + " " + a[n % 10]).trim();
+    if (n < 100)
+      return (b[Math.floor(n / 10)] + (n % 10 ? " " + a[n % 10] : "")).trim();
     if (n < 1000)
-      return (a[Math.floor(n / 100)] + " Hundred " + inWords(n % 100)).trim();
+      return (
+        a[Math.floor(n / 100)] +
+        " Hundred " +
+        (n % 100 ? inWords(n % 100) : "")
+      ).trim();
     if (n < 100000)
       return (
-        inWords(Math.floor(n / 1000)) + " Thousand " + inWords(n % 1000)
+        inWords(Math.floor(n / 1000)) +
+        " Thousand " +
+        (n % 1000 ? inWords(n % 1000) : "")
       ).trim();
     if (n < 10000000)
       return (
-        inWords(Math.floor(n / 100000)) + " Lakh " + inWords(n % 100000)
+        inWords(Math.floor(n / 100000)) +
+        " Lakh " +
+        (n % 100000 ? inWords(n % 100000) : "")
       ).trim();
     return (
-      inWords(Math.floor(n / 10000000)) + " Crore " + inWords(n % 10000000)
+      inWords(Math.floor(n / 10000000)) +
+      " Crore " +
+      (n % 10000000 ? inWords(n % 10000000) : "")
     ).trim();
   };
 
+  if (num <= 0) return "INR Zero Only";
   return `INR ${inWords(Math.floor(num))} Only`;
 }
 
@@ -150,14 +144,7 @@ function setBlack(doc: Doc) {
   doc.setTextColor(0);
 }
 
-function rect(
-  doc: Doc,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  lw = 0.35
-) {
+function rect(doc: Doc, x: number, y: number, w: number, h: number, lw = 0.35) {
   setBlack(doc);
   doc.setLineWidth(lw);
   doc.rect(x, y, w, h);
@@ -200,97 +187,6 @@ function textBox(
   });
 }
 
-function oneLineClamp(
-  doc: Doc,
-  text: string,
-  x: number,
-  y: number,
-  maxW: number,
-  fontSize = 7.2
-) {
-  doc.setFont("Helvetica", "normal");
-  doc.setFontSize(fontSize);
-
-  let t = text ?? "";
-  if (doc.getTextWidth(t) <= maxW) {
-    doc.text(t, x, y);
-    return;
-  }
-
-  const ell = "…";
-  let lo = 0;
-  let hi = t.length;
-
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    const test = t.slice(0, mid) + ell;
-    if (doc.getTextWidth(test) <= maxW) lo = mid + 1;
-    else hi = mid;
-  }
-
-  t = t.slice(0, Math.max(0, lo - 1)) + ell;
-  doc.text(t, x, y);
-}
-
-function detectImageFormat(dataUrl: string): "PNG" | "JPEG" | null {
-  if (!dataUrl.startsWith("data:image/")) return null;
-  if (dataUrl.startsWith("data:image/png")) return "PNG";
-  if (
-    dataUrl.startsWith("data:image/jpeg") ||
-    dataUrl.startsWith("data:image/jpg")
-  )
-    return "JPEG";
-  return null;
-}
-
-/** TS-safe: works in browser and node (no atob dependency) */
-function detectImageFormatFromContent(
-  dataUrl: string
-): "PNG" | "JPEG" | null {
-  if (!dataUrl.startsWith("data:image/")) return null;
-
-  const parts = dataUrl.split(",");
-  if (parts.length < 2) return null;
-  const base64 = parts[1];
-
-  let bytes: Uint8Array;
-
-  try {
-    if (typeof window === "undefined") {
-      const buf = Buffer.from(base64, "base64");
-      bytes = new Uint8Array(buf.slice(0, 16));
-    } else {
-      const bin = window.atob(base64.slice(0, 64));
-      const arr = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      bytes = arr;
-    }
-  } catch {
-    return null;
-  }
-
-  // PNG signature
-  if (
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return "PNG";
-  }
-
-  // JPEG signature
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "JPEG";
-  }
-
-  return null;
-}
-
 async function addImageSafe(
   doc: Doc,
   dataUrl: string | undefined,
@@ -303,45 +199,29 @@ async function addImageSafe(
 ) {
   if (!dataUrl) return;
 
-  let fmt = detectImageFormatFromContent(dataUrl);
-  if (!fmt) fmt = detectImageFormat(dataUrl);
-  if (!fmt) return;
+  const fmt: "PNG" | "JPEG" = dataUrl.startsWith("data:image/png")
+    ? "PNG"
+    : "JPEG";
 
-  let width = logoWidth;
-  let height = logoHeight;
+  let width = logoWidth ?? maxW;
+  let height = logoHeight ?? maxH;
 
-  if (
-    (width === undefined || height === undefined || width <= 0 || height <= 0) &&
-    typeof Image !== "undefined"
-  ) {
-    const imgProps = await new Promise<{ width: number; height: number }>(
-      (resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve({ width: img.width, height: img.height });
-        img.onerror = reject;
-        img.src = dataUrl;
-      }
-    ).catch(() => null);
-
-    if (imgProps) {
-      width = imgProps.width;
-      height = imgProps.height;
-    }
+  if (typeof Image !== "undefined" && (!width || !height)) {
+    const img = new Image();
+    await new Promise((resolve) => {
+      img.onload = resolve;
+      img.src = dataUrl;
+    });
+    width = img.width;
+    height = img.height;
   }
 
-  if (!width || !height) {
-    width = maxW;
-    height = maxH;
-  }
-
+  const ratio = width / height;
   let targetW = maxW;
   let targetH = maxH;
 
-  if (width > 0 && height > 0) {
-    const ratio = width / height;
-    if (targetW / targetH > ratio) targetW = targetH * ratio;
-    else targetH = targetW / ratio;
-  }
+  if (targetW / targetH > ratio) targetW = targetH * ratio;
+  else targetH = targetW / ratio;
 
   const targetX = x + (maxW - targetW) / 2;
   const targetY = y + (maxH - targetH) / 2;
@@ -349,17 +229,41 @@ async function addImageSafe(
   try {
     doc.addImage(dataUrl, fmt, targetX, targetY, targetW, targetH);
   } catch {
-    const altFmt = fmt === "JPEG" ? "PNG" : "JPEG";
-    try {
-      doc.addImage(dataUrl, altFmt, targetX, targetY, targetW, targetH);
-    } catch {
-      // ignore
-    }
+    // ignore
   }
 }
 
-/* ---------------- CORE RENDER ---------------- */
+/* ---------------- AutoTable BLACK/WHITE THEME ---------------- */
+const BW_TABLE = {
+  styles: {
+    fontSize: 7.6,
+    cellPadding: 1.5,
+    lineWidth: 0.35,
+    textColor: 0,
+    lineColor: 0,
+    fillColor: 255,
+  },
+  headStyles: {
+    fontStyle: "bold" as const,
+    halign: "center" as const,
+    textColor: 0,
+    lineColor: 0,
+    fillColor: 255,
+  },
+  bodyStyles: {
+    textColor: 0,
+    lineColor: 0,
+    fillColor: 255,
+  },
+  footStyles: {
+    fontStyle: "bold" as const,
+    textColor: 0,
+    lineColor: 0,
+    fillColor: 255,
+  },
+};
 
+/* ---------------- CORE RENDER ---------------- */
 async function renderClientInvoice(
   doc: Doc,
   data: ClientInvoiceData,
@@ -369,13 +273,27 @@ async function renderClientInvoice(
   const R = 198;
   const W = R - L;
 
-  // CLIENT INVOICES: Force 0% GST and Total = Taxable
+  // Robust values
   const taxable = Number(data.taxableValue || 0);
-  const gst = 0;
-  const total = taxable;
+  const gstPercent = Number(data.gstPercent || 0);
+
+  const computedGst = +((taxable * gstPercent) / 100).toFixed(2);
+  const computedTotal = +(taxable + computedGst).toFixed(2);
+
+  const gst = Number.isFinite(data.gstAmount ?? NaN)
+    ? Number(data.gstAmount)
+    : computedGst;
+
+  const total = Number.isFinite(data.totalAmount ?? NaN)
+    ? Number(data.totalAmount)
+    : computedTotal;
 
   const roundedTotal = Math.round(total);
   const roundOff = +(roundedTotal - total).toFixed(2);
+
+  const description =
+    (data.description || "").trim() || "Supply of Fresh Fish";
+  const hsn = (data.hsn || "").trim() || "0302";
 
   /* ---------------- TITLE ---------------- */
   setBlack(doc);
@@ -420,13 +338,11 @@ async function renderClientInvoice(
   });
 
   const pad = 2;
-  const maxW = rightAreaW - pad * 2;
-  doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.2);
-  oneLineClamp(doc, `Phone: ${COMPANY.phone}`, rightX + pad, y + 7.0, maxW, 7.2);
-  oneLineClamp(doc, `Email: ${COMPANY.email}`, rightX + pad, y + 10.6, maxW, 7.2);
-  oneLineClamp(doc, `GSTIN: ${COMPANY.gstin}`, rightX + pad, y + 14.2, maxW, 7.2);
-  oneLineClamp(doc, `State: ${COMPANY.state}`, rightX + pad, y + 17.8, maxW, 7.2);
+  doc.text(`Phone: ${COMPANY.phone}`, rightX + pad, y + 7.0);
+  doc.text(`Email: ${COMPANY.email}`, rightX + pad, y + 10.6);
+  doc.text(`GSTIN: ${COMPANY.gstin}`, rightX + pad, y + 14.2);
+  doc.text(`State: ${COMPANY.state}`, rightX + pad, y + 17.8);
 
   y += headerH;
 
@@ -442,18 +358,7 @@ async function renderClientInvoice(
   doc.text("Bill To:", L + 2, y + 6);
 
   doc.setFont("Helvetica", "normal");
-  const billToText = [
-    data.clientName || "",
-    data.billTo || "",
-    data.shipTo ? `Ship To: ${data.shipTo}` : "",
-    data.contactNo ? `Contact No: ${data.contactNo}` : "",
-    data.state ? `State: ${data.state}` : "",
-    data.gstin ? `GSTIN: ${data.gstin}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  textBox(doc, billToText, L, y + 6, billW, topRowH - 6, 7.4, 3.4);
+  textBox(doc, data.billTo, L, y + 6, billW, topRowH - 6, 7.4, 3.4);
 
   const invX = L + billW;
   const invW = W - billW;
@@ -480,23 +385,8 @@ async function renderClientInvoice(
     startY: y,
     theme: "grid",
     tableWidth: W,
-    margin: { left: L, right: 210 - R },
-    styles: {
-      fontSize: 7.6,
-      cellPadding: 1.5,
-      lineWidth: 0.35,
-      lineColor: [0, 0, 0],
-      fillColor: [255, 255, 255],
-      textColor: [0, 0, 0],
-    },
-    headStyles: {
-      fontStyle: "bold",
-      halign: "center",
-      lineWidth: 0.35,
-      lineColor: [0, 0, 0],
-      fillColor: [255, 255, 255],
-      textColor: [0, 0, 0],
-    },
+    margin: { left: L },
+    ...BW_TABLE,
     columnStyles: {
       0: { cellWidth: 12, halign: "center" },
       1: { cellWidth: 66 },
@@ -506,7 +396,6 @@ async function renderClientInvoice(
       5: { cellWidth: 18, halign: "right" },
       6: { cellWidth: 22, halign: "right" },
     },
-    // ✅ CHANGED: "Item name" -> "Description"
     head: [
       [
         "#",
@@ -521,8 +410,8 @@ async function renderClientInvoice(
     body: [
       [
         "1",
-        data.description || "Goods / Service",
-        data.hsn,
+        description, // ✅ always non-empty now
+        hsn,
         "1",
         money(taxable),
         money(gst),
@@ -542,14 +431,13 @@ async function renderClientInvoice(
 
   y += 10;
 
-  /* ---------------- TAX SUMMARY + TOTALS (WITH PAYMENT DETAILS INSIDE LEFT BOX) ---------------- */
+  /* ---------------- TAX SUMMARY + PAYMENT + TOTALS ---------------- */
   const lowerH = 38;
   rect(doc, L, y, W, lowerH);
 
   const leftLowerW = 112;
   vLine(doc, L + leftLowerW, y, y + lowerH);
 
-  // Left title
   const taxTitleH = 7;
   hLine(doc, L, L + leftLowerW, y + taxTitleH);
 
@@ -557,29 +445,21 @@ async function renderClientInvoice(
   doc.setFontSize(7.6);
   doc.text("Tax Summary:", L + 2, y + 5);
 
-  // Tax table inside left (top portion)
   const taxTableY = y + taxTitleH;
+
   autoTable(doc, {
     startY: taxTableY,
     theme: "grid",
     margin: { left: L },
     tableWidth: leftLowerW,
     styles: {
+      ...BW_TABLE.styles,
       fontSize: 7.0,
       cellPadding: 1.2,
-      lineWidth: 0.35,
-      lineColor: [0, 0, 0],
-      fillColor: [255, 255, 255],
-      textColor: [0, 0, 0],
     },
-    headStyles: {
-      fontStyle: "bold",
-      halign: "center",
-      lineWidth: 0.35,
-      lineColor: [0, 0, 0],
-      fillColor: [255, 255, 255],
-      textColor: [0, 0, 0],
-    },
+    headStyles: { ...BW_TABLE.headStyles },
+    bodyStyles: { ...BW_TABLE.bodyStyles },
+    footStyles: { ...BW_TABLE.footStyles },
     columnStyles: {
       0: { cellWidth: 24, halign: "center" },
       1: { cellWidth: 44, halign: "right" },
@@ -587,52 +467,28 @@ async function renderClientInvoice(
       3: { cellWidth: 26, halign: "right" },
     },
     head: [["HSN / SAC", "Taxable amount (Rs.)", "Rate (%)", "Amt (Rs.)"]],
-    body: [[data.hsn, money(taxable), `${gst.toFixed(0)}%`, money(gst)]],
+    body: [[hsn, money(taxable), `${gstPercent}%`, money(gst)]],
     foot: [["TOTAL", money(taxable), "", money(gst)]],
   });
 
-  // ✅ Payment Details in remaining empty space under the tax table (LEFT side)
+  // Payment Details (only show if mode exists)
   const lastTaxY = (doc as any).lastAutoTable.finalY as number;
   const paymentBoxTop = lastTaxY + 1.5;
-  const paymentBoxBottom = y + lowerH;
-  const paymentBoxH = Math.max(0, paymentBoxBottom - paymentBoxTop);
+  const paymentBoxH = Math.max(0, y + lowerH - paymentBoxTop);
 
-  if (paymentBoxH > 6) {
-    // separator line (looks neat)
+  if (paymentBoxH > 6 && (data.paymentMode || "").trim()) {
     hLine(doc, L, L + leftLowerW, paymentBoxTop);
-
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(7.6);
     doc.text("Payment Details:", L + 2, paymentBoxTop + 5);
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(7.2);
-
-    const paymentLines = [
-      `Mode: ${data.paymentMode || COMPANY.defaultPaymentMode}`,
-      data.referenceNo ? `Reference No: ${data.referenceNo}` : "",
-      data.paymentRef ? `Payment Ref: ${data.paymentRef}` : "",
-      data.paymentdetails ? `Notes: ${data.paymentdetails}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    // Place to the right of label, clamp inside leftLowerW area
-    textBox(
-      doc,
-      paymentLines,
-      L + 26,
-      paymentBoxTop + 1.5,
-      leftLowerW - 26,
-      paymentBoxH - 1.5,
-      7.2,
-      3.2
-    );
+    doc.text(`Mode: ${data.paymentMode}`, L + 26, paymentBoxTop + 10);
   }
 
   // Right totals panel
   const rightX2 = L + leftLowerW;
-
   const row1H = 12;
   const row2H = 14;
   const row3H = lowerH - row1H - row2H;
@@ -642,7 +498,6 @@ async function renderClientInvoice(
 
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.0);
-
   doc.text("Sub Total", rightX2 + 2, y + 4.5);
   doc.text(`Rs. ${money(total)}`, R - 3, y + 4.5, { align: "right" });
 
@@ -678,7 +533,6 @@ async function renderClientInvoice(
   const r3Y = y + row1H + row2H;
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.0);
-
   doc.text("Received", rightX2 + 2, r3Y + 5.0);
   doc.text("0.00", R - 3, r3Y + 5.0, { align: "right" });
 
@@ -703,10 +557,8 @@ async function renderClientInvoice(
   rect(doc, L, y, W, footerH);
 
   const bankW = 112;
-  const rightFooterW = W - bankW;
-
   vLine(doc, L + bankW, y, y + footerH);
-  const rightMid = L + bankW + rightFooterW / 2;
+  const rightMid = L + bankW + (W - bankW) / 2;
   vLine(doc, rightMid, y, y + footerH);
 
   doc.setFont("Helvetica", "bold");
@@ -737,14 +589,10 @@ Account holder's name : ${COMPANY.accountHolder}`;
 
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text(
-    "Authorized Signatory",
-    rightMid + (rightFooterW / 2) / 2,
-    y + footerH - 5,
-    { align: "center" }
-  );
+  doc.text("Authorized Signatory", rightMid + (W - bankW) / 4, y + footerH - 5, {
+    align: "center",
+  });
 
-  doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.2);
   doc.text("This is a Computer Generated Invoice", (L + R) / 2, 292, {
     align: "center",
@@ -752,7 +600,6 @@ Account holder's name : ${COMPANY.accountHolder}`;
 }
 
 /* ---------------- EXPORTS ---------------- */
-
 export async function buildClientInvoicePDF(
   JsPDF: typeof jsPDF,
   data: ClientInvoiceData,
@@ -778,17 +625,14 @@ export async function generateClientInvoicePDF(
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
-/* ---------------- CLIENT HELPER ---------------- */
-
 export async function loadImageAsDataUrl(path: string): Promise<string> {
   const res = await fetch(path, { cache: "no-store" });
   if (!res.ok) throw new Error(`Image not found: ${path}`);
   const blob = await res.blob();
-
-  return await new Promise<string>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Failed to read image"));
-    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.onload = () => resolve(reader.result as string);
     reader.readAsDataURL(blob);
   });
 }

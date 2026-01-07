@@ -20,16 +20,22 @@ export async function GET(req: NextRequest) {
   const payment = await prisma.clientPayment.findUnique({
     where: { id: paymentId },
     select: {
+      id: true,
+      amount: true,
+      date: true,
       paymentMode: true,
-      referenceNo: true,
-      paymentRef: true,
-      paymentdetails: true,
-      accountNumber: true,
-      ifsc: true,
-      bankName: true,
-      bankAddress: true,
+      isInstallment: true,
+      installments: true,
+      installmentNumber: true,
+      createdAt: true,
+      clientDetailsId: true,
     },
   });
+
+  if (!payment) {
+    // unlikely if invoice exists, but handle gracefully
+    return NextResponse.json({ invoice, payment: null });
+  }
 
   return NextResponse.json({ invoice, payment });
 }

@@ -1,15 +1,37 @@
-// app/api/invoices/client/route.tsx
+// app/api/invoices/client/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { paymentId, clientId, clientName, invoiceNo, billTo } = body;
 
-    if (!paymentId || !invoiceNo || !clientId || !clientName || !billTo) {
+    const {
+      paymentId,
+      clientId,
+      clientName,
+      invoiceNo,
+      billTo,
+      hsn,
+      description,
+      gstPercent = 0,
+    } = body;
+
+    // ✅ Strict validation (no defaults)
+    if (!paymentId || !clientId || !clientName || !invoiceNo || !billTo) {
       return NextResponse.json(
         { message: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    if (!hsn || !String(hsn).trim()) {
+      return NextResponse.json({ message: "HSN is required" }, { status: 400 });
+    }
+
+    if (!description || !String(description).trim()) {
+      return NextResponse.json(
+        { message: "Description is required" },
         { status: 400 }
       );
     }
@@ -20,13 +42,7 @@ export async function POST(req: NextRequest) {
         amount: true,
         date: true,
         paymentMode: true,
-        referenceNo: true,
-        paymentRef: true,
-        paymentdetails: true,
-        accountNumber: true,
-        ifsc: true,
-        bankName: true,
-        bankAddress: true,
+        clientName: true,
       },
     });
 
@@ -37,11 +53,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const hsn = "0302";
-    const gstPercent = 0;
     const taxableValue = payment.amount;
     const gstAmount = 0;
-    const totalAmount = taxableValue + gstAmount;
+    const totalAmount = taxableValue;
 
     const invoice = await prisma.clientInvoice.upsert({
       where: { paymentId },
@@ -49,8 +63,9 @@ export async function POST(req: NextRequest) {
         clientId,
         clientName,
         invoiceNo,
-        billTo,
-        hsn,
+        billTo: String(billTo).trim(),
+        hsn: String(hsn).trim(),
+        description: String(description).trim(),
         gstPercent,
         taxableValue,
         gstAmount,
@@ -63,8 +78,9 @@ export async function POST(req: NextRequest) {
         clientName,
         invoiceNo,
         invoiceDate: payment.date || new Date(),
-        billTo,
-        hsn,
+        billTo: String(billTo).trim(),
+        hsn: String(hsn).trim(),
+        description: String(description).trim(),
         gstPercent,
         taxableValue,
         gstAmount,
@@ -73,25 +89,23 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ✅ return invoice + payment so your frontend can generate PDF properly
     return NextResponse.json({
       success: true,
       invoice,
       payment: {
+        amount: payment.amount,
+        date: payment.date,
         paymentMode: payment.paymentMode,
-        referenceNo: payment.referenceNo,
-        paymentRef: payment.paymentRef,
-        paymentdetails: payment.paymentdetails,
-        accountNumber: payment.accountNumber,
-        ifsc: payment.ifsc,
-        bankName: payment.bankName,
-        bankAddress: payment.bankAddress,
+        clientName: payment.clientName,
       },
     });
   } catch (err: any) {
     console.error("Client Invoice Save Error:", err);
     return NextResponse.json(
-      { message: "Failed to save invoice", details: err.message },
+      {
+        message: "Failed to save invoice",
+        details: err?.message || "Unknown error",
+      },
       { status: 500 }
     );
   }
@@ -103,27 +117,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: "Missing paymentId" }, { status: 400 });
   }
 
-  const invoice = await prisma.clientInvoice.findUnique({
-    where: { paymentId },
-  });
+  try {
+    const invoice = await prisma.clientInvoice.findUnique({
+      where: { paymentId },
+    });
 
-  if (!invoice) {
-    return NextResponse.json({ message: "Invoice not found" }, { status: 404 });
+    if (!invoice) {
+      return NextResponse.json(
+        { message: "Invoice not found" },
+        { status: 404 }
+      );
+    }
+
+    const payment = await prisma.clientPayment.findUnique({
+      where: { id: paymentId },
+      select: { amount: true, date: true, paymentMode: true, clientName: true },
+    });
+
+    return NextResponse.json({ invoice, payment: payment || {} });
+  } catch (err: any) {
+    console.error("Invoice fetch error:", err);
+    return NextResponse.json(
+      {
+        message: "Failed to fetch invoice",
+        details: err?.message || "Unknown error",
+      },
+      { status: 500 }
+    );
   }
-
-  const payment = await prisma.clientPayment.findUnique({
-    where: { id: paymentId },
-    select: {
-      paymentMode: true,
-      referenceNo: true,
-      paymentRef: true,
-      paymentdetails: true,
-      accountNumber: true,
-      ifsc: true,
-      bankName: true,
-      bankAddress: true,
-    },
-  });
-
-  return NextResponse.json({ invoice, payment });
 }

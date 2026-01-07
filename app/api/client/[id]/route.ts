@@ -1,3 +1,4 @@
+// app\api\client\[id]\route.ts
 import { diffObjects } from "@/lib/auditDiff";
 import { logAudit } from "@/lib/auditLogger";
 import prisma from "@/lib/prisma";
