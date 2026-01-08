@@ -128,23 +128,22 @@ export const DispatchPayment = () => {
   });
   /* ---------------------- FETCH CLIENT LOADINGS ---------------------- */
   useEffect(() => {
-    const loadBills = async () => {
-      try {
-        setLoadingBills(true);
-        const res = await fetch("/api/client-loading?stage=PACKING_PENDING");
-
-        const json = await res.json();
-        setBills(json.data || []);
-      } catch (e) {
-        toast.error("Failed to load client bills");
-        setBills([]);
-      } finally {
-        setLoadingBills(false);
-      }
-    };
     loadBills();
   }, []);
+  const loadBills = async () => {
+    try {
+      setLoadingBills(true);
+      const res = await fetch("/api/client-loading?stage=PACKING_PENDING");
 
+      const json = await res.json();
+      setBills(json.data || []);
+    } catch (e) {
+      toast.error("Failed to load client bills");
+      setBills([]);
+    } finally {
+      setLoadingBills(false);
+    }
+  };
   /* ---------------------- AUTO TOTAL CALC ---------------------- */
   const totalAmount = useMemo(() => {
     if (iceBlocks <= 0 || icePrice <= 0) return 0;
@@ -346,6 +345,7 @@ export const DispatchPayment = () => {
       }
 
       toast.success("Ice blocks amount saved");
+      loadBills();
       await queryClient.invalidateQueries({
         queryKey: ["dispatch-pending-loadings"],
       });

@@ -20,18 +20,6 @@ import { toast } from "sonner";
 
 type PaymentMode = "cash" | "ac" | "upi" | "cheque";
 
-type ClientRow = {
-  id: string; // Client.id (master)
-  name: string;
-  totalBilled: number;
-  totalPaid: number;
-  remaining: number;
-  accountNumber?: string;
-  ifsc?: string;
-  bankName?: string;
-  bankAddress?: string;
-};
-
 const currency = (v: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -57,11 +45,22 @@ export function ClientPayments() {
   const [bankName, setBankName] = useState("");
   const [bankAddress, setBankAddress] = useState("");
 
-  // Fetch clients with pending dues (ALL loadings, calculate remaining)
-  const { data: clientData = [], isLoading: loadingClients } = useQuery<
-    ClientRow[]
+  const { data: billData = [], isLoading: loadingBills } = useQuery<
+    {
+      id: string; // Use loading ID as the key for payment
+      loadingId: string; // or whatever the loading record ID is
+      clientDetailsId: string;
+      clientName: string;
+      billAmount: number; // grandTotal of this loading
+      totalPaid: number;
+      remaining: number;
+      accountNumber?: string;
+      ifsc?: string;
+      bankName?: string;
+      bankAddress?: string;
+    }[]
   >({
-    queryKey: ["clients-for-payment"],
+    queryKey: ["bills-for-payment"],
     queryFn: async () => {
       const [loadingsRes, paymentsRes] = await Promise.all([
         axios.get("/api/client-loading"),
@@ -73,100 +72,58 @@ export function ClientPayments() {
 
       if (loadings.length === 0) return [];
 
-      // Group by master clientId
-      const clientMap = new Map<
-        string,
-        {
-          name: string;
-          totalBilled: number;
-          accountNumber?: string;
-          ifsc?: string;
-          bankName?: string;
-          bankAddress?: string;
-        }
-      >();
-
-      loadings.forEach((load: any) => {
-        const masterId = load.clientId?.toString();
-        const name = (load.clientName || "").trim();
-        if (!masterId || !name) return;
-
-        // Use grandTotal which already includes dispatch + packing charges
-        const billed = Number(load.grandTotal || 0);
-
-        if (!clientMap.has(masterId)) {
-          clientMap.set(masterId, {
-            name,
-            totalBilled: billed,
-            accountNumber: load.accountNumber || undefined,
-            ifsc: load.ifsc || undefined,
-            bankName: load.bankName || undefined,
-            bankAddress: load.bankAddress || undefined,
-          });
-        } else {
-          const existing = clientMap.get(masterId)!;
-          existing.totalBilled += billed;
-
-          // Keep best bank details
-          if (!existing.accountNumber && load.accountNumber) {
-            existing.accountNumber = load.accountNumber;
-            existing.ifsc = load.ifsc;
-            existing.bankName = load.bankName;
-            existing.bankAddress = load.bankAddress;
-          }
-        }
-      });
-
-      // Total paid per client
+      // Calculate total paid per loading
       const paidMap = new Map<string, number>();
       payments.forEach((p: any) => {
-        const clientId = p.clientDetailsId?.toString();
-        if (clientId) {
-          const amt = Number(p.amount || 0);
-          paidMap.set(clientId, (paidMap.get(clientId) || 0) + amt);
+        const loadingId = p.clientId?.toString();
+        if (loadingId) {
+          paidMap.set(
+            loadingId,
+            (paidMap.get(loadingId) || 0) + Number(p.amount || 0)
+          );
         }
       });
 
-      const result: ClientRow[] = [];
+      const result = loadings
+        .map((load: any) => {
+          const loadingId = load.id?.toString();
+          const billAmount = Math.round(Number(load.grandTotal || 0)); // Round bill
+          const totalPaid = paidMap.get(loadingId) || 0;
+          const remaining = Math.max(0, billAmount - Math.round(totalPaid)); // Round paid too
 
-      for (const [id, client] of clientMap) {
-        const totalPaid = paidMap.get(id) || 0;
-        const remaining = client.totalBilled - totalPaid;
+          const hasCharges =
+            load.dispatchChargesTotal > 0 || load.packingAmountTotal > 0;
 
-        // Must have some remaining AND either:
-        // - Decent amount (≥ ₹20,000) OR
-        // - Has dispatch/packing charges (real trip)
-        const hasCharges = loadings
-          .filter((l: any) => l.clientId?.toString() === id)
-          .some(
-            (l: any) => l.dispatchChargesTotal > 0 || l.packingAmountTotal > 0
-          );
+          if (remaining > 0 && (billAmount >= 20000 || hasCharges)) {
+            return {
+              id: loadingId,
+              loadingId,
+              clientName: load.clientName?.trim() || "Unknown",
+              clientDetailsId: load.clientId?.toString(),
+              billAmount,
+              totalPaid,
+              remaining,
+              accountNumber: load.accountNumber || undefined,
+              ifsc: load.ifsc || undefined,
+              bankName: load.bankName || undefined,
+              bankAddress: load.bankAddress || undefined,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => a!.clientName.localeCompare(b!.clientName));
 
-        if (remaining > 0 && (client.totalBilled >= 20000 || hasCharges)) {
-          result.push({
-            id,
-            name: client.name,
-            totalBilled: client.totalBilled,
-            totalPaid,
-            remaining,
-            accountNumber: client.accountNumber,
-            ifsc: client.ifsc,
-            bankName: client.bankName,
-            bankAddress: client.bankAddress,
-          });
-        }
-      }
-
-      return result.sort((a, b) => a.name.localeCompare(b.name));
+      return result as any[];
     },
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
-  const selectedClient = clientData.find((c) => c.id === clientDetailsId);
+  const selectedClient = billData.find((c) => c.id === clientDetailsId);
 
-  const totalBilled = selectedClient?.totalBilled || 0;
-  const paidAmount = selectedClient?.totalPaid || 0;
-  const remaining = selectedClient?.remaining || 0;
+  const totalBilled = Math.round(selectedClient?.billAmount || 0);
+  const paidAmount = Math.round(selectedClient?.totalPaid || 0);
+  const remaining = Math.round(selectedClient?.remaining || 0);
 
   useEffect(() => {
     if (paymentMode === "ac" && selectedClient) {
@@ -183,10 +140,14 @@ export function ClientPayments() {
   }, [paymentMode, selectedClient]);
 
   const validateForm = () => {
-    if (!clientDetailsId) return "Please select a client";
+    if (!clientDetailsId) return "Please select a bill";
     if (!amount || Number(amount) <= 0) return "Enter a valid amount";
-    if (Number(amount) > remaining)
-      return `Amount exceeds remaining due ${currency(remaining)}`;
+
+    const enteredAmount = Math.round(Number(amount)); // Allow only whole rupees
+    const maxAllowed = Math.round(remaining);
+
+    if (enteredAmount > maxAllowed)
+      return `Amount exceeds remaining due ${currency(maxAllowed)}`;
 
     return null;
   };
@@ -195,7 +156,8 @@ export function ClientPayments() {
     mutationFn: (payload: any) => axios.post("/api/payments/client", payload),
     onSuccess: () => {
       toast.success("Client payment recorded successfully!");
-      queryClient.invalidateQueries({ queryKey: ["clients-for-payment"] });
+      queryClient.invalidateQueries({ queryKey: ["bills-for-payment"] });
+      queryClient.refetchQueries({ queryKey: ["bills-for-payment"] });
       resetForm();
     },
     onError: (err: any) => {
@@ -208,10 +170,11 @@ export function ClientPayments() {
     if (error) return toast.error(error);
 
     const payload = {
-      clientDetailsId: selectedClient!.id,
-      clientName: selectedClient!.name,
+      clientDetailsId: selectedClient!.clientDetailsId,
+      loadingId: selectedClient!.id, // Send the selected loading ID to apply payment to this bill only
+      clientName: selectedClient!.clientName,
       date,
-      amount: Number(amount),
+      amount: Math.round(Number(amount)),
       paymentMode: paymentMode.toUpperCase(),
       referenceNo: referenceNo || null,
       paymentRef: paymentRef || null,
@@ -224,7 +187,6 @@ export function ClientPayments() {
       installments: isPartial ? Number(installments) || null : null,
       installmentNumber: isPartial ? Number(installmentNumber) || null : null,
     };
-
     saveMutation.mutate(payload);
   };
 
@@ -278,38 +240,44 @@ export function ClientPayments() {
           {/* Client Selection */}
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 sm:p-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-end">
-              <div className="lg:col-span-6 space-y-2">
-                <Label className="text-slate-700">Client Name</Label>
+              <div className="col-span-full lg:col-span-6 space-y-2">
+                <Label className="text-slate-700 text-base sm:text-lg">
+                  Select Bill
+                </Label>
                 <Select
                   value={clientDetailsId}
                   onValueChange={setClientDetailsId}
-                  disabled={loadingClients}
+                  disabled={loadingBills}
                 >
-                  <SelectTrigger className="h-11 border-slate-200 bg-white shadow-sm">
+                  <SelectTrigger className="w-full py-8 h-12 sm:h-14 border-slate-200 bg-white shadow-sm text-left">
                     <SelectValue
                       placeholder={
-                        loadingClients
-                          ? "Loading clients..."
-                          : "Select a client with pending dues"
+                        loadingBills
+                          ? "Loading bills..."
+                          : "Select a bill with pending dues"
                       }
                     />
                   </SelectTrigger>
-                  <SelectContent>
-                    {clientData.length === 0 ? (
-                      <div className="px-6 py-4 text-center text-slate-500">
-                        {loadingClients
+                  <SelectContent className="max-h-80">
+                    {billData.length === 0 ? (
+                      <div className="px-6 py-8 text-center text-slate-500">
+                        {loadingBills
                           ? "Loading..."
-                          : "No clients with pending payments"}
+                          : "No bills with pending payments"}
                       </div>
                     ) : (
-                      clientData.map((c) => (
-                        <SelectItem key={c.id} value={c.id} className="py-3">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-slate-800">
-                              {c.name}
+                      billData.map((c) => (
+                        <SelectItem
+                          key={c.id}
+                          value={c.id}
+                          className="py-4 px-4"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium text-slate-800 text-base">
+                              {c.clientName}
                             </span>
-                            <span className="text-sm text-slate-500">
-                              Billed: {currency(c.totalBilled)} | Remaining:{" "}
+                            <span className="text-sm text-slate-500 leading-tight">
+                              Bill: {currency(c.billAmount)} | Remaining:{" "}
                               {currency(c.remaining)}
                             </span>
                           </div>
@@ -323,7 +291,7 @@ export function ClientPayments() {
               <div className="lg:col-span-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
                   <p className="text-xs font-medium text-slate-600">
-                    Total Billed
+                    Bill Amount
                   </p>
                   <p className="mt-1 font-bold text-slate-900 text-xl sm:text-2xl">
                     {currency(totalBilled)}
@@ -363,25 +331,32 @@ export function ClientPayments() {
                   type="text"
                   value={amount}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    if (!/^\d*\.?\d*$/.test(val)) return;
-                    const num = val === "" ? 0 : parseFloat(val);
-                    if (num > remaining) {
+                    const val = e.target.value.replace(/[^0-9]/g, ""); // Only digits
+                    if (val === "") {
+                      setAmount("");
+                      return;
+                    }
+                    const num = Number(val);
+                    const roundedRemaining = Math.round(remaining);
+                    if (num > roundedRemaining) {
                       toast.error(
-                        `Cannot exceed remaining: ${currency(remaining)}`
+                        `Cannot exceed ${currency(roundedRemaining)}`
                       );
                       return;
                     }
                     setAmount(val);
                   }}
-                  placeholder="100000"
+                  placeholder="1318037"
                   className="h-11 font-mono text-lg"
                 />
-                {remaining > 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Max allowed: {currency(Math.round(remaining))}
+                </p>
+                {/* {remaining > 0 && (
                   <p className="text-xs text-slate-500 mt-1">
                     Max allowed: {currency(remaining)}
                   </p>
-                )}
+                )} */}
               </div>
 
               <div className="space-y-2">
@@ -499,7 +474,7 @@ export function ClientPayments() {
             <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="rounded-xl bg-white border border-slate-200 p-4 text-center">
-                  <p className="text-xs text-slate-600">Total Billed</p>
+                  <p className="text-xs text-slate-600">Bill Amount</p>
                   <p className="mt-1 font-bold text-slate-900 text-xl">
                     {currency(totalBilled)}
                   </p>

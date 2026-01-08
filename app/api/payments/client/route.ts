@@ -27,7 +27,8 @@ function asBoolean(value: unknown): boolean {
 }
 
 type PostBody = {
-  clientDetailsId?: string; // ✅ Client.id (master)
+  clientDetailsId?: string; // Client master ID
+  loadingId?: string; // Specific loading ID to apply payment to
   clientName?: string;
   date?: string;
   amount?: number;
@@ -53,15 +54,17 @@ export const POST = withAuth(async (req: NextRequest) => {
     const body = (await req.json()) as PostBody;
 
     const clientDetailsId = asString(body.clientDetailsId);
+    const loadingId = asString(body.loadingId);
     const clientName = asString(body.clientName);
     const dateStr = asString(body.date);
-    const totalAmount = asPositiveNumber(body.amount);
+    const totalAmount = Math.round(asPositiveNumber(body.amount) || 0);
 
     const paymentModeStr = asString(body.paymentMode)?.toUpperCase() || null;
     const paymentMode = paymentModeStr as PaymentMode | null;
 
     if (
       !clientDetailsId ||
+      !loadingId ||
       !clientName ||
       !dateStr ||
       !totalAmount ||
@@ -85,37 +88,47 @@ export const POST = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ error: "Invalid date" }, { status: 400 });
     }
 
-    // ✅ Fetch all loadings for this client (oldest first)
-    const loadings = await prisma.clientLoading.findMany({
-      where: { clientId: clientDetailsId },
-      orderBy: { date: "asc" },
+    // Fetch the specific loading
+    const loading = await prisma.clientLoading.findUnique({
+      where: { id: loadingId },
       select: {
         id: true,
         billNo: true,
         grandTotal: true,
+        clientId: true,
       },
     });
 
-    if (loadings.length === 0) {
+    if (!loading || loading.clientId !== clientDetailsId) {
       return NextResponse.json(
-        { error: "No bills found for this client" },
+        { error: "Specified bill not found or does not belong to the client" },
         { status: 404 }
       );
     }
 
-    // ✅ Paid per loading
-    const paidAgg = await prisma.clientPayment.groupBy({
-      by: ["clientId"],
-      where: { clientDetailsId },
+    // Get paid amount for this specific loading
+    const paidAgg = await prisma.clientPayment.aggregate({
+      where: { clientId: loadingId },
       _sum: { amount: true },
     });
 
-    const paidByLoading = new Map<string, number>();
-    for (const row of paidAgg) {
-      paidByLoading.set(row.clientId, Number(row._sum.amount || 0));
+    const billed = Math.round(Number(loading.grandTotal || 0));
+    const paid = Math.round(Number(paidAgg._sum.amount || 0));
+    const due = Math.max(0, billed - paid);
+
+    if (due <= 0) {
+      return NextResponse.json(
+        { error: "This bill is already fully paid" },
+        { status: 400 }
+      );
     }
 
-    let remainingToAllocate = totalAmount;
+    if (totalAmount > due) {
+      return NextResponse.json(
+        { error: "Amount exceeds remaining due for this bill" },
+        { status: 400 }
+      );
+    }
 
     const isInstallment = asBoolean(body.isInstallment);
     const installments =
@@ -127,7 +140,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         ? null
         : Number(body.installmentNumber);
 
-    // basic installment validation (optional fields)
+    // Basic installment validation
     if (isInstallment) {
       if (
         installments !== null &&
@@ -159,71 +172,43 @@ export const POST = withAuth(async (req: NextRequest) => {
       }
     }
 
-    const createdPayments = await prisma.$transaction(async (tx) => {
-      const created: any[] = [];
-
-      for (const l of loadings) {
-        if (remainingToAllocate <= 0) break;
-
-        const billed = Number(l.grandTotal || 0);
-        const paid = paidByLoading.get(l.id) || 0;
-        const due = Math.max(0, billed - paid);
-
-        if (due <= 0) continue;
-
-        const payNow = Math.min(due, remainingToAllocate);
-        remainingToAllocate -= payNow;
-
-        const p = await tx.clientPayment.create({
-          data: {
-            clientId: l.id, // ✅ ClientLoading FK
-            clientDetailsId: clientDetailsId, // ✅ Client master FK
-            clientKey: `client:${clientName}`,
-            clientName,
-            date,
-            amount: payNow,
-            paymentMode, // enum
-            isInstallment,
-            installments,
-            installmentNumber,
-          },
-        });
-
-        created.push({ ...p, billNo: l.billNo });
-      }
-
-      return created;
+    // Create the payment for this specific loading
+    const payment = await prisma.clientPayment.create({
+      data: {
+        clientId: loading.id, // Loading FK
+        clientDetailsId: clientDetailsId, // Master FK
+        clientKey: `client:${clientName}`,
+        clientName,
+        date,
+        amount: totalAmount,
+        paymentMode,
+        isInstallment,
+        installments,
+        installmentNumber,
+      },
     });
 
-    if (remainingToAllocate > 0.01) {
-      return NextResponse.json(
-        { error: "Amount exceeds total pending due for this client" },
-        { status: 400 }
-      );
-    }
-
-    for (const payment of createdPayments) {
-      await logAudit({
-        user: (req as any).user,
-        module: "Client Payments",
-        action: "CREATE",
-        recordId: payment.id,
-        label: `Client payment created for bill ${payment.billNo}`,
-        oldValues: null,
-        newValues: {
-          clientName: payment.clientName,
-          clientKey: payment.clientKey,
-          billNo: payment.billNo,
-          amount: payment.amount,
-          paymentMode: payment.paymentMode,
-          date: payment.date,
-        },
-        request: req,
-      });
-    }
+    // Log audit
+    await logAudit({
+      user: (req as any).user,
+      module: "Client Payments",
+      action: "CREATE",
+      recordId: payment.id,
+      label: `Client payment created for bill ${loading.billNo}`,
+      oldValues: null,
+      newValues: {
+        clientName: payment.clientName,
+        clientKey: payment.clientKey,
+        billNo: loading.billNo,
+        amount: payment.amount,
+        paymentMode: payment.paymentMode,
+        date: payment.date,
+      },
+      request: req,
+    });
 
     return NextResponse.json(
-      { success: true, data: createdPayments },
+      { success: true, data: [{ ...payment, billNo: loading.billNo }] },
       { status: 201 }
     );
   } catch (error: any) {
@@ -250,7 +235,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         clientId: true,
-        clientDetailsId: true, // ✅ return master id
+        clientDetailsId: true,
         clientKey: true,
         clientName: true,
         date: true,
@@ -260,9 +245,6 @@ export async function GET(req: NextRequest) {
         installments: true,
         installmentNumber: true,
         createdAt: true,
-        client: {
-          select: { billNo: true, village: true, fishCode: true },
-        },
       },
     });
 
