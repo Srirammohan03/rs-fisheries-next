@@ -5,7 +5,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import * as XLSX from "xlsx";
+
+// ✅ Excel export (styled)
+import * as ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,6 +63,95 @@ import {
 
 import { AnimatePresence, motion } from "framer-motion";
 
+/* ---------------- Types used by Export (safe minimal) ---------------- */
+type LoadingItem = {
+  id?: string;
+  varietyCode: string;
+  noTrays: number;
+  trayKgs?: number;
+  loose: number;
+  totalKgs: number;
+  pricePerKg: number;
+  totalPrice: number;
+};
+
+type DispatchCharge = {
+  type?: string;
+  label?: string | null;
+  amount: number;
+};
+
+type PackingAmount = {
+  id?: string;
+  totalAmount: number;
+};
+
+type DispatchBreakdown = {
+  iceCooling: number;
+  transportCharges: number;
+  otherCharges?: Array<{ label?: string; amount?: number }>;
+  dispatchChargesTotal: number;
+};
+
+type ClientLoading = {
+  id: string;
+  clientId?: string; // sometimes exists as details id
+  clientName: string;
+  billNo: string;
+  date: string;
+  fishCode?: string;
+  village?: string;
+  vehicleNo?: string;
+  tripStatus?: string;
+
+  totalTrays: number;
+  totalLooseKgs: number;
+  totalTrayKgs?: number;
+  totalKgs: number;
+
+  totalPrice: number;
+  dispatchChargesTotal: number;
+  packingAmountTotal: number;
+  grandTotal: number;
+
+  items: LoadingItem[];
+  dispatchCharges?: DispatchCharge[];
+  packingAmounts?: PackingAmount[];
+  dispatchBreakdown?: DispatchBreakdown;
+
+  packingDone?: boolean;
+  dispatchDone?: boolean;
+};
+
+type ClientPayment = {
+  id: string;
+  clientId: string; // IMPORTANT: In your sample this equals loading.id
+  clientDetailsId?: string;
+  clientKey?: string;
+  clientName: string;
+  date: string;
+  amount: number;
+  paymentMode: string;
+  isInstallment: boolean;
+  installments?: number | null;
+  installmentNumber?: number | null;
+  createdAt: string;
+};
+
+type ApiResponse<T> = { data?: T } | T;
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed: ${url}`);
+  const json: unknown = await res.json();
+  if (isObj(json) && "data" in json) return (json as { data: T }).data;
+  return json as T;
+}
+
 /* ---------------- Styling constants ---------------- */
 const THEME = "#139BC3";
 
@@ -80,18 +172,31 @@ function money(n: number): string {
 }
 
 function qty(n: number): string {
-  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(n);
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(
+    Number(n || 0)
+  );
 }
 
 /* ---------------- Tooltips ---------------- */
-const CustomTooltip = ({ active, payload, label }: any) => {
+type RechartsTooltipProps = {
+  active?: boolean;
+  payload?: Array<{
+    name?: string;
+    value?: number;
+    color?: string;
+    fill?: string;
+  }>;
+  label?: string;
+};
+
+const CustomTooltip = ({ active, payload, label }: RechartsTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
         <p className="font-semibold text-gray-900">{label}</p>
-        {payload.map((entry: any, index: number) => (
+        {payload.map((entry, index) => (
           <p key={index} style={{ color: entry.color }}>
-            {entry.name}: {money(entry.value)}
+            {entry.name}: {money(entry.value ?? 0)}
           </p>
         ))}
       </div>
@@ -100,12 +205,14 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const PieTooltip = ({ active, payload }: any) => {
+const PieTooltip = ({ active, payload }: RechartsTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-        <p className="font-semibold text-gray-900">{payload[0].name}</p>
-        <p style={{ color: payload[0].fill }}>{qty(payload[0].value)} kgs</p>
+        <p className="font-semibold text-gray-900">{payload[0]?.name}</p>
+        <p style={{ color: payload[0]?.fill }}>
+          {qty(payload[0]?.value ?? 0)} kgs
+        </p>
       </div>
     );
   }
@@ -190,12 +297,12 @@ function KpiCard({
 }
 
 /* ---------------- Date Picker ---------------- */
-const PRESETS = [
+const PRESETS: Array<{ label: string; get: () => DateRange }> = [
   {
     label: "Today",
     get: () => {
       const d = new Date();
-      return { from: startOfDay(d), to: endOfDay(d) } as DateRange;
+      return { from: startOfDay(d), to: endOfDay(d) };
     },
   },
   {
@@ -203,7 +310,7 @@ const PRESETS = [
     get: () => {
       const to = new Date();
       const from = subDays(to, 6);
-      return { from: startOfDay(from), to: endOfDay(to) } as DateRange;
+      return { from: startOfDay(from), to: endOfDay(to) };
     },
   },
   {
@@ -211,7 +318,7 @@ const PRESETS = [
     get: () => {
       const to = new Date();
       const from = subDays(to, 29);
-      return { from: startOfDay(from), to: endOfDay(to) } as DateRange;
+      return { from: startOfDay(from), to: endOfDay(to) };
     },
   },
   {
@@ -219,7 +326,7 @@ const PRESETS = [
     get: () => {
       const to = new Date();
       const from = subDays(to, 89);
-      return { from: startOfDay(from), to: endOfDay(to) } as DateRange;
+      return { from: startOfDay(from), to: endOfDay(to) };
     },
   },
 ];
@@ -252,7 +359,8 @@ function DateRangePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-[280px] justify-start">
+        {/* ✅ Responsive button */}
+        <Button variant="outline" className="w-full sm:w-[280px] justify-start">
           <CalendarIcon className="mr-2 h-4 w-4" />
           {formatRange(value)}
         </Button>
@@ -303,7 +411,7 @@ function DateRangePicker({
               numberOfMonths={2}
               selected={draft}
               onSelect={(r) =>
-                setDraft(r || { from: undefined, to: undefined })
+                setDraft(r ?? { from: undefined, to: undefined })
               }
               initialFocus
             />
@@ -366,6 +474,8 @@ export default function DashboardClient({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [varietyToDelete, setVarietyToDelete] = useState<{
     code: string;
@@ -376,6 +486,7 @@ export default function DashboardClient({
     "idle" | "success" | "error"
   >("idle");
   const [deleteMessage, setDeleteMessage] = useState("");
+
   const openDeleteDialog = (variety: { code: string; name: string }) => {
     setVarietyToDelete(variety);
     setDeleteStatus("idle");
@@ -396,30 +507,36 @@ export default function DashboardClient({
         body: JSON.stringify({ code: varietyToDelete.code }),
       });
 
-      const json = await res.json();
+      const json: unknown = await res.json();
 
-      if (json.success) {
+      if (isObj(json) && (json as { success?: boolean }).success) {
         setDeleteStatus("success");
         setDeleteMessage(
           `Variety ${varietyToDelete.code} deleted successfully`
         );
-        router.refresh(); // Refresh server data
-        // Close dialog after short delay
+        router.refresh();
         setTimeout(() => {
           setDeleteDialogOpen(false);
           setVarietyToDelete(null);
         }, 1500);
       } else {
+        const msg =
+          isObj(json) &&
+          typeof (json as { message?: unknown }).message === "string"
+            ? (json as { message: string }).message
+            : "Failed to delete variety";
         setDeleteStatus("error");
-        setDeleteMessage(json.message || "Failed to delete variety");
+        setDeleteMessage(msg);
       }
-    } catch (err) {
+    } catch {
       setDeleteStatus("error");
       setDeleteMessage("Network error. Please try again.");
     } finally {
       setIsDeleting(false);
     }
   };
+
+  // range + agg
   const safeFrom = new Date(initialFrom);
   const safeTo = new Date(initialTo);
 
@@ -429,6 +546,7 @@ export default function DashboardClient({
     ),
     to: endOfDay(Number.isNaN(safeTo.getTime()) ? new Date() : safeTo),
   }));
+
   const [agg, setAgg] = useState<"day" | "week" | "month">(initialAgg);
 
   useEffect(() => {
@@ -459,139 +577,59 @@ export default function DashboardClient({
     setAgg(newAgg);
   };
 
+  /* ---------------- ✅ Export: Farmer + Agent + Client + Payments ---------------- */
   const handleExport = async () => {
-    const [farmer, agent, client] = await Promise.all([
-      fetch("/api/former-loading").then((res) =>
-        res.json().then((j) => j.data || [])
-      ),
-      fetch("/api/agent-loading").then((res) =>
-        res.json().then((j) => j.data || [])
-      ),
-      fetch("/api/client-loading").then((res) =>
-        res.json().then((j) => j.data || [])
-      ),
-    ]);
+    try {
+      const [farmer, agent, clientLoadings, clientPayments] = await Promise.all<
+        [unknown, unknown, unknown, unknown]
+      >([
+        fetchJson<unknown>("/api/former-loading"),
+        fetchJson<unknown>("/api/agent-loading"),
+        fetchJson<unknown>("/api/client-loading"),
+        fetchJson<unknown>("/api/payments/client"),
+      ]);
 
-    const wb = XLSX.utils.book_new();
+      const farmerRows = Array.isArray(farmer) ? farmer : [];
+      const agentRows = Array.isArray(agent) ? agent : [];
 
-    const farmerSheet = createLoadingSheet(farmer, "farmer");
-    XLSX.utils.book_append_sheet(wb, farmerSheet, "Farmer Loadings");
+      const clientRows = Array.isArray(clientLoadings)
+        ? (clientLoadings as ClientLoading[])
+        : [];
 
-    const agentSheet = createLoadingSheet(agent, "agent");
-    XLSX.utils.book_append_sheet(wb, agentSheet, "Agent Loadings");
+      const paymentRows = Array.isArray(clientPayments)
+        ? (clientPayments as ClientPayment[])
+        : [];
 
-    const clientSheet = createClientSheet(client);
-    XLSX.utils.book_append_sheet(wb, clientSheet, "Client Loadings");
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "RS Fisheries";
+      wb.created = new Date();
 
-    XLSX.writeFile(wb, "RS-Fisheries_Loadings.xlsx");
+      // Farmer + Agent
+      buildSimpleLoadingSheetExcelJS(
+        wb,
+        farmerRows,
+        "Farmer Loadings",
+        "farmer"
+      );
+      buildSimpleLoadingSheetExcelJS(wb, agentRows, "Agent Loadings", "agent");
+
+      // Client with Payments
+      buildClientWithPaymentsSheetExcelJS(wb, clientRows, paymentRows);
+
+      const buf = await wb.xlsx.writeBuffer();
+      saveAs(
+        new Blob([buf], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+        `RS-Fisheries_Loadings_${format(new Date(), "dd-MM-yyyy")}.xlsx`
+      );
+    } catch (e) {
+      console.error(e);
+      alert("Export failed. Please try again.");
+    }
   };
 
-  const createLoadingSheet = (loadings: any[], type: "farmer" | "agent") => {
-    let ws_data: any[][] = [];
-
-    loadings.forEach((l) => {
-      const nameKey = type === "farmer" ? "FarmerName" : "agentName";
-      const nameLabel = type === "farmer" ? "Farmer Name" : "Agent Name";
-
-      ws_data.push([
-        nameLabel,
-        l[nameKey],
-        "Date",
-        format(new Date(l.date), "dd/MM/yyyy"),
-      ]);
-      ws_data.push(["Bill No", l.billNo]);
-      ws_data.push([
-        "Sl.No",
-        "Item Description",
-        "Tray",
-        "Loose",
-        "Total",
-        "Rate",
-        "Amount",
-      ]);
-
-      l.items.forEach((it: any, idx: number) => {
-        ws_data.push([
-          idx + 1,
-          it.varietyCode,
-          it.noTrays,
-          it.loose,
-          it.totalKgs,
-          it.pricePerKg,
-          it.totalPrice,
-        ]);
-      });
-
-      ws_data.push([
-        "Total",
-        "",
-        l.totalTrays,
-        l.totalLooseKgs,
-        l.totalKgs,
-        "",
-        l.totalPrice,
-      ]);
-      ws_data.push([]); // empty row
-    });
-
-    return XLSX.utils.aoa_to_sheet(ws_data);
-  };
-
-  const createClientSheet = (loadings: any[]) => {
-    let ws_data: any[][] = [];
-
-    loadings.forEach((l) => {
-      ws_data.push([
-        "Buyer Name",
-        l.clientName,
-        "Date",
-        format(new Date(l.date), "dd/MM/yyyy"),
-      ]);
-      ws_data.push(["Bill No", l.billNo]);
-      ws_data.push([
-        "Sl.No",
-        "Category",
-        "No.of Trays",
-        "Loose",
-        "Total weight",
-        "Less",
-        "Total KGS",
-        "Rate",
-        "Amount",
-      ]);
-
-      l.items.forEach((it: any, idx: number) => {
-        const less = 0; // No 'less' in data, set to 0
-        const totalWeight = it.trayKgs + it.loose;
-        const totalKGS = totalWeight - less;
-        ws_data.push([
-          idx + 1,
-          it.varietyCode,
-          it.noTrays,
-          it.loose,
-          totalWeight,
-          less,
-          totalKGS,
-          it.pricePerKg,
-          it.totalPrice,
-        ]);
-      });
-
-      ws_data.push(["Total Amount", "", "", "", "", "", "", "", l.totalPrice]);
-
-      const icePacking = l.dispatchBreakdown.iceCooling + l.packingAmountTotal;
-      const freight = l.dispatchBreakdown.transportCharges;
-
-      ws_data.push(["", "Ice & Packing", icePacking]);
-      ws_data.push(["", "Freight", freight]);
-      ws_data.push(["Grand Total", l.grandTotal]);
-
-      ws_data.push([]); // empty row
-    });
-
-    return XLSX.utils.aoa_to_sheet(ws_data);
-  };
-
+  // charts data
   const weeklyData = useMemo(
     () =>
       data.weekly.map((d) => ({
@@ -626,63 +664,72 @@ export default function DashboardClient({
     [data.outstandingAgeing]
   );
 
-  const tooltipProps = { content: <CustomTooltip /> };
-
   const ageingTotal = ageingData.reduce((s, a) => s + a.amount, 0);
   const ageingSafeTotal = ageingTotal > 0 ? ageingTotal : 1;
 
   return (
     <AnimatePresence>
       <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
+        {/* ✅ Responsive Header */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.45 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+          className="flex flex-col gap-3"
         >
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-              Dashboard
-            </h1>
-            <p className="text-sm text-slate-500">
-              Quick view of sales, purchases, movement & outstanding
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={agg === "day" ? "default" : "outline"}
-              size="sm"
-              onClick={() => applyAggToUrl("day")}
-            >
-              Daily
-            </Button>
-            <Button
-              variant={agg === "week" ? "default" : "outline"}
-              size="sm"
-              onClick={() => applyAggToUrl("week")}
-            >
-              Weekly
-            </Button>
-            <Button
-              variant={agg === "month" ? "default" : "outline"}
-              size="sm"
-              onClick={() => applyAggToUrl("month")}
-            >
-              Monthly
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+                Dashboard
+              </h1>
+              <p className="text-sm text-slate-500">
+                Quick view of sales, purchases, movement & outstanding
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={agg === "day" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyAggToUrl("day")}
+              >
+                Daily
+              </Button>
+              <Button
+                variant={agg === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyAggToUrl("week")}
+              >
+                Weekly
+              </Button>
+              <Button
+                variant={agg === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyAggToUrl("month")}
+              >
+                Monthly
+              </Button>
+            </div>
           </div>
 
-          <DateRangePicker value={range} onApply={applyRangeToUrl} />
-          <Button onClick={handleExport} variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Export Loadings
-          </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="w-full sm:w-auto">
+              <DateRangePicker value={range} onApply={applyRangeToUrl} />
+            </div>
+            <Button
+              onClick={handleExport}
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export Loadings
+            </Button>
+          </div>
         </motion.div>
 
         {/* KPI grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
-          {/* Dynamic tone for Sales card */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
           {(() => {
             const hasSales = data.today.sales > 0;
             const purchaseExceedsDispatch =
@@ -693,7 +740,7 @@ export default function DashboardClient({
 
             return (
               <KpiCard
-                title="Sales"
+                title="Dispatch"
                 value={money(data.today.sales)}
                 tone={salesTone}
                 icon={
@@ -707,6 +754,7 @@ export default function DashboardClient({
               />
             );
           })()}
+
           <KpiCard
             title="Purchase"
             value={money(data.today.purchase)}
@@ -723,16 +771,17 @@ export default function DashboardClient({
             sub="Count (selected range)"
           />
 
-          <KpiCard
+          {/* <KpiCard
             title="Dispatch"
             value={money(data.today.outstanding)}
             tone="red"
             icon={<Wallet className="text-red-600 w-6 h-6" />}
             sub="Receivable (selected range)"
-          />
+          /> */}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 items-stretch">
+          {/* Overview */}
           <motion.div
             className="lg:col-span-2"
             initial={{ opacity: 0, x: -20 }}
@@ -777,7 +826,9 @@ export default function DashboardClient({
                       axisLine={{ stroke: CHART.grid }}
                       tickLine={{ stroke: CHART.grid }}
                       width={isMobile ? 26 : 34}
-                      tickFormatter={(value) => money(value).replace("₹", "")}
+                      tickFormatter={(value) =>
+                        money(Number(value)).replace("₹", "")
+                      }
                     />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend verticalAlign="top" height={36} />
@@ -799,6 +850,7 @@ export default function DashboardClient({
             </Card>
           </motion.div>
 
+          {/* Top Varieties */}
           <motion.div
             className="lg:col-span-1"
             initial={{ opacity: 0, x: 20 }}
@@ -822,6 +874,7 @@ export default function DashboardClient({
                   <PieIcon style={{ color: THEME }} />
                 </div>
               </CardHeader>
+
               <CardContent className="px-2 sm:px-6 h-[230px] sm:h-[310px] lg:h-[330px] flex flex-col justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -834,7 +887,7 @@ export default function DashboardClient({
                       outerRadius={isMobile ? 78 : 96}
                       innerRadius={isMobile ? 46 : 56}
                       paddingAngle={2}
-                      label={({ value }) => qty(value)}
+                      label={({ value }) => qty(Number(value))}
                       labelLine={false}
                     >
                       {pieData.map((_, i) => (
@@ -850,6 +903,7 @@ export default function DashboardClient({
             </Card>
           </motion.div>
 
+          {/* Sales vs Movement */}
           <motion.div
             className="lg:col-span-2"
             initial={{ opacity: 0, x: -20 }}
@@ -890,7 +944,7 @@ export default function DashboardClient({
                       axisLine={{ stroke: CHART.grid }}
                       tickLine={{ stroke: CHART.grid }}
                       width={isMobile ? 26 : 34}
-                      tickFormatter={(v) => money(v).replace("₹", "")}
+                      tickFormatter={(v) => money(Number(v)).replace("₹", "")}
                     />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend verticalAlign="top" height={36} />
@@ -918,6 +972,7 @@ export default function DashboardClient({
             </Card>
           </motion.div>
 
+          {/* Outstanding Ageing */}
           <motion.div
             className="lg:col-span-1"
             initial={{ opacity: 0, x: 20 }}
@@ -965,6 +1020,7 @@ export default function DashboardClient({
             </Card>
           </motion.div>
 
+          {/* Fish Varieties */}
           <motion.div
             className="lg:col-span-3"
             initial={{ opacity: 0, y: 14 }}
@@ -972,7 +1028,6 @@ export default function DashboardClient({
             transition={{ duration: 0.4 }}
           >
             <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              {/* HEADER */}
               <CardHeader className="flex flex-row items-center justify-between px-4 sm:px-6 pb-2">
                 <div>
                   <CardTitle className="text-base sm:text-lg text-slate-900">
@@ -988,7 +1043,6 @@ export default function DashboardClient({
                 </div>
               </CardHeader>
 
-              {/* CONTENT */}
               <CardContent className="px-4 sm:px-6 pb-6">
                 {data.fishVarieties.length === 0 ? (
                   <p className="py-10 text-center text-sm text-slate-500">
@@ -1001,12 +1055,10 @@ export default function DashboardClient({
                         key={v.code}
                         className="group relative flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm shadow-sm transition-all hover:border-red-300 hover:bg-red-50"
                       >
-                        {/* CODE */}
                         <span className="font-semibold text-slate-800">
                           {v.code}
                         </span>
 
-                        {/* DELETE */}
                         <button
                           onClick={() => openDeleteDialog(v)}
                           className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:text-red-600 focus:outline-none"
@@ -1015,7 +1067,6 @@ export default function DashboardClient({
                           <Trash2 className="h-4 w-4" />
                         </button>
 
-                        {/* SINGLE TOOLTIP */}
                         <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
                           {v.name}
                         </div>
@@ -1084,4 +1135,365 @@ export default function DashboardClient({
       </div>
     </AnimatePresence>
   );
+}
+
+/* =============================================================================
+   ✅ ExcelJS Export Helpers (Styled, production safe)
+============================================================================= */
+
+function buildSimpleLoadingSheetExcelJS(
+  wb: ExcelJS.Workbook,
+  loadings: unknown[],
+  sheetName: string,
+  type: "farmer" | "agent"
+) {
+  const ws = wb.addWorksheet(sheetName);
+
+  ws.columns = [
+    {
+      header: type === "farmer" ? "Farmer Name" : "Agent Name",
+      key: "name",
+      width: 28,
+    },
+    { header: "Date", key: "date", width: 14 },
+    { header: "Bill No", key: "bill", width: 16 },
+    { header: "Variety", key: "variety", width: 14 },
+    { header: "Trays", key: "trays", width: 10 },
+    { header: "Loose", key: "loose", width: 10 },
+    { header: "Total Kgs", key: "kgs", width: 12 },
+    { header: "Rate", key: "rate", width: 10 },
+    { header: "Amount", key: "amount", width: 14 },
+  ];
+
+  const headerRow = ws.getRow(1);
+  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  headerRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF139BC3" },
+  };
+  headerRow.alignment = { vertical: "middle", horizontal: "center" };
+  headerRow.height = 20;
+
+  for (const raw of loadings) {
+    if (!isObj(raw)) continue;
+    const l = raw as Record<string, unknown>;
+    const nameKey = type === "farmer" ? "FarmerName" : "agentName";
+    const name = typeof l[nameKey] === "string" ? (l[nameKey] as string) : "";
+
+    const dateStr =
+      typeof l.date === "string" ? format(new Date(l.date), "dd/MM/yyyy") : "";
+
+    const billNo = typeof l.billNo === "string" ? (l.billNo as string) : "";
+
+    const items = Array.isArray(l.items) ? (l.items as unknown[]) : [];
+    for (const itRaw of items) {
+      if (!isObj(itRaw)) continue;
+      const it = itRaw as Record<string, unknown>;
+
+      ws.addRow({
+        name,
+        date: dateStr,
+        bill: billNo,
+        variety: typeof it.varietyCode === "string" ? it.varietyCode : "",
+        trays: typeof it.noTrays === "number" ? it.noTrays : 0,
+        loose: typeof it.loose === "number" ? it.loose : 0,
+        kgs: typeof it.totalKgs === "number" ? it.totalKgs : 0,
+        rate: typeof it.pricePerKg === "number" ? it.pricePerKg : 0,
+        amount: typeof it.totalPrice === "number" ? it.totalPrice : 0,
+      });
+    }
+
+    ws.addRow({});
+  }
+
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+}
+
+function buildClientWithPaymentsSheetExcelJS(
+  wb: ExcelJS.Workbook,
+  clientLoadings: ClientLoading[],
+  clientPayments: ClientPayment[]
+) {
+  const ws = wb.addWorksheet("Client Loadings + Payments");
+
+  ws.columns = [
+    { header: "Label", key: "c1", width: 22 },
+    { header: "Value", key: "c2", width: 40 },
+    { header: "Label", key: "c3", width: 16 },
+    { header: "Value", key: "c4", width: 20 },
+    { header: "Label", key: "c5", width: 16 },
+    { header: "Value", key: "c6", width: 18 },
+  ];
+
+  const THEME = "FF139BC3";
+  const LIGHT = "FFF1F5F9";
+  const SOFT_GREEN = "FFDCFCE7";
+  const SOFT_RED = "FFFEE2E2";
+  const DARK = "FF0F172A";
+
+  const titleStyle = (row: ExcelJS.Row) => {
+    row.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+    row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: THEME } };
+    row.alignment = { vertical: "middle", horizontal: "left" };
+    row.height = 20;
+  };
+
+  const sectionStyle = (row: ExcelJS.Row) => {
+    row.font = { bold: true, color: { argb: "FF0F172A" } };
+    row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT } };
+    row.alignment = { vertical: "middle", horizontal: "left" };
+    row.height = 18;
+  };
+
+  const tableHeaderStyle = (row: ExcelJS.Row) => {
+    row.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DARK } };
+    row.alignment = { vertical: "middle", horizontal: "center" };
+    row.height = 18;
+  };
+
+  const moneyCell = (cell: ExcelJS.Cell) => {
+    cell.numFmt = "₹#,##0";
+    cell.alignment = { vertical: "middle", horizontal: "right" };
+  };
+
+  const centerCell = (cell: ExcelJS.Cell) => {
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  };
+
+  const leftCell = (cell: ExcelJS.Cell) => {
+    cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+  };
+
+  const applyThinBorder = (cell: ExcelJS.Cell) => {
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFE2E8F0" } },
+      left: { style: "thin", color: { argb: "FFE2E8F0" } },
+      bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+      right: { style: "thin", color: { argb: "FFE2E8F0" } },
+    };
+  };
+
+  // payments grouped by loading id
+  const paymentsByLoadingId = new Map<string, ClientPayment[]>();
+  for (const p of clientPayments) {
+    const arr = paymentsByLoadingId.get(p.clientId) ?? [];
+    arr.push(p);
+    paymentsByLoadingId.set(p.clientId, arr);
+  }
+
+  let r = 1;
+
+  ws.mergeCells(`A${r}:F${r}`);
+  ws.getCell(`A${r}`).value = "Client Loadings + Charges + Payments";
+  titleStyle(ws.getRow(r));
+  r += 2;
+
+  for (let i = 0; i < clientLoadings.length; i++) {
+    const l = clientLoadings[i];
+
+    // Title row per bill
+    ws.mergeCells(`A${r}:F${r}`);
+    ws.getCell(`A${r}`).value = `#${i + 1}  ${l.clientName}  •  Bill: ${
+      l.billNo
+    }`;
+    titleStyle(ws.getRow(r));
+    r++;
+
+    // Info row 1
+    ws.getCell(`A${r}`).value = "Buyer Name";
+    ws.getCell(`B${r}`).value = l.clientName;
+    ws.getCell(`C${r}`).value = "Date";
+    ws.getCell(`D${r}`).value = l.date
+      ? format(new Date(l.date), "dd/MM/yyyy")
+      : "";
+    ws.getCell(`E${r}`).value = "Trip";
+    ws.getCell(`F${r}`).value = l.tripStatus ?? "";
+    leftCell(ws.getCell(`B${r}`));
+    centerCell(ws.getCell(`D${r}`));
+    centerCell(ws.getCell(`F${r}`));
+    r++;
+
+    // Info row 2
+    ws.getCell(`A${r}`).value = "Village / Address";
+    ws.getCell(`B${r}`).value = l.village ?? "";
+    ws.getCell(`C${r}`).value = "Vehicle";
+    ws.getCell(`D${r}`).value = l.vehicleNo ?? "";
+    ws.getCell(`E${r}`).value = "Fish Code";
+    ws.getCell(`F${r}`).value = l.fishCode ?? "";
+    leftCell(ws.getCell(`B${r}`));
+    leftCell(ws.getCell(`D${r}`));
+    centerCell(ws.getCell(`F${r}`));
+    r++;
+
+    // Loading Items section
+    ws.mergeCells(`A${r}:F${r}`);
+    ws.getCell(`A${r}`).value = "Loading Items";
+    sectionStyle(ws.getRow(r));
+    r++;
+
+    // Items header
+    ws.getRow(r).values = [
+      "",
+      "Sl.No",
+      "Category",
+      "Trays",
+      "Loose",
+      "Total KGS",
+    ];
+    tableHeaderStyle(ws.getRow(r));
+    r++;
+
+    // Items rows
+    for (let idx = 0; idx < (l.items ?? []).length; idx++) {
+      const it = l.items[idx];
+      ws.getCell(`B${r}`).value = idx + 1;
+      ws.getCell(`C${r}`).value = it.varietyCode ?? "";
+      ws.getCell(`D${r}`).value = Number(it.noTrays ?? 0);
+      ws.getCell(`E${r}`).value = Number(it.loose ?? 0);
+      ws.getCell(`F${r}`).value = Number(it.totalKgs ?? 0);
+
+      centerCell(ws.getCell(`B${r}`));
+      leftCell(ws.getCell(`C${r}`));
+      centerCell(ws.getCell(`D${r}`));
+      centerCell(ws.getCell(`E${r}`));
+      centerCell(ws.getCell(`F${r}`));
+
+      r++;
+    }
+
+    // Totals row
+    ws.getCell(`C${r}`).value = "Total";
+    ws.getCell(`D${r}`).value = Number(l.totalTrays ?? 0);
+    ws.getCell(`E${r}`).value = Number(l.totalLooseKgs ?? 0);
+    ws.getCell(`F${r}`).value = Number(l.totalKgs ?? 0);
+    ws.getRow(r).font = { bold: true };
+    ws.getRow(r).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: LIGHT },
+    };
+    r += 2;
+
+    // Charges section
+    ws.mergeCells(`A${r}:F${r}`);
+    ws.getCell(`A${r}`).value = "Charges & Totals";
+    sectionStyle(ws.getRow(r));
+    r++;
+
+    ws.getCell(`A${r}`).value = "Total Price";
+    ws.getCell(`B${r}`).value = Number(l.totalPrice ?? 0);
+    moneyCell(ws.getCell(`B${r}`));
+
+    ws.getCell(`C${r}`).value = "Dispatch";
+    ws.getCell(`D${r}`).value = Number(l.dispatchChargesTotal ?? 0);
+    moneyCell(ws.getCell(`D${r}`));
+
+    ws.getCell(`E${r}`).value = "Packing";
+    ws.getCell(`F${r}`).value = Number(l.packingAmountTotal ?? 0);
+    moneyCell(ws.getCell(`F${r}`));
+    r++;
+
+    ws.getCell(`A${r}`).value = "Grand Total";
+    ws.getCell(`B${r}`).value = Number(l.grandTotal ?? 0);
+    moneyCell(ws.getCell(`B${r}`));
+    ws.getRow(r).font = { bold: true };
+    ws.getRow(r).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0F2FE" },
+    };
+    r += 2;
+
+    // Payments section
+    ws.mergeCells(`A${r}:F${r}`);
+    ws.getCell(`A${r}`).value = "Payments (Full / Installments)";
+    sectionStyle(ws.getRow(r));
+    r++;
+
+    ws.getRow(r).values = [
+      "",
+      "Date",
+      "Amount",
+      "Mode",
+      "Type",
+      "Installment #",
+    ];
+    tableHeaderStyle(ws.getRow(r));
+    r++;
+
+    const pay = (paymentsByLoadingId.get(l.id) ?? []).slice().sort((a, b) => {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
+    let paidTotal = 0;
+
+    if (pay.length === 0) {
+      ws.mergeCells(`B${r}:F${r}`);
+      ws.getCell(`B${r}`).value = "No payments found for this bill.";
+      ws.getCell(`B${r}`).font = { italic: true, color: { argb: "FF64748B" } };
+      r++;
+    } else {
+      for (const p of pay) {
+        paidTotal += Number(p.amount ?? 0);
+
+        ws.getCell(`B${r}`).value = p.date
+          ? format(new Date(p.date), "dd/MM/yyyy")
+          : "";
+        ws.getCell(`C${r}`).value = Number(p.amount ?? 0);
+        ws.getCell(`D${r}`).value = p.paymentMode ?? "";
+        ws.getCell(`E${r}`).value = p.isInstallment ? "Installment" : "Full";
+        ws.getCell(`F${r}`).value = p.isInstallment
+          ? p.installmentNumber ?? "-"
+          : "-";
+
+        centerCell(ws.getCell(`B${r}`));
+        moneyCell(ws.getCell(`C${r}`));
+        centerCell(ws.getCell(`D${r}`));
+        centerCell(ws.getCell(`E${r}`));
+        centerCell(ws.getCell(`F${r}`));
+
+        r++;
+      }
+    }
+
+    const grand = Number(l.grandTotal ?? 0);
+    const balance = Math.max(0, grand - paidTotal);
+
+    ws.getCell(`A${r}`).value = "Paid Total";
+    ws.getCell(`B${r}`).value = paidTotal;
+    moneyCell(ws.getCell(`B${r}`));
+
+    ws.getCell(`C${r}`).value = "Balance";
+    ws.getCell(`D${r}`).value = balance;
+    moneyCell(ws.getCell(`D${r}`));
+
+    ws.getRow(r).font = { bold: true };
+    ws.getRow(r).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: balance === 0 ? SOFT_GREEN : SOFT_RED },
+    };
+    r += 2;
+
+    // Blank separator
+    ws.addRow([]);
+    r++;
+  }
+
+  // Apply borders to non-empty cells A..F
+  for (let row = 1; row <= ws.rowCount; row++) {
+    for (let col = 1; col <= 6; col++) {
+      const cell = ws.getCell(row, col);
+      const v = cell.value;
+      const hasValue =
+        v !== null &&
+        v !== undefined &&
+        !(typeof v === "string" && v.trim() === "");
+      if (hasValue) applyThinBorder(cell);
+    }
+  }
+
+  ws.views = [{ state: "frozen", ySplit: 1 }];
 }
