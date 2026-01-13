@@ -1,3 +1,4 @@
+// app\(dashboard)\receipts\page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -10,10 +11,12 @@ import { toast } from "sonner";
 
 import type {
   Receipt,
+  VendorReceipt,
   ClientReceipt,
   EmployeeReceipt,
 } from "../../../lib/receipts";
 import { generatePayslipPDF } from "@/lib/pdf/payslip";
+import { VendorInvoiceModal } from "./components/invoice/VendorInvoiceModal";
 import { ClientInvoiceModal } from "./components/invoice/ClientInvoiceModal";
 
 const formatCurrency = (amt: number) =>
@@ -29,7 +32,7 @@ const formatDate = (date: string | Date | null | undefined) => {
   return Number.isNaN(d.getTime()) ? "N/A" : d.toLocaleDateString("en-IN");
 };
 
-type TabId = "client" | "employee";
+type TabId = "vendor" | "client" | "employee";
 
 function cn(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(" ");
@@ -63,6 +66,8 @@ function TabsTrigger({
   label: string;
 }) {
   const isActive = value === activeValue;
+  const mobileLabel =
+    value === "vendor" ? "Vendor" : value === "client" ? "Client" : "Employee";
 
   return (
     <button
@@ -84,6 +89,7 @@ function TabsTrigger({
     >
       <span className="flex items-center justify-center sm:justify-start gap-2">
         <Icon className="h-4 w-4 shrink-0" />
+        <span className="sm:hidden">{mobileLabel}</span>
         <span className="hidden sm:inline">{label}</span>
       </span>
       <span
@@ -97,7 +103,7 @@ function TabsTrigger({
 }
 
 export default function ReceiptsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("client");
+  const [activeTab, setActiveTab] = useState<TabId>("vendor");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -108,6 +114,11 @@ export default function ReceiptsPage() {
   const PAGE_SIZE = 15;
   const [page, setPage] = useState(1);
 
+  const [openVendorInvoice, setOpenVendorInvoice] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState<VendorReceipt | null>(
+    null
+  );
+
   const [openClientInvoice, setOpenClientInvoice] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClientReceipt | null>(
     null
@@ -115,12 +126,19 @@ export default function ReceiptsPage() {
 
   const [invoiceMap, setInvoiceMap] = useState<Record<string, boolean>>({});
 
+  const isVendorReceipt = (r: Receipt): r is VendorReceipt =>
+    (r as VendorReceipt).vendorId !== undefined;
+  const isClientReceipt = (r: Receipt): r is ClientReceipt =>
+    (r as ClientReceipt).clientDetailsId !== undefined;
+
   const tabs = [
+    { id: "vendor" as const, label: "Vendor Receipt", icon: User },
     { id: "client" as const, label: "Client Receipt", icon: User },
     { id: "employee" as const, label: "Employee Receipt", icon: User },
   ];
 
   const apiMap: Record<TabId, string> = {
+    vendor: "/api/payments/vendor",
     client: "/api/payments/client",
     employee: "/api/payments/employee",
   };
@@ -154,11 +172,14 @@ export default function ReceiptsPage() {
 
         setReceipts(normalized);
 
-        if (activeTab === "client") {
+        if (activeTab === "vendor" || activeTab === "client") {
           const map: Record<string, boolean> = {};
           await Promise.all(
             normalized.map(async (r: any) => {
-              const endpoint = `/api/invoices/client/by-payment?paymentId=${r.id}`;
+              const endpoint =
+                activeTab === "vendor"
+                  ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+                  : `/api/invoices/client/by-payment?paymentId=${r.id}`;
               const x = await fetch(endpoint);
               map[r.id] = x.ok;
             })
@@ -186,6 +207,7 @@ export default function ReceiptsPage() {
 
   const getTitle = () => {
     const map: Record<TabId, string> = {
+      vendor: "Vendor Payment Receipts",
       client: "Client Payment Receipts",
       employee: "Employee Salary Receipts",
     };
@@ -193,6 +215,7 @@ export default function ReceiptsPage() {
   };
 
   const getPartyName = (r: Receipt) => {
+    if (activeTab === "vendor") return (r as VendorReceipt).vendorName || "—";
     if (activeTab === "client") return (r as ClientReceipt).clientName || "—";
     if (activeTab === "employee")
       return (r as EmployeeReceipt).employeeName || "—";
@@ -220,7 +243,15 @@ export default function ReceiptsPage() {
       const ref = String(
         (r as any).reference || (r as any).referenceNo || ""
       ).toLowerCase();
-      return party.includes(q) || mode.includes(q) || ref.includes(q);
+      const billNo = String((r as any).billNo || "").toLowerCase();
+      const invoiceNo = String((r as any).invoiceNo || "").toLowerCase();
+      return (
+        party.includes(q) ||
+        mode.includes(q) ||
+        ref.includes(q) ||
+        billNo.includes(q) ||
+        invoiceNo.includes(q)
+      );
     };
 
     const out = receipts.filter((r: any) => {
@@ -244,9 +275,12 @@ export default function ReceiptsPage() {
   }, [filteredReceipts, page]);
 
   const handleGenerateInvoice = async (r: any) => {
-    const res = await fetch(
-      `/api/invoices/client/by-payment?paymentId=${r.id}`
-    );
+    const isVendor = activeTab === "vendor";
+    const endpoint = isVendor
+      ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+      : `/api/invoices/client/by-payment?paymentId=${r.id}`;
+
+    const res = await fetch(endpoint);
     if (!res.ok) {
       toast.error("Invoice not found");
       return;
@@ -256,48 +290,67 @@ export default function ReceiptsPage() {
     const invoice = json?.invoice;
     const payment = json?.payment;
 
-    const clientRes = await fetch(`/api/client/${payment.clientDetailsId}`);
-    const clientData = await clientRes.json();
-    const client = clientData?.data;
-
     const { jsPDF } = await import("jspdf");
     await import("jspdf-autotable");
 
     const LOGO_PATH = "/assets/favicon.png";
-    const { generateClientInvoicePDF, loadImageAsDataUrl } = await import(
-      "@/lib/pdf/client-invoice"
-    );
-
     let logoDataUrl: string | undefined;
     try {
+      const { loadImageAsDataUrl } = await import("@/lib/pdf/client-invoice");
       logoDataUrl = await loadImageAsDataUrl(LOGO_PATH);
     } catch (e) {
       console.error("Failed to load logo:", e);
     }
 
-    const baseAmount = Number(invoice?.taxableValue ?? 0);
+    if (isVendor) {
+      const { generateVendorInvoicePDF } = await import(
+        "@/lib/pdf/vendor-invoice"
+      );
+      await generateVendorInvoicePDF(
+        jsPDF,
+        {
+          ...invoice,
+          description: invoice?.description ?? "",
+          paymentMode: payment?.paymentMode,
+          referenceNo: payment?.referenceNo,
+          paymentRef: payment?.paymentRef,
+          paymentdetails: payment?.paymentdetails,
+        },
+        { logoDataUrl }
+      );
+    } else {
+      const clientRes = await fetch(`/api/client/${r.clientDetailsId}`);
+      const clientData = await clientRes.json();
+      const client = clientData?.data;
 
-    await generateClientInvoicePDF(
-      jsPDF,
-      {
-        invoiceNo: invoice.invoiceNo,
-        invoiceDate: invoice.invoiceDate || new Date().toISOString(),
-        clientName: payment?.clientName || "Client",
-        billTo: invoice.billTo,
-        contactNo: client?.phone,
-        state: client?.state,
-        gstin: client?.gstin,
-        description: invoice.description,
-        hsn: invoice.hsn,
-        gstPercent: 0,
-        taxableValue: baseAmount,
-        gstAmount: 0,
-        totalAmount: baseAmount,
-        paymentMode: payment?.paymentMode,
-        placeOfSupply: client?.state,
-      },
-      { logoDataUrl }
-    );
+      const { generateClientInvoicePDF } = await import(
+        "@/lib/pdf/client-invoice"
+      );
+
+      const baseAmount = Number(invoice?.taxableValue ?? 0);
+
+      await generateClientInvoicePDF(
+        jsPDF,
+        {
+          invoiceNo: invoice.invoiceNo,
+          invoiceDate: invoice.invoiceDate || new Date().toISOString(),
+          clientName: payment?.clientName || "Client",
+          billTo: invoice.billTo,
+          contactNo: client?.phone,
+          state: client?.state,
+          gstin: client?.gstin,
+          description: invoice.description,
+          hsn: invoice.hsn,
+          gstPercent: 0,
+          taxableValue: baseAmount,
+          gstAmount: 0,
+          totalAmount: baseAmount,
+          paymentMode: payment?.paymentMode,
+          placeOfSupply: client?.state,
+        },
+        { logoDataUrl }
+      );
+    }
   };
 
   return (
@@ -308,7 +361,7 @@ export default function ReceiptsPage() {
             Receipts
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            View and generate client invoices & employee payslips
+            View and generate invoices & payslips
           </p>
         </div>
 
@@ -388,6 +441,92 @@ export default function ReceiptsPage() {
           </div>
         ) : (
           <div className="space-y-5">
+            {/* MOBILE: Cards */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {paginatedReceipts.map((r: any) => (
+                <div
+                  key={r.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <span className="text-sm font-semibold">
+                          {formatDate(r.date || r.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 font-extrabold text-slate-900 truncate">
+                        {getPartyName(r)}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs text-slate-500">Amount</div>
+                      <div className="text-lg font-extrabold text-emerald-600">
+                        {formatCurrency(r.amount || 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    <div>{r.paymentMode || "—"}</div>
+                    {(r.reference || r.referenceNo) && (
+                      <div className="mt-1 text-slate-500">
+                        Ref: {r.reference || r.referenceNo}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    {(activeTab === "vendor" && isVendorReceipt(r)) ||
+                    (activeTab === "client" && isClientReceipt(r)) ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+                          onClick={() => {
+                            if (activeTab === "vendor") {
+                              setSelectedVendor(r as VendorReceipt);
+                              setOpenVendorInvoice(true);
+                            } else {
+                              setSelectedClient(r as ClientReceipt);
+                              setOpenClientInvoice(true);
+                            }
+                          }}
+                        >
+                          <FileText className="w-4 h-4" />
+                          Edit Invoice
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          className="gap-2 bg-[#139BC3] text-white hover:bg-[#1088AA] disabled:opacity-20"
+                          disabled={!invoiceMap[r.id]}
+                          onClick={() => handleGenerateInvoice(r)}
+                        >
+                          <FileText className="w-4 h-4" />
+                          Generate Invoice
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
+                        onClick={() => generatePayslipPDF(r as EmployeeReceipt)}
+                      >
+                        <FileText className="w-4 h-4" />
+                        Generate Payslip
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
               <div className="min-w-[800px] rounded-2xl border border-slate-200 bg-white">
@@ -449,15 +588,21 @@ export default function ReceiptsPage() {
                         </td>
 
                         <td className="py-4 px-4">
-                          {activeTab === "client" ? (
+                          {(activeTab === "vendor" && isVendorReceipt(r)) ||
+                          (activeTab === "client" && isClientReceipt(r)) ? (
                             <div className="flex justify-end gap-2">
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="gap-2 border-slate-200 text-slate-700 hover:bg-slate-50"
                                 onClick={() => {
-                                  setSelectedClient(r as ClientReceipt);
-                                  setOpenClientInvoice(true);
+                                  if (activeTab === "vendor") {
+                                    setSelectedVendor(r as VendorReceipt);
+                                    setOpenVendorInvoice(true);
+                                  } else {
+                                    setSelectedClient(r as ClientReceipt);
+                                    setOpenClientInvoice(true);
+                                  }
                                 }}
                               >
                                 <FileText className="w-4 h-4" />
@@ -554,11 +699,25 @@ export default function ReceiptsPage() {
         )}
       </CardCustom>
 
-      {/* ✅ Modal */}
+      {openVendorInvoice && selectedVendor ? (
+        <VendorInvoiceModal
+          open={openVendorInvoice}
+          vendorId={selectedVendor.vendorId}
+          vendorName={selectedVendor.vendorName}
+          source={selectedVendor.source as "farmer" | "agent"}
+          paymentId={selectedVendor.id}
+          onClose={() => setOpenVendorInvoice(false)}
+          onSaved={() => {
+            setOpenVendorInvoice(false);
+            setInvoiceMap((prev) => ({ ...prev, [selectedVendor.id]: true }));
+          }}
+        />
+      ) : null}
+
       {openClientInvoice && selectedClient ? (
         <ClientInvoiceModal
           open={openClientInvoice}
-          clientDetailsId={(selectedClient as any).clientDetailsId}
+          clientDetailsId={(selectedClient as any).clientDetailsId} // ✅ FIX
           clientName={selectedClient.clientName}
           paymentId={selectedClient.id}
           onClose={() => setOpenClientInvoice(false)}

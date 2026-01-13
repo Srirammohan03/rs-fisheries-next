@@ -13,7 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit, Check, X, Trash2, Download, Plus } from "lucide-react";
+import {
+  Edit,
+  Check,
+  X,
+  Trash2,
+  Download,
+  Plus,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import LoadingDeleteDialog from "@/components/helpers/LoadingDeleteDialog";
@@ -24,7 +33,7 @@ interface VendorItem {
 
   // backend values
   noTrays?: number;
-  trayKgs?: number; // IMPORTANT: this is TOTAL tray kgs for this item (not per tray)
+  trayKgs?: number; // TOTAL tray kgs for this item
   loose?: number;
   totalKgs?: number;
 
@@ -57,9 +66,10 @@ interface LoadingRecord {
   totalPrice?: number;
 }
 
-type UIItem = VendorItem & {
-  recordTotalKgs: number;
-  recordGrandTotal: number;
+type FishVariety = {
+  id: string;
+  code?: string;
+  name?: string;
 };
 
 type EditingRow = {
@@ -74,12 +84,6 @@ type EditingRow = {
   trayKgsTotal: number;
   totalKgs: number;
   totalPrice: number;
-};
-
-type FishVariety = {
-  id: string;
-  code?: string;
-  name?: string;
 };
 
 const fetchFarmerLoadings = async (): Promise<LoadingRecord[]> => {
@@ -109,9 +113,24 @@ function n(v: unknown): number {
 
 // Backend logic: 95% net
 function calcTotalPrice(totalKgs: number, pricePerKg: number): number {
-  // same as your backend example: 3500*100*0.95 = 332500
   return Math.round(totalKgs * pricePerKg * 0.95);
 }
+
+type BillRow = {
+  id: string; // loading record id
+  source: "farmer" | "agent";
+  billNo: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  vehicleNo?: string;
+  village?: string;
+
+  items: VendorItem[];
+
+  varietyCount: number; // number of items (varieties)
+  uniqueVarietyCount: number; // unique codes count
+  totalPrice: number; // sum of item.totalPrice
+};
 
 export default function VendorBillsPage() {
   const [activeTab, setActiveTab] = useState<"farmer" | "agent">("farmer");
@@ -119,6 +138,11 @@ export default function VendorBillsPage() {
   const [records, setRecords] = useState<LoadingRecord[]>([]);
   const [editing, setEditing] = useState<Record<string, EditingRow>>({});
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
+
+  // Expand/collapse bills
+  const [expandedBills, setExpandedBills] = useState<Record<string, boolean>>(
+    {}
+  );
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -131,7 +155,9 @@ export default function VendorBillsPage() {
   const [newAgentCount, setNewAgentCount] = useState(0);
 
   const [deleteItemOpen, setDeleteItemOpen] = useState(false);
-  const [deleteItemTarget, setDeleteItemTarget] = useState<UIItem | null>(null);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<VendorItem | null>(
+    null
+  );
   const [deletingItem, setDeletingItem] = useState(false);
 
   // Add Variety (GLOBAL)
@@ -147,8 +173,8 @@ export default function VendorBillsPage() {
   const [fishVarieties, setFishVarieties] = useState<FishVariety[]>([]);
   const [fishLoading, setFishLoading] = useState(false);
 
-  // Pagination
-  const PAGE_SIZE = 15;
+  // Pagination (bills)
+  const PAGE_SIZE = 10;
   const [page, setPage] = useState(1);
 
   const refreshRecords = useCallback(async () => {
@@ -195,8 +221,10 @@ export default function VendorBillsPage() {
     };
   }, []);
 
+  // Badge counts
   useEffect(() => {
     if (typeof window === "undefined") return;
+
     const key = "vendorBillsLastSeen";
     const stored = localStorage.getItem(key);
     const lastSeen = stored ? JSON.parse(stored) : { farmer: 0, agent: 0 };
@@ -233,24 +261,14 @@ export default function VendorBillsPage() {
     setNewTrays(0);
     setNewLoose(0);
     setNewPrice(0);
+
+    // reset expansion and pagination
+    setExpandedBills({});
+    setPage(1);
   };
 
-  // Records for active tab
-  const recordsForTab = useMemo(() => {
-    return records
-      .filter((r) => r.source === activeTab)
-      .sort((a, b) => {
-        const da = (a.date || "").split("T")[0];
-        const db = (b.date || "").split("T")[0];
-        return sortOrder === "newest"
-          ? db.localeCompare(da)
-          : da.localeCompare(db);
-      });
-  }, [records, activeTab, sortOrder]);
-
-  // ✅ use master fish list
+  // ✅ master fish list options
   const fishVarietyOptions = useMemo(() => {
-    // show Code if exists else Name
     const cleaned = fishVarieties
       .map((v) => ({
         id: v.id,
@@ -259,7 +277,6 @@ export default function VendorBillsPage() {
       }))
       .filter((x) => x.label.length > 0);
 
-    // de-dupe by label
     const seen = new Set<string>();
     const unique = cleaned.filter((x) => {
       const key = x.label.toUpperCase();
@@ -315,6 +332,9 @@ export default function VendorBillsPage() {
       toast.success("Variety added to bill");
       await refreshRecords();
       closeAddVarietyModal();
+
+      // auto expand that bill
+      setExpandedBills((prev) => ({ ...prev, [selectedBillId]: true }));
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to add variety");
     } finally {
@@ -338,53 +358,71 @@ export default function VendorBillsPage() {
     return { trayKgsTotal, totalKgs, totalPrice };
   };
 
-  const filteredItems: UIItem[] = useMemo(() => {
-    let result: UIItem[] = records
-      .filter((rec) =>
-        activeTab === "farmer"
-          ? rec.source === "farmer"
-          : rec.source === "agent"
-      )
-      .flatMap((rec) => {
-        const recordTotalKgs = n(rec.totalKgs);
-        const recordGrandTotal = n(rec.grandTotal);
+  // ✅ Build bill rows (one row per bill)
+  const bills: BillRow[] = useMemo(() => {
+    const rows = records
+      .filter((r) => r.source === activeTab)
+      .map((rec) => {
+        const billNo = rec.billNo || "-";
+        const name =
+          activeTab === "farmer"
+            ? rec.FarmerName || "Unknown"
+            : rec.agentName || "Unknown";
+        const date = (rec.date || "").split("T")[0] || "";
 
-        return rec.items.map((it) => ({
-          ...it,
-          loadingId: rec.id,
-          source: rec.source,
-          billNo: rec.billNo,
-          name: rec.source === "farmer" ? rec.FarmerName : rec.agentName,
-          date: rec.date?.split("T")[0] || "",
-          recordTotalKgs,
-          recordGrandTotal,
-          loose: it.loose,
-        }));
+        const items = Array.isArray(rec.items) ? rec.items : [];
+        const totalPrice =
+          n(rec.grandTotal) ||
+          items.reduce((sum, it) => sum + n(it.totalPrice), 0);
+
+        const varietyCount = items.length;
+        const uniqueVarietyCount = new Set(
+          items.map((it) => (it.varietyCode || "").trim().toUpperCase())
+        ).size;
+
+        return {
+          id: rec.id,
+          source: activeTab,
+          billNo,
+          name,
+          date,
+          vehicleNo: rec.vehicleNo,
+          village: rec.village,
+          items,
+          varietyCount,
+          uniqueVarietyCount,
+          totalPrice,
+        };
       });
 
-    if (searchTerm) {
+    // Filter: search in billNo/name OR any item variety
+    let filtered = rows;
+
+    if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(
-        (it) =>
-          it.billNo?.toLowerCase().includes(term) ||
-          it.name?.toLowerCase().includes(term) ||
-          it.varietyCode?.toLowerCase().includes(term)
-      );
+      filtered = filtered.filter((b) => {
+        const billMatch = b.billNo.toLowerCase().includes(term);
+        const nameMatch = b.name.toLowerCase().includes(term);
+        const varietyMatch = b.items.some((it) =>
+          (it.varietyCode || "").toLowerCase().includes(term)
+        );
+        return billMatch || nameMatch || varietyMatch;
+      });
     }
 
-    if (fromDate) result = result.filter((it) => (it.date || "") >= fromDate);
-    if (toDate) result = result.filter((it) => (it.date || "") <= toDate);
+    if (fromDate) filtered = filtered.filter((b) => (b.date || "") >= fromDate);
+    if (toDate) filtered = filtered.filter((b) => (b.date || "") <= toDate);
 
-    result.sort((a, b) => {
-      const dateA = a.date || "";
-      const dateB = b.date || "";
+    filtered.sort((a, b) => {
+      const da = a.date || "";
+      const db = b.date || "";
       return sortOrder === "newest"
-        ? dateB.localeCompare(dateA)
-        : dateA.localeCompare(dateB);
+        ? db.localeCompare(da)
+        : da.localeCompare(db);
     });
 
-    return result;
-  }, [records, activeTab, searchTerm, sortOrder, fromDate, toDate]);
+    return filtered;
+  }, [records, activeTab, searchTerm, fromDate, toDate, sortOrder]);
 
   useEffect(
     () => setPage(1),
@@ -392,18 +430,18 @@ export default function VendorBillsPage() {
   );
 
   const totalPages = useMemo(() => {
-    if (filteredItems.length === 0) return 1;
-    return Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
-  }, [filteredItems.length]);
+    if (bills.length === 0) return 1;
+    return Math.max(1, Math.ceil(bills.length / PAGE_SIZE));
+  }, [bills.length]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const paginatedItems = useMemo(() => {
+  const paginatedBills = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return filteredItems.slice(start, start + PAGE_SIZE);
-  }, [filteredItems, page]);
+    return bills.slice(start, start + PAGE_SIZE);
+  }, [bills, page]);
 
   const pageNumbers = useMemo(() => {
     const delta = 1;
@@ -428,17 +466,19 @@ export default function VendorBillsPage() {
     return range;
   }, [page, totalPages]);
 
+  const toggleBill = (billId: string) => {
+    setExpandedBills((prev) => ({ ...prev, [billId]: !prev[billId] }));
+  };
+
   // ✅ Start edit: compute perTrayKgs correctly from backend values
-  const startEdit = useCallback((item: UIItem) => {
+  const startEdit = useCallback((item: VendorItem) => {
     const noTrays = n(item.noTrays);
     const trayKgsTotal = n(item.trayKgs);
 
-    // If backend stores trayKgs as TOTAL tray kgs (your sample does),
-    // perTrayKgs = trayKgsTotal / noTrays
     const perTrayKgs = noTrays > 0 ? trayKgsTotal / noTrays : 0;
 
     const base = {
-      noTrays: noTrays,
+      noTrays,
       loose: n(item.loose),
       pricePerKg: n(item.pricePerKg),
       perTrayKgs: Number(perTrayKgs.toFixed(3)),
@@ -495,7 +535,7 @@ export default function VendorBillsPage() {
   );
 
   // ✅ Save: send trayKgs as TOTAL tray kgs (perTrayKgs * noTrays)
-  const saveRow = async (item: UIItem) => {
+  const saveRow = async (item: VendorItem) => {
     const edits = editing[item.id];
     if (!edits || savingIds[item.id]) return;
 
@@ -505,7 +545,7 @@ export default function VendorBillsPage() {
       noTrays: n(edits.noTrays),
       loose: n(edits.loose),
       pricePerKg: n(edits.pricePerKg),
-      trayKgs: n(edits.trayKgsTotal), // IMPORTANT: total tray kgs
+      trayKgs: n(edits.trayKgsTotal),
       totalKgs: n(edits.totalKgs),
       totalPrice: n(edits.totalPrice),
     };
@@ -513,11 +553,11 @@ export default function VendorBillsPage() {
     try {
       await patchItem(item.id, payload);
 
-      // Optimistic local update (even if backend is slow)
+      // Optimistic local update
       setRecords((prev) =>
         prev.map((rec) => ({
           ...rec,
-          items: rec.items.map((it) =>
+          items: (rec.items || []).map((it) =>
             it.id === item.id ? { ...it, ...payload } : it
           ),
         }))
@@ -538,7 +578,7 @@ export default function VendorBillsPage() {
     }
   };
 
-  const openDeleteItemDialog = (row: UIItem) => {
+  const openDeleteItemDialog = (row: VendorItem) => {
     setDeleteItemTarget(row);
     setDeleteItemOpen(true);
   };
@@ -579,7 +619,7 @@ export default function VendorBillsPage() {
     const data = records
       .filter((r) => r.source === type)
       .flatMap((rec) =>
-        rec.items.map((it) => ({
+        (rec.items || []).map((it) => ({
           "Bill No": rec.billNo || "",
           Name: type === "farmer" ? rec.FarmerName || "" : rec.agentName || "",
           Date: rec.date ? new Date(rec.date).toLocaleDateString("en-IN") : "",
@@ -606,24 +646,6 @@ export default function VendorBillsPage() {
       wb,
       `${type}-bills-${new Date().toISOString().slice(0, 10)}.xlsx`
     );
-  };
-
-  const TraysDisplay = ({ item }: { item: UIItem }) => {
-    const trays = item.noTrays ?? 0;
-    const looseKgs = n(item.loose);
-
-    if (trays > 0)
-      return <span className="font-semibold text-gray-900">{trays}</span>;
-
-    if (looseKgs > 0) {
-      return (
-        <span className="text-orange-600 font-medium text-sm">
-          (Loose) {looseKgs.toFixed(1)} KGS
-        </span>
-      );
-    }
-
-    return <span className="text-gray-400">-</span>;
   };
 
   return (
@@ -688,6 +710,7 @@ export default function VendorBillsPage() {
                     <Download className="w-4 h-4 mr-2" />
                     Export Farmers
                   </Button>
+
                   <Button
                     variant="outline"
                     onClick={() => exportData("agent")}
@@ -700,6 +723,7 @@ export default function VendorBillsPage() {
               </div>
             </div>
 
+            {/* Filters */}
             <div className="flex flex-col gap-4 p-4 sm:p-5 rounded-xl border border-blue-100 bg-white/40">
               <div className="flex flex-col lg:flex-row lg:items-center gap-3">
                 <div className="relative w-full lg:w-[420px]">
@@ -775,332 +799,527 @@ export default function VendorBillsPage() {
             <div className="text-center py-12 text-gray-500">
               Loading bills...
             </div>
-          ) : filteredItems.length === 0 ? (
+          ) : bills.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               No records found
             </div>
           ) : (
             <>
-              {/* Desktop Table */}
+              {/* Desktop Table (Bills) */}
               <div className="mt-6 hidden md:block overflow-x-auto">
                 <table className="w-full min-w-[900px] table-auto">
                   <thead className="bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                     <tr>
                       <th className="p-4">Bill No / Name</th>
-                      <th className="p-4">Variety</th>
-                      <th className="p-4 text-right">Trays</th>
-                      <th className="p-4 text-right">Loose</th>
-                      <th className="p-4 text-right">Price/Kg</th>
-                      <th className="p-4 text-right">Total Price</th>
-                      <th className="p-4 text-center">Actions</th>
+                      <th className="p-4 text-right">Variety</th>
+                      <th className="p-4 text-right">Total</th>
+                      <th className="p-4 text-center">Open</th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-gray-200">
-                    {paginatedItems.map((it) => {
-                      const edit = editing[it.id];
-                      const isEditing = !!edit;
-                      const isSaving = !!savingIds[it.id];
+                    {paginatedBills.map((bill) => {
+                      const open = !!expandedBills[bill.id];
 
                       return (
-                        <tr key={it.id} className="hover:bg-gray-50">
-                          <td className="p-4 font-medium">
-                            <div>{it.billNo}</div>
-                            <div className="text-xs text-gray-500">
-                              {it.name}
-                            </div>
-                          </td>
-
-                          <td className="p-4">{it.varietyCode}</td>
-
-                          <td className="p-4 text-right">
-                            {isEditing ? (
-                              <Input
-                                value={edit.noTrays}
-                                onChange={(e) =>
-                                  onChangeEditField(
-                                    it.id,
-                                    "noTrays",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-24 text-right"
-                                type="number"
-                                step="1"
-                                min={0}
-                              />
-                            ) : (
-                              <TraysDisplay item={it} />
-                            )}
-                          </td>
-
-                          <td className="p-4 text-right">
-                            {isEditing ? (
-                              <Input
-                                value={edit.loose}
-                                onChange={(e) =>
-                                  onChangeEditField(
-                                    it.id,
-                                    "loose",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-28 text-right"
-                                type="number"
-                                step="0.1"
-                                min={0}
-                              />
-                            ) : (
-                              <span className="text-gray-700">
-                                {n(it.loose).toFixed(1)}
-                              </span>
-                            )}
-                          </td>
-
-                          <td className="p-4 text-right">
-                            {isEditing ? (
-                              <Input
-                                value={edit.pricePerKg}
-                                onChange={(e) =>
-                                  onChangeEditField(
-                                    it.id,
-                                    "pricePerKg",
-                                    e.target.value
-                                  )
-                                }
-                                className="w-24 text-right"
-                                type="number"
-                                step="0.01"
-                                min={0}
-                              />
-                            ) : (
-                              <span>{n(it.pricePerKg).toFixed(2)}</span>
-                            )}
-                          </td>
-
-                          <td className="p-4 text-right font-semibold text-green-600">
-                            {isEditing ? (
-                              <Input
-                                value={edit.totalPrice}
-                                readOnly
-                                className="w-40 text-right bg-green-50"
-                              />
-                            ) : (
-                              n(it.totalPrice).toFixed(2)
-                            )}
-                          </td>
-
-                          <td className="p-4 text-center">
-                            {!isEditing ? (
-                              <div className="flex justify-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => startEdit(it)}
+                        <React.Fragment key={bill.id}>
+                          <tr className="hover:bg-gray-50">
+                            <td className="p-4 font-medium">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBill(bill.id)}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100"
+                                  aria-label="Toggle bill"
                                 >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-600 hover:bg-red-50"
-                                  onClick={() => openDeleteItemDialog(it)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex justify-center gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => saveRow(it)}
-                                  disabled={isSaving}
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  {isSaving ? (
-                                    "..."
+                                  {open ? (
+                                    <ChevronDown className="w-4 h-4 text-gray-700" />
                                   ) : (
-                                    <Check className="w-4 h-4" />
+                                    <ChevronRight className="w-4 h-4 text-gray-700" />
                                   )}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => cancelEdit(it.id)}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
+                                </button>
+                                <div>
+                                  <div className="text-gray-900">
+                                    {bill.billNo}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {bill.name}
+                                    {bill.date ? ` • ${bill.date}` : ""}
+                                  </div>
+                                </div>
                               </div>
-                            )}
-                          </td>
-                        </tr>
+                            </td>
+
+                            <td className="p-4 text-right">
+                              <div className="font-semibold text-gray-900">
+                                {bill.varietyCount}
+                              </div>
+                              {/* <div className="text-xs text-gray-500">
+                                Unique: {bill.uniqueVarietyCount}
+                              </div> */}
+                            </td>
+
+                            <td className="p-4 text-right font-semibold text-green-600">
+                              {n(bill.totalPrice).toFixed(2)}
+                            </td>
+
+                            <td className="p-4 text-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => toggleBill(bill.id)}
+                                className="bg-[#139BC3] text-white"
+                              >
+                                {open ? "Hide" : "View"}
+                              </Button>
+                            </td>
+                          </tr>
+
+                          {/* Expanded content */}
+                          {open && (
+                            <tr className="bg-white">
+                              <td colSpan={4} className="p-4">
+                                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                                  <div className="px-4 py-3 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div className="text-sm text-gray-700">
+                                      <span className="font-semibold text-gray-900">
+                                        Bill:
+                                      </span>{" "}
+                                      {bill.billNo}{" "}
+                                      <span className="text-gray-400">•</span>{" "}
+                                      {bill.name}
+                                      {bill.vehicleNo ? (
+                                        <>
+                                          {" "}
+                                          <span className="text-gray-400">
+                                            •
+                                          </span>{" "}
+                                          Vehicle: {bill.vehicleNo}
+                                        </>
+                                      ) : null}
+                                      {bill.village ? (
+                                        <>
+                                          {" "}
+                                          <span className="text-gray-400">
+                                            •
+                                          </span>{" "}
+                                          Village: {bill.village}
+                                        </>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="text-sm font-semibold text-green-700">
+                                      Total: {n(bill.totalPrice).toFixed(2)}
+                                    </div>
+                                  </div>
+
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[900px] table-auto">
+                                      <thead className="bg-white text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+                                        <tr>
+                                          <th className="p-4">Variety</th>
+                                          <th className="p-4 text-right">
+                                            Trays
+                                          </th>
+                                          <th className="p-4 text-right">
+                                            Loose
+                                          </th>
+                                          <th className="p-4 text-right">
+                                            Price/Kg
+                                          </th>
+                                          <th className="p-4 text-right">
+                                            Total
+                                          </th>
+                                          <th className="p-4 text-center">
+                                            Actions
+                                          </th>
+                                        </tr>
+                                      </thead>
+
+                                      <tbody className="divide-y divide-gray-200">
+                                        {bill.items.map((it) => {
+                                          const edit = editing[it.id];
+                                          const isEditing = !!edit;
+                                          const isSaving = !!savingIds[it.id];
+
+                                          return (
+                                            <tr
+                                              key={it.id}
+                                              className="hover:bg-gray-50"
+                                            >
+                                              <td className="p-4 font-medium">
+                                                {it.varietyCode || "-"}
+                                              </td>
+
+                                              <td className="p-4 text-right">
+                                                {isEditing ? (
+                                                  <Input
+                                                    value={edit.noTrays}
+                                                    onChange={(e) =>
+                                                      onChangeEditField(
+                                                        it.id,
+                                                        "noTrays",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-24 text-right"
+                                                    type="number"
+                                                    step="1"
+                                                    min={0}
+                                                  />
+                                                ) : (
+                                                  <span className="font-semibold text-gray-900">
+                                                    {n(it.noTrays)}
+                                                  </span>
+                                                )}
+                                              </td>
+
+                                              <td className="p-4 text-right">
+                                                {isEditing ? (
+                                                  <Input
+                                                    value={edit.loose}
+                                                    onChange={(e) =>
+                                                      onChangeEditField(
+                                                        it.id,
+                                                        "loose",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-28 text-right"
+                                                    type="number"
+                                                    step="0.1"
+                                                    min={0}
+                                                  />
+                                                ) : (
+                                                  <span className="text-gray-700">
+                                                    {n(it.loose).toFixed(1)}
+                                                  </span>
+                                                )}
+                                              </td>
+
+                                              <td className="p-4 text-right">
+                                                {isEditing ? (
+                                                  <Input
+                                                    value={edit.pricePerKg}
+                                                    onChange={(e) =>
+                                                      onChangeEditField(
+                                                        it.id,
+                                                        "pricePerKg",
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-24 text-right"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min={0}
+                                                  />
+                                                ) : (
+                                                  <span>
+                                                    {n(it.pricePerKg).toFixed(
+                                                      2
+                                                    )}
+                                                  </span>
+                                                )}
+                                              </td>
+
+                                              <td className="p-4 text-right font-semibold text-green-600">
+                                                {isEditing ? (
+                                                  <Input
+                                                    value={edit.totalPrice}
+                                                    readOnly
+                                                    className="w-40 text-right bg-green-50"
+                                                  />
+                                                ) : (
+                                                  n(it.totalPrice).toFixed(2)
+                                                )}
+                                              </td>
+
+                                              <td className="p-4 text-center">
+                                                {!isEditing ? (
+                                                  <div className="flex justify-center gap-2">
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() =>
+                                                        startEdit(it)
+                                                      }
+                                                    >
+                                                      <Edit className="w-4 h-4" />
+                                                    </Button>
+
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      className="text-red-600 hover:bg-red-50"
+                                                      onClick={() =>
+                                                        openDeleteItemDialog(it)
+                                                      }
+                                                    >
+                                                      <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                  </div>
+                                                ) : (
+                                                  <div className="flex justify-center gap-2">
+                                                    <Button
+                                                      size="sm"
+                                                      onClick={() =>
+                                                        saveRow(it)
+                                                      }
+                                                      disabled={isSaving}
+                                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                      {isSaving ? (
+                                                        "..."
+                                                      ) : (
+                                                        <Check className="w-4 h-4" />
+                                                      )}
+                                                    </Button>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() =>
+                                                        cancelEdit(it.id)
+                                                      }
+                                                    >
+                                                      <X className="w-4 h-4" />
+                                                    </Button>
+                                                  </div>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
 
-              {/* ✅ Mobile cards */}
+              {/* Mobile (Bills as cards) */}
               <div className="mt-6 grid grid-cols-1 gap-3 md:hidden">
-                {paginatedItems.map((it) => {
-                  const edit = editing[it.id];
-                  const isEditing = !!edit;
-                  const isSaving = !!savingIds[it.id];
+                {paginatedBills.map((bill) => {
+                  const open = !!expandedBills[bill.id];
 
                   return (
                     <div
-                      key={it.id}
+                      key={bill.id}
                       className="rounded-2xl border bg-white p-4 shadow-sm"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold">
-                            {it.billNo}
+                      <button
+                        type="button"
+                        onClick={() => toggleBill(bill.id)}
+                        className="w-full flex items-start justify-between gap-3"
+                      >
+                        <div className="text-left">
+                          <div className="text-sm font-semibold text-gray-900">
+                            {bill.billNo}
                           </div>
-                          <div className="text-xs text-gray-600">{it.name}</div>
-                          {/* <div className="text-[11px] text-gray-500 mt-1">
-                            {it.hasVehicle
-                              ? "Vehicle: Yes (No 5% cut)"
-                              : "Vehicle: No (5% cut)"}
-                          </div> */}
+                          <div className="text-xs text-gray-600">
+                            {bill.name}
+                          </div>
+                          {bill.date ? (
+                            <div className="text-[11px] text-gray-500 mt-1">
+                              {bill.date}
+                            </div>
+                          ) : null}
                         </div>
 
-                        {!isEditing ? (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => startEdit(it)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:bg-red-50"
-                              onClick={() => openDeleteItemDialog(it)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500">
+                              Varieties
+                            </div>
+                            <div className="font-semibold text-gray-900">
+                              {bill.varietyCount}
+                            </div>
                           </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => saveRow(it)}
-                              disabled={isSaving}
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              {isSaving ? "..." : <Check className="w-4 h-4" />}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => cancelEdit(it.id)}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        )}
+                          {open ? (
+                            <ChevronDown className="w-5 h-5 text-gray-700 mt-1" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-gray-700 mt-1" />
+                          )}
+                        </div>
+                      </button>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="text-xs text-gray-500">Total</div>
+                        <div className="font-bold text-green-600">
+                          {n(bill.totalPrice).toFixed(2)}
+                        </div>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <div className="text-xs text-gray-500">Variety</div>
-                          <div className="font-medium">
-                            {it.varietyCode || "-"}
+                      {open && (
+                        <div className="mt-4 space-y-3">
+                          <div className="rounded-xl border bg-gray-50 p-3 text-xs text-gray-700">
+                            {bill.vehicleNo ? (
+                              <>Vehicle: {bill.vehicleNo} • </>
+                            ) : null}
+                            {bill.village ? <>Village: {bill.village}</> : null}
+                          </div>
+
+                          <div className="space-y-3">
+                            {bill.items.map((it) => {
+                              const edit = editing[it.id];
+                              const isEditing = !!edit;
+                              const isSaving = !!savingIds[it.id];
+
+                              return (
+                                <div
+                                  key={it.id}
+                                  className="rounded-xl border bg-white p-3"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="text-sm font-semibold">
+                                        {it.varietyCode || "-"}
+                                      </div>
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        Total:{" "}
+                                        <span className="font-semibold text-green-700">
+                                          {isEditing
+                                            ? n(edit.totalPrice).toFixed(2)
+                                            : n(it.totalPrice).toFixed(2)}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {!isEditing ? (
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => startEdit(it)}
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="text-red-600 hover:bg-red-50"
+                                          onClick={() =>
+                                            openDeleteItemDialog(it)
+                                          }
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          onClick={() => saveRow(it)}
+                                          disabled={isSaving}
+                                          className="bg-green-600 hover:bg-green-700 text-white"
+                                        >
+                                          {isSaving ? (
+                                            "..."
+                                          ) : (
+                                            <Check className="w-4 h-4" />
+                                          )}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => cancelEdit(it.id)}
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                      <div className="text-xs text-gray-500">
+                                        Trays
+                                      </div>
+                                      {isEditing ? (
+                                        <Input
+                                          value={edit.noTrays}
+                                          onChange={(e) =>
+                                            onChangeEditField(
+                                              it.id,
+                                              "noTrays",
+                                              e.target.value
+                                            )
+                                          }
+                                          className="h-9"
+                                          type="number"
+                                          min={0}
+                                        />
+                                      ) : (
+                                        <div className="font-medium">
+                                          {n(it.noTrays)}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <div className="text-xs text-gray-500">
+                                        Loose (Kgs)
+                                      </div>
+                                      {isEditing ? (
+                                        <Input
+                                          value={edit.loose}
+                                          onChange={(e) =>
+                                            onChangeEditField(
+                                              it.id,
+                                              "loose",
+                                              e.target.value
+                                            )
+                                          }
+                                          className="h-9"
+                                          type="number"
+                                          min={0}
+                                          step="0.1"
+                                        />
+                                      ) : (
+                                        <div className="font-medium">
+                                          {n(it.loose).toFixed(1)}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="col-span-2">
+                                      <div className="text-xs text-gray-500">
+                                        Price/Kg
+                                      </div>
+                                      {isEditing ? (
+                                        <Input
+                                          value={edit.pricePerKg}
+                                          onChange={(e) =>
+                                            onChangeEditField(
+                                              it.id,
+                                              "pricePerKg",
+                                              e.target.value
+                                            )
+                                          }
+                                          className="h-9"
+                                          type="number"
+                                          min={0}
+                                          step="0.01"
+                                        />
+                                      ) : (
+                                        <div className="font-medium">
+                                          {n(it.pricePerKg).toFixed(2)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-
-                        <div>
-                          <div className="text-xs text-gray-500">
-                            Total Price
-                          </div>
-                          <div className="font-bold text-green-600">
-                            {isEditing
-                              ? Number(edit.totalPrice ?? 0).toFixed(2)
-                              : Number(it.totalPrice ?? 0).toFixed(2)}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-xs text-gray-500">Trays</div>
-                          {isEditing ? (
-                            <Input
-                              value={edit.noTrays ?? 0}
-                              onChange={(e) =>
-                                setEditing((prev) => ({
-                                  ...prev,
-                                  [it.id]: {
-                                    ...prev[it.id],
-                                    noTrays: Number(e.target.value),
-                                  },
-                                }))
-                              }
-                              className="h-9"
-                              type="number"
-                              min={0}
-                            />
-                          ) : (
-                            <div className="font-medium">{it.noTrays ?? 0}</div>
-                          )}
-                        </div>
-
-                        <div>
-                          <div className="text-xs text-gray-500">
-                            Loose (Kgs)
-                          </div>
-                          {isEditing ? (
-                            <Input
-                              value={edit.loose ?? 0}
-                              onChange={(e) =>
-                                setEditing((prev) => ({
-                                  ...prev,
-                                  [it.id]: {
-                                    ...prev[it.id],
-                                    loose: Number(e.target.value),
-                                  },
-                                }))
-                              }
-                              className="h-9"
-                              type="number"
-                              min={0}
-                              step="0.1"
-                            />
-                          ) : (
-                            <div className="font-medium">
-                              {Number(it.loose ?? 0).toFixed(1)}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="col-span-2">
-                          <div className="text-xs text-gray-500">Price/Kg</div>
-                          {isEditing ? (
-                            <Input
-                              value={edit.pricePerKg ?? 0}
-                              onChange={(e) =>
-                                setEditing((prev) => ({
-                                  ...prev,
-                                  [it.id]: {
-                                    ...prev[it.id],
-                                    pricePerKg: Number(e.target.value),
-                                  },
-                                }))
-                              }
-                              className="h-9"
-                              type="number"
-                              min={0}
-                              step="0.01"
-                            />
-                          ) : (
-                            <div className="font-medium">
-                              {Number(it.pricePerKg ?? 0).toFixed(2)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1116,11 +1335,11 @@ export default function VendorBillsPage() {
                     </span>{" "}
                     –{" "}
                     <span className="font-medium text-gray-900">
-                      {Math.min(page * PAGE_SIZE, filteredItems.length)}
+                      {Math.min(page * PAGE_SIZE, bills.length)}
                     </span>{" "}
                     of{" "}
                     <span className="font-medium text-gray-900">
-                      {filteredItems.length}
+                      {bills.length}
                     </span>
                   </div>
 
@@ -1203,17 +1422,27 @@ export default function VendorBillsPage() {
                     <SelectValue placeholder={`Select ${activeTab} bill`} />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
-                    {recordsForTab.map((r) => {
-                      const bill = r.billNo || "(No Bill No)";
-                      const name =
-                        activeTab === "farmer" ? r.FarmerName : r.agentName;
-                      const date = (r.date || "").split("T")[0];
-                      return (
-                        <SelectItem key={r.id} value={r.id}>
-                          {bill} — {name || "Unknown"} {date ? `(${date})` : ""}
-                        </SelectItem>
-                      );
-                    })}
+                    {records
+                      .filter((r) => r.source === activeTab)
+                      .sort((a, b) => {
+                        const da = (a.date || "").split("T")[0];
+                        const db = (b.date || "").split("T")[0];
+                        return sortOrder === "newest"
+                          ? db.localeCompare(da)
+                          : da.localeCompare(db);
+                      })
+                      .map((r) => {
+                        const bill = r.billNo || "(No Bill No)";
+                        const name =
+                          activeTab === "farmer" ? r.FarmerName : r.agentName;
+                        const date = (r.date || "").split("T")[0];
+                        return (
+                          <SelectItem key={r.id} value={r.id}>
+                            {bill} — {name || "Unknown"}{" "}
+                            {date ? `(${date})` : ""}
+                          </SelectItem>
+                        );
+                      })}
                   </SelectContent>
                 </Select>
               </div>
@@ -1322,9 +1551,7 @@ export default function VendorBillsPage() {
         onConfirm={confirmDeleteItem}
         loading={deletingItem}
         title="Delete Item"
-        description={`Delete this item from bill ${
-          deleteItemTarget?.billNo ? `(${deleteItemTarget.billNo})` : ""
-        }? If this is the last item, the bill will be deleted automatically.`}
+        description={`Delete this item? If this is the last item, the bill will be deleted automatically.`}
         confirmText="Delete Item"
       />
     </div>

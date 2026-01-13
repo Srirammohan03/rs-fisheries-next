@@ -1,3 +1,4 @@
+// app\(dashboard)\audit-logs\page.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -36,6 +37,8 @@ import {
   RefreshCw,
   Tag,
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import { toast } from "sonner";
 
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -440,6 +443,103 @@ const AuditLogsPage = () => {
     link.click();
     document.body.removeChild(link);
   };
+  const exportAllToExcel = async () => {
+    try {
+      toast.loading("Preparing Excel export...", { id: "audit-export" });
+
+      const params = new URLSearchParams({
+        exportAll: "1",
+        search: debouncedSearch || "",
+      });
+
+      if (fromDate)
+        params.append("fromDate", fromDate.toISOString().split("T")[0]);
+      if (toDate) params.append("toDate", toDate.toISOString().split("T")[0]);
+
+      const res = await axios.get(`/api/audit-logs?${params.toString()}`);
+      const rows: AuditLog[] = res.data?.data ?? [];
+
+      if (!rows.length) {
+        toast.error("No logs found for export", { id: "audit-export" });
+        return;
+      }
+
+      //  Format timestamp in IST
+      const formatIST = (iso: string) => {
+        const dt = new Date(iso);
+        return new Intl.DateTimeFormat("en-IN", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        }).format(dt);
+      };
+
+      const safeJson = (v: unknown) => {
+        if (v === null || v === undefined) return "";
+        try {
+          return JSON.stringify(v);
+        } catch {
+          return String(v);
+        }
+      };
+
+      const sheetData = rows.map((log) => ({
+        // "Log ID": log.id,
+        "IST DateTime": formatIST(log.createdAt),
+        "User Email": log.email,
+        "User Role": log.userRole,
+        // "User ID": log.userId,
+        Module: log.module,
+        Action: log.action,
+        // "Record ID": log.recordId,
+        Label: log.label || "",
+        // "IP Address": log.ipAddress || "",
+        // "User Agent": log.userAgent || "",
+        "Old Values (JSON)": safeJson(log.oldValues),
+        "New Values (JSON)": safeJson(log.newValues),
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+
+      //  Make columns readable
+      const colWidths = [
+        { wch: 26 }, // Log ID
+        { wch: 22 }, // IST DateTime
+        { wch: 28 }, // Email
+        { wch: 14 }, // Role
+        { wch: 14 }, // User ID
+        { wch: 18 }, // Module
+        { wch: 16 }, // Action
+        { wch: 18 }, // Record ID
+        { wch: 18 }, // Label
+        { wch: 16 }, // IP
+        { wch: 60 }, // UA
+        { wch: 80 }, // Old
+        { wch: 80 }, // New
+      ];
+      (ws as any)["!cols"] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Audit Logs");
+
+      const fileName = `audit-logs-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      toast.success(`Exported ${rows.length} logs `, { id: "audit-export" });
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.response?.data?.message || "Export failed", {
+        id: "audit-export",
+      });
+    }
+  };
 
   if (isError) {
     return (
@@ -472,6 +572,14 @@ const AuditLogsPage = () => {
             <Download className="w-4 h-4" />
             Export CSV
           </Button> */}
+          <Button
+            variant="outline"
+            className="bg-[#139BC3] hover:bg-[#139BC3]/80 text-white"
+            onClick={exportAllToExcel}
+          >
+            <Download className="w-4 h-4" />
+            Export Excel
+          </Button>
         </div>
 
         {/* Toolbar */}

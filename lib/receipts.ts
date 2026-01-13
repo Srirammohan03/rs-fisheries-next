@@ -33,6 +33,7 @@ export interface VendorReceipt extends BaseReceipt {
 
 export interface ClientReceipt extends BaseReceipt {
   clientId: string;
+  clientDetailsId: string;
   clientName: string;
   imageUrl?: string | null;
   isInstallment?: boolean;

@@ -14,6 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Props {
   open: boolean;
@@ -21,9 +28,31 @@ interface Props {
   vendorId: string;
   vendorName: string;
   source: "farmer" | "agent";
-  onSaved: () => void;
   paymentId: string;
+  onSaved: () => void;
 }
+
+const descriptionOptions = [
+  { value: "Supply of Fresh Raw Fish", label: "Supply of Fresh Raw Fish" },
+  { value: "Supply of Chilled Seafood", label: "Supply of Chilled Seafood" },
+  {
+    value: "Live Fish/Prawns for Farming",
+    label: "Live Fish/Prawns for Farming",
+  },
+  {
+    value: "Fresh Harvested Prawns (Head-on)",
+    label: "Fresh Harvested Prawns (Head-on)",
+  },
+  {
+    value: "Fresh Harvested Prawns (HL/PUD)",
+    label: "Fresh Harvested Prawns (HL/PUD)",
+  },
+  {
+    value: "Bulk Supply of Fresh Squid/Cuttlefish",
+    label: "Bulk Supply of Fresh Squid/Cuttlefish",
+  },
+  { value: "other", label: "Other (Please specify)" },
+];
 
 export function VendorInvoiceModal({
   open,
@@ -36,21 +65,28 @@ export function VendorInvoiceModal({
 }: Props) {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [description, setDescription] = useState("");
-  // const [vendorAddress, setVendorAddress] = useState("");
+  const [customDescription, setCustomDescription] = useState("");
   const [saving, setSaving] = useState(false);
-
   const [existingInvoiceNo, setExistingInvoiceNo] = useState<string | null>(
     null
   );
+
+  const isOtherSelected = description === "other";
+
+  const finalDescription = isOtherSelected
+    ? customDescription.trim()
+    : description;
 
   useEffect(() => {
     if (!open) return;
 
     setExistingInvoiceNo(null);
+    setInvoiceNo("");
+    setDescription("");
+    setCustomDescription("");
 
     (async () => {
       try {
-        // Load existing invoice if exists
         const res = await axios.get(
           `/api/invoices/vendor/by-payment?paymentId=${paymentId}`
         );
@@ -58,31 +94,37 @@ export function VendorInvoiceModal({
 
         setInvoiceNo(inv.invoiceNo);
         setExistingInvoiceNo(inv.invoiceNo);
-        setDescription(inv.description ?? "");
-        // setVendorAddress(inv.vendorAddress ?? "");
+
+        const savedDesc = (inv.description || "").trim();
+        const matched = descriptionOptions.find(
+          (opt) => opt.value !== "other" && opt.value === savedDesc
+        );
+
+        if (matched) {
+          setDescription(matched.value);
+        } else if (savedDesc) {
+          setDescription("other");
+          setCustomDescription(savedDesc);
+        }
       } catch (err: any) {
         if (err?.response?.status === 404) {
-          // New invoice - fetch next number
           try {
-            const next = await axios.get("/api/invoices/next-number");
+            const next = await axios.get(
+              "/api/invoices/next-number?type=vendor"
+            );
             setInvoiceNo(next.data.invoiceNumber);
           } catch {
-            setInvoiceNo("");
+            setInvoiceNo("Error loading number");
           }
-
-          // Reset fields
-          setDescription("");
-          // setVendorAddress("");
         } else {
           console.error(err);
-          setInvoiceNo("");
         }
       }
     })();
   }, [open, paymentId]);
 
   const saveInvoice = async () => {
-    if (!description.trim()) {
+    if (!finalDescription) {
       alert("Please enter a description");
       return;
     }
@@ -93,7 +135,9 @@ export function VendorInvoiceModal({
       let finalInvoiceNo = invoiceNo;
 
       if (!existingInvoiceNo) {
-        const reserve = await axios.post("/api/invoices/next-number");
+        const reserve = await axios.post("/api/invoices/next-number", {
+          type: "vendor",
+        });
         finalInvoiceNo = reserve.data.invoiceNumber;
       }
 
@@ -103,11 +147,9 @@ export function VendorInvoiceModal({
         vendorName,
         source,
         invoiceNo: finalInvoiceNo,
-        hsn: "0303", // Fixed for fish
-        gstPercent: 0, // 0% GST
-        description,
-        // vendorAddress: vendorAddress.trim() || null,
-        // No other optional fields sent
+        hsn: "0303",
+        gstPercent: 0,
+        description: finalDescription,
       });
 
       setInvoiceNo(finalInvoiceNo);
@@ -115,9 +157,9 @@ export function VendorInvoiceModal({
 
       onSaved();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to save invoice");
+      alert(err?.response?.data?.message || "Failed to save invoice");
     } finally {
       setSaving(false);
     }
@@ -131,7 +173,6 @@ export function VendorInvoiceModal({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Invoice No + Vendor Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Invoice No</Label>
@@ -143,35 +184,50 @@ export function VendorInvoiceModal({
             </div>
           </div>
 
-          {/* Description */}
           <div>
-            <Label>Description (Goods / Service)</Label>
-            <Textarea
-              rows={4}
-              placeholder="e.g. Purchase of fresh fish / Loading charges / Agent commission"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="resize-none"
-            />
-          </div>
+            <Label>Description / Particulars</Label>
+            <Select value={description} onValueChange={setDescription}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select description" />
+              </SelectTrigger>
+              <SelectContent>
+                {descriptionOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          {/* Vendor Address */}
-          {/* <div>
-            <Label>Vendor Address</Label>
-            <Textarea
-              rows={5}
-              placeholder="Full address: Village, Taluk, District, State - PIN Code"
-              value={vendorAddress}
-              onChange={(e) => setVendorAddress(e.target.value)}
-              className="resize-none"
-            />
-          </div> */}
+            {isOtherSelected && (
+              <div className="mt-3">
+                <Label>Please specify</Label>
+                <Textarea
+                  rows={3}
+                  placeholder="Type custom description here..."
+                  value={customDescription}
+                  onChange={(e) => setCustomDescription(e.target.value)}
+                />
+                {!customDescription.trim() && isOtherSelected && (
+                  <div className="mt-1 text-xs text-red-600">
+                    Please enter custom description
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!description && (
+              <div className="mt-1 text-xs text-red-600">
+                Description is required
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-8">
           <Button
             onClick={saveInvoice}
-            disabled={saving || !invoiceNo || !description.trim()}
+            disabled={saving || !invoiceNo || !finalDescription}
             className="w-full"
             size="lg"
           >

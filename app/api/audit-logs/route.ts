@@ -5,8 +5,6 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export const GET = apiHandler(async (req: Request) => {
-  // /api/audit-logs?page=1&limit=10
-
   const { searchParams } = new URL(req.url);
 
   const page = Number(searchParams.get("page") ?? 1);
@@ -16,36 +14,19 @@ export const GET = apiHandler(async (req: Request) => {
   const fromDateParam = searchParams.get("fromDate");
   const toDateParam = searchParams.get("toDate");
 
+  // ✅ if exportAll=1 => return all matching rows (no pagination)
+  const exportAll = searchParams.get("exportAll") === "1";
+
   const skip = (page - 1) * limit;
 
   const where: Prisma.AuditLogWhereInput = {};
 
   if (search) {
     where.OR = [
-      {
-        email: {
-          contains: search,
-          mode: "insensitive",
-        },
-      },
-      {
-        userRole: {
-          contains: search,
-          mode: "insensitive",
-        },
-      },
-      {
-        action: {
-          contains: search,
-          mode: "insensitive",
-        },
-      },
-      {
-        module: {
-          contains: search,
-          mode: "insensitive",
-        },
-      },
+      { email: { contains: search, mode: "insensitive" } },
+      { userRole: { contains: search, mode: "insensitive" } },
+      { action: { contains: search, mode: "insensitive" } },
+      { module: { contains: search, mode: "insensitive" } },
     ];
   }
 
@@ -54,26 +35,25 @@ export const GET = apiHandler(async (req: Request) => {
       ...(fromDateParam
         ? { gte: new Date(`${fromDateParam}T00:00:00.000Z`) }
         : {}),
-      ...(toDateParam ? { lte: new Date(`${toDateParam}T00:00:00.000Z`) } : {}),
+      ...(toDateParam ? { lte: new Date(`${toDateParam}T23:59:59.999Z`) } : {}),
     };
   }
 
   const [auditLog, total] = await Promise.all([
-    await prisma.auditLog.findMany({
+    prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip,
-      take: limit,
+      ...(exportAll ? {} : { skip, take: limit }),
     }),
-    await prisma.auditLog.count(),
+    prisma.auditLog.count({ where }), // ✅ count must respect filters
   ]);
 
   return NextResponse.json(
     new ApiResponse(200, auditLog, "Audit Logs Fetched Successfully", {
       page,
-      limit,
+      limit: exportAll ? total : limit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages: exportAll ? 1 : Math.ceil(total / limit),
     })
   );
 });

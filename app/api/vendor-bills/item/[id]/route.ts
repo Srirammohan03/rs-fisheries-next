@@ -126,12 +126,12 @@ export const PATCH = withAuth(
             await logAudit({
               user: (req as any).user,
               action: "UPDATE",
-              module: "Vender Bills",
+              module: "Vendor Bills",
               recordId: updatedItem.id,
               request: req,
               oldValues,
               newValues,
-              label: `Vender Bills updated for bill: ${fItem.loading.billNo}`,
+              label: `Vendor Bills updated for bill: ${fItem.loading.billNo}`,
             });
           }
 
