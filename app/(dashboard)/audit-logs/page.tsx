@@ -221,7 +221,7 @@ const AuditLogsPage = () => {
   const limit = 15;
   const debouncedSearch = useDebouncedValue(globalFilter, 500);
   // --- Data Fetching ---
-  const { data, isLoading, isError, error, refetch } = useQuery<
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<
     PaginatedResponse<AuditLog>
   >({
     queryKey: [
@@ -243,7 +243,9 @@ const AuditLogsPage = () => {
         params.append("fromDate", fromDate.toISOString().split("T")[0]);
       if (toDate) params.append("toDate", toDate.toISOString().split("T")[0]);
 
-      const { data } = await axios.get(`/api/audit-logs?${params.toString()}`);
+      const { data } = await axios.get(`/api/audit-logs?${params.toString()}`, {
+        withCredentials: true,
+      });
       return data;
     },
     placeholderData: keepPreviousData,
@@ -647,10 +649,12 @@ const AuditLogsPage = () => {
             <Button
               variant="outline"
               onClick={() => refetch()}
-              disabled={isLoading}
+              disabled={isLoading || isFetching}
               className="gap-2"
             >
-              <RefreshCw className={isLoading ? "animate-spin" : ""} />
+              <RefreshCw
+                className={isLoading || isFetching ? "animate-spin" : ""}
+              />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
@@ -714,7 +718,7 @@ const AuditLogsPage = () => {
                 </Button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {table

@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/withAuth";
 import { ApiError } from "@/utils/ApiError";
 import { apiHandler } from "@/utils/apiHandler";
 import { ApiResponse } from "@/utils/ApiResponse";
-import { BalanceType, GstType } from "@prisma/client";
+import { BalanceType, GstType, Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export const POST = withAuth(
@@ -115,63 +115,140 @@ export const POST = withAuth(
 );
 
 export const GET = apiHandler(async (req: Request) => {
-  const clients = await prisma.client.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      payments: {
-        select: {
-          clientKey: true,
-          clientName: true,
-          date: true,
-          amount: true,
-          paymentMode: true,
-          isInstallment: true,
-          client: {
-            select: {
-              billNo: true,
-            },
-          },
+  const { searchParams } = new URL(req.url);
+
+  const page = Math.max(Number(searchParams.get("page") ?? 1), 1);
+  const limit = Math.min(
+    Math.max(Number(searchParams.get("limit") ?? 10), 1),
+    100
+  );
+  const search = searchParams.get("search")?.trim() || "";
+
+  const where: Prisma.ClientWhereInput = {};
+
+  if (search) {
+    const numbericSearch = Number(search);
+    const lowerSearch = search.toLowerCase();
+    const isBooleanSearch =
+      lowerSearch === "true" ||
+      lowerSearch === "false" ||
+      lowerSearch === "active" ||
+      lowerSearch === "inactive";
+    where.OR = [
+      {
+        partyName: {
+          contains: search,
+          mode: "insensitive",
         },
       },
-      loadings: {
-        select: {
-          billNo: true,
-          date: true,
-          vehicle: {
-            select: {
-              ownership: true,
-              vehicleNumber: true,
+      {
+        phone: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        gstin: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      ...(isBooleanSearch
+        ? [
+            {
+              isActive: {
+                equals: lowerSearch === "true" || lowerSearch === "active",
+              },
             },
-          },
-          tripStatus: true,
-          vehicleNo: true,
-          startedAt: true,
-          completedAt: true,
-          totalTrays: true,
-          totalLooseKgs: true,
-          totalTrayKgs: true,
-          totalKgs: true,
-          totalPrice: true,
-          dispatchChargesTotal: true,
-          packingAmountTotal: true,
-          grandTotal: true,
-          items: {
-            select: {
-              varietyCode: true,
-              noTrays: true,
-              trayKgs: true,
-              loose: true,
-              totalKgs: true,
-              pricePerKg: true,
-              totalPrice: true,
+          ]
+        : []),
+      ...(Number.isFinite(numbericSearch)
+        ? [
+            {
+              creditLimit: {
+                equals: numbericSearch,
+              },
             },
+          ]
+        : []),
+    ];
+  }
+
+  const include = {
+    payments: {
+      select: {
+        clientKey: true,
+        clientName: true,
+        date: true,
+        amount: true,
+        paymentMode: true,
+        isInstallment: true,
+        client: {
+          select: {
+            billNo: true,
           },
         },
       },
     },
-  });
+    loadings: {
+      select: {
+        billNo: true,
+        date: true,
+        vehicle: {
+          select: {
+            ownership: true,
+            vehicleNumber: true,
+          },
+        },
+        tripStatus: true,
+        vehicleNo: true,
+        startedAt: true,
+        completedAt: true,
+        totalTrays: true,
+        totalLooseKgs: true,
+        totalTrayKgs: true,
+        totalKgs: true,
+        totalPrice: true,
+        dispatchChargesTotal: true,
+        packingAmountTotal: true,
+        grandTotal: true,
+        items: {
+          select: {
+            varietyCode: true,
+            noTrays: true,
+            trayKgs: true,
+            loose: true,
+            totalKgs: true,
+            pricePerKg: true,
+            totalPrice: true,
+          },
+        },
+      },
+    },
+  };
+
+  const skip = (page - 1) * limit;
+
+  const [clients, total] = await Promise.all([
+    prisma.client.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include,
+      skip,
+      take: limit,
+    }),
+    await prisma.client.count({
+      where,
+    }),
+  ]);
+
   return NextResponse.json(
-    new ApiResponse(200, clients, "Client fetched successfully"),
+    new ApiResponse(200, clients, "Client fetched successfully", {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    }),
     { status: 200 }
   );
 });
