@@ -8,6 +8,29 @@ import path from "path";
 import fs from "fs/promises";
 import { withAuth } from "@/lib/withAuth";
 import { logAudit } from "@/lib/auditLogger";
+import { Prisma } from "@prisma/client";
+
+function parseDDMMYYYY(input: string): Date | null {
+  const match = input.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+
+  if (!match) return null;
+
+  const [, day, month, year] = match.map(Number);
+
+  // Month in JS Date is 0-based
+  const date = new Date(year, month - 1, day);
+
+  // Validate correctness (prevents 32-01-2025, etc.)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
 
 export const POST = withAuth(
   apiHandler(async (req: Request) => {
@@ -190,13 +213,96 @@ export const POST = withAuth(
   })
 );
 
-export const GET = apiHandler(async (_req: Request) => {
-  const employees = await prisma.employee.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+export const GET = apiHandler(async (req: Request) => {
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(Number(searchParams.get("page") ?? 1), 1);
+  const limit = Math.min(
+    Math.max(Number(searchParams.get("limit") ?? 10), 1),
+    100
+  );
+  const fromDateParam = searchParams.get("fromDate");
+  const toDateParam = searchParams.get("toDate");
+  const search = searchParams.get("search")?.trim() || "";
+  const sort = searchParams.get("sort");
+  const shiftType = searchParams.get("shiftType");
+  const designation = searchParams.get("designation");
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.EmployeeWhereInput = {};
+
+  if (shiftType) where.shiftType = shiftType;
+  if (designation) where.designation = designation;
+
+  if (search) {
+    where.OR = [
+      {
+        employeeId: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        fullName: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        designation: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        department: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+      {
+        shiftType: {
+          contains: search,
+          mode: "insensitive",
+        },
+      },
+    ];
+  }
+
+  if (fromDateParam || toDateParam) {
+    where.doj = {
+      ...(fromDateParam
+        ? {
+            gte: new Date(`${fromDateParam}T00:00:00.000Z`),
+          }
+        : {}),
+      ...(toDateParam
+        ? {
+            lte: new Date(`${toDateParam}T00:00:00.000Z`),
+          }
+        : {}),
+    };
+  }
+
+  const orderBy: Prisma.EmployeeOrderByWithRelationInput =
+    sort === "old" ? { createdAt: "asc" } : { createdAt: "desc" };
+
+  const [employees, total] = await Promise.all([
+    await prisma.employee.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limit,
+    }),
+    await prisma.employee.count({ where }),
+  ]);
 
   return NextResponse.json(
-    new ApiResponse(200, employees, "Employees fetched successfully"),
+    new ApiResponse(200, employees, "Employees fetched successfully", {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    }),
     { status: 200 }
   );
 });

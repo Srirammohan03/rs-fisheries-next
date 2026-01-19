@@ -47,11 +47,27 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Client } from "./types/type";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import axios from "axios";
 import DeleteDialog from "@/components/helpers/DeleteDialog";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { PaginatedResponse } from "@/components/helpers/forms/types";
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -67,6 +83,11 @@ export default function ClientsPage() {
   const [selectedClientId, setSelectedClientId] = React.useState<string | null>(
     null
   );
+  const [search, setSearch] = React.useState<string | "">("");
+  const [page, setPage] = React.useState(1);
+  const limit = 15;
+
+  const debouncedSearch = useDebouncedValue(search, 400);
 
   const columns: ColumnDef<Client>[] = [
     {
@@ -227,16 +248,26 @@ export default function ClientsPage() {
     },
   ];
 
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["clients"],
+  const { data, isLoading, isError, error } = useQuery<
+    PaginatedResponse<Client>
+  >({
+    queryKey: ["clients", debouncedSearch, page, limit],
     queryFn: async () => {
-      const { data } = await axios.get("/api/client", {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        search: debouncedSearch,
+      });
+
+      const { data } = await axios.get(`/api/client?${params.toString()}`, {
         withCredentials: true,
       });
       return data;
     },
+    placeholderData: keepPreviousData,
   });
   const clients = data?.data ?? [];
+  const meta = data?.meta;
 
   const table = useReactTable({
     data: clients,
@@ -389,12 +420,11 @@ export default function ClientsPage() {
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Filter by party name..."
-            value={
-              (table.getColumn("partyName")?.getFilterValue() as string) ?? ""
-            }
-            onChange={(event) =>
-              table.getColumn("partyName")?.setFilterValue(event.target.value)
-            }
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
             className="pl-8"
           />
         </div>
@@ -480,30 +510,71 @@ export default function ClientsPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+      {meta && meta.totalPages > 1 && (
+        <div className="flex justify-end py-4">
+          <Pagination>
+            <PaginationContent>
+              {/* Previous */}
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className={
+                    page <= 1
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+
+              {/* Page Numbers */}
+              {Array.from({ length: meta.totalPages })
+                .slice(
+                  Math.max(0, page - 3),
+                  Math.min(meta.totalPages, page + 2)
+                )
+                .map((_, idx) => {
+                  const pageNumber = idx + Math.max(1, page - 2);
+
+                  return (
+                    <PaginationItem key={pageNumber}>
+                      <PaginationLink
+                        isActive={page === pageNumber}
+                        onClick={() => setPage(pageNumber)}
+                        className="cursor-pointer"
+                      >
+                        {pageNumber}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+              {/* Ellipsis (optional, UX polish) */}
+              {meta.totalPages > 5 && page < meta.totalPages - 2 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+
+              {/* Next */}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() =>
+                    setPage((p) =>
+                      meta ? Math.min(meta.totalPages, p + 1) : p
+                    )
+                  }
+                  className={
+                    page >= meta.totalPages
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
-        <div className="space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      )}
+
       <DeleteDialog
         open={deleteOpen}
         onClose={() => {

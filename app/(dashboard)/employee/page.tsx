@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import {
   Download,
   Plus,
@@ -13,6 +13,7 @@ import {
   Building2,
   CalendarDays,
   User,
+  Clock,
 } from "lucide-react";
 
 // Components
@@ -51,6 +52,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { PaginatedResponse } from "@/components/helpers/forms/types";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 const EmployeePage = () => {
   const router = useRouter();
@@ -60,9 +78,28 @@ const EmployeePage = () => {
   const [sortOrder, setSortOrder] = useState<"new" | "old">("new");
   const [shiftFilter, setShiftFilter] = useState<string>("all");
   const [designationFilter, setDesignationFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const limit = 15;
+  const [fromDate, setFromDate] = useState<Date | null>(null);
+  const [toDate, setToDate] = useState<Date | null>(null);
 
+  const debouncedSearch = useDebouncedValue(searchTerm, 400);
   const queryClient = useQueryClient();
-  const { data: response, isLoading, isError } = useEmployee();
+  const {
+    data: response,
+    isLoading,
+    isError,
+    error,
+  } = useEmployee({
+    page,
+    search: debouncedSearch,
+    limit,
+    fromDate,
+    toDate,
+    sortOrder,
+    shiftType: shiftFilter === "all" ? undefined : shiftFilter,
+    designation: designationFilter === "all" ? undefined : designationFilter,
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async (employeeId: string) => {
@@ -88,6 +125,7 @@ const EmployeePage = () => {
   });
 
   const employees = response?.data || [];
+  const meta = response?.meta;
 
   const uniqueDesignations = Array.from(
     new Set(
@@ -96,38 +134,6 @@ const EmployeePage = () => {
         .filter((des): des is string => Boolean(des))
     )
   );
-
-  const uniqueShifts = Array.from(
-    new Set(
-      employees
-        .map((e) => e.shiftType)
-        .filter((shift): shift is string => Boolean(shift))
-    )
-  );
-
-  // Filter Logic
-  const processedEmployees = employees
-    .filter((emp) => {
-      const search = searchTerm.toLowerCase();
-      const matchesSearch =
-        emp.fullName.toLowerCase().includes(search) ||
-        emp.employeeId.toLowerCase().includes(search) ||
-        emp.designation.toLowerCase().includes(search);
-
-      const matchesShift =
-        shiftFilter === "all" || emp.shiftType === shiftFilter;
-
-      const matchesDesignation =
-        designationFilter === "all" || emp.designation === designationFilter;
-
-      return matchesSearch && matchesShift && matchesDesignation;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-
-      return sortOrder === "new" ? dateB - dateA : dateA - dateB;
-    });
 
   // Helper for Initials
   const getInitials = (name: string) =>
@@ -148,7 +154,14 @@ const EmployeePage = () => {
     setSortOrder("new");
     setShiftFilter("all");
     setDesignationFilter("all");
+    setFromDate(null);
+    setToDate(null);
+    setPage(1);
   };
+
+  if (isError) {
+    return <ErrorState error={error} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-8 space-y-8">
@@ -185,54 +198,127 @@ const EmployeePage = () => {
 
       {/* ---------------- Filters & Controls ---------------- */}
       <Card className="border-none shadow-sm bg-transparent">
-        <div className="flex flex-col md:flex-row md:items-center gap-4 px-5">
+        <div
+          className="
+      grid
+      grid-cols-1
+      gap-3
+      px-4
+
+      sm:grid-cols-2
+      lg:grid-cols-12
+      lg:gap-4
+    "
+        >
           {/* Search */}
-          <div className="relative flex-1 md:max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="relative lg:col-span-4">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by name or ID..."
-              className="pl-9 bg-white border-slate-200"
+              className="pl-10 bg-white border-slate-200"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
 
+          {/* Date Range */}
+          <div className="lg:col-span-3">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 bg-white border-slate-200"
+                >
+                  <Clock className="h-4 w-4" />
+                  <span className="truncate">
+                    {fromDate && toDate
+                      ? `${fromDate.toLocaleDateString()} → ${toDate.toLocaleDateString()}`
+                      : "Date range"}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent align="start" className="w-auto p-2">
+                <Calendar
+                  mode="range"
+                  selected={{
+                    from: fromDate ?? undefined,
+                    to: toDate ?? undefined,
+                  }}
+                  onSelect={(range) => {
+                    setFromDate(range?.from ?? null);
+                    setToDate(range?.to ?? null);
+                    setPage(1);
+                  }}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Clear Date */}
+          {(fromDate || toDate) && (
+            <div className="lg:col-span-1 flex items-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full lg:w-auto"
+                onClick={() => {
+                  setFromDate(null);
+                  setToDate(null);
+                  setPage(1);
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+
           {/* Sort */}
-          <Select
-            value={sortOrder}
-            onValueChange={(v: "new" | "old") => setSortOrder(v)}
-          >
-            <SelectTrigger className="w-[180px] bg-white">
-              <SelectValue placeholder="Sort by date" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="new">New → Old</SelectItem>
-              <SelectItem value="old">Old → New</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="lg:col-span-2">
+            <Select
+              value={sortOrder}
+              onValueChange={(v: "new" | "old") => setSortOrder(v)}
+            >
+              <SelectTrigger className="w-full bg-white">
+                <SelectValue placeholder="Sort by date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="new">New → Old</SelectItem>
+                <SelectItem value="old">Old → New</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Designation Filter */}
-          <Select
-            value={designationFilter}
-            onValueChange={setDesignationFilter}
-          >
-            <SelectTrigger className="w-[200px] bg-white">
-              <SelectValue placeholder="Filter by designation" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Designations</SelectItem>
-              {uniqueDesignations.map((des) => (
-                <SelectItem key={des} value={des}>
-                  {des}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
+          <div className="lg:col-span-2">
+            <Select
+              value={designationFilter}
+              onValueChange={setDesignationFilter}
+            >
+              <SelectTrigger className="w-full bg-white">
+                <SelectValue placeholder="Filter by designation" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Designations</SelectItem>
+                {uniqueDesignations.map((des) => (
+                  <SelectItem key={des} value={des}>
+                    {des}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {/* Clear Filters */}
+        <div className="flex items-center  px-4 gap-3">
           <Button
             variant="outline"
+            className="w-full lg:w-auto bg-white border-slate-200 text-slate-700"
             onClick={clearFilters}
-            className="bg-white border-slate-200 text-slate-700"
           >
             Clear Filters
           </Button>
@@ -286,7 +372,7 @@ const EmployeePage = () => {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : processedEmployees.length === 0 ? (
+              ) : employees && employees.length === 0 ? (
                 // Empty State
                 <TableRow>
                   <TableCell colSpan={5} className="h-96 text-center">
@@ -312,7 +398,8 @@ const EmployeePage = () => {
                 </TableRow>
               ) : (
                 // Data Rows
-                processedEmployees.map((emp) => (
+                employees &&
+                employees.map((emp) => (
                   <TableRow
                     key={emp.id}
                     className="group hover:bg-slate-50/50 transition-colors"
@@ -423,10 +510,68 @@ const EmployeePage = () => {
         </CardContent>
       </Card>
 
-      {/* Footer / Meta info */}
-      <div className="text-xs text-muted-foreground text-center">
-        Showing {processedEmployees.length} of {employees.length} employees
-      </div>
+      {/* Pagination */}
+      {meta && meta.totalPages > 1 && (
+        <div className="flex justify-end py-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => {
+                    setPage((p) => Math.max(1, p - 1));
+                  }}
+                  className={
+                    page <= 1
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+              {Array.from({ length: meta.totalPages })
+                .slice(
+                  Math.max(0, page - 3),
+                  Math.min(meta.totalPages, page + 2)
+                )
+                .map((_, idx) => {
+                  const pageNumber = idx + Math.max(1, page - 2);
+
+                  return (
+                    <PaginationItem key={pageNumber}>
+                      <PaginationLink
+                        isActive={page === pageNumber}
+                        onClick={() => setPage(pageNumber)}
+                        className="cursor-pointer"
+                      >
+                        {pageNumber}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+              {meta.totalPages > 5 && page < meta.totalPages - 2 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+
+              {/* Next */}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() =>
+                    setPage((p) =>
+                      meta ? Math.min(meta.totalPages, p + 1) : p
+                    )
+                  }
+                  className={
+                    page >= meta.totalPages
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
 
       <DeleteDialog
         open={openDeleteDialog}
@@ -436,5 +581,18 @@ const EmployeePage = () => {
     </div>
   );
 };
+
+function ErrorState({ error }: { error: Error | AxiosError }) {
+  return (
+    <div className="h-screen flex flex-col items-center justify-center space-y-4">
+      <h2 className="text-xl font-bold">
+        {axios.isAxiosError(error)
+          ? error.response?.data.message
+          : error.message || "Client not found"}
+      </h2>
+      <Button onClick={() => window.history.back()}>Go Back</Button>
+    </div>
+  );
+}
 
 export default EmployeePage;
