@@ -1,4 +1,3 @@
-// app/(dashboard)/loadings/components/ClientLoading.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -21,23 +20,18 @@ import { Field, FieldLabel } from "@/components/ui/field";
 
 const TRAY_KG = 35;
 const DEDUCTION_PERCENT = 5;
+
 const OTHER_VEHICLE_VALUE = "__OTHER__";
+const OTHER_CLIENT_VALUE = "__CLIENT_OTHER__";
 
 // ✅ Text validation + sanitization
-const CLIENT_NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/; // letters + space + . ' -
-const VILLAGE_REGEX = /^[A-Za-z][A-Za-z ]*$/; // letters + space
+// const CLIENT_NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
+// address allows numbers, commas, slash, hyphen etc.
+// const ADDRESS_REGEX = /^[A-Za-z0-9][A-Za-z0-9 ,./#()-]*$/;
 
-const cleanClientName = (v: string) =>
-  v
-    .replace(/[^A-Za-z .'-]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimStart();
+const cleanClientName = (v: string) => v.trimStart();
 
-const cleanVillage = (v: string) =>
-  v
-    .replace(/[^A-Za-z ]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimStart();
+const cleanAddress = (v: string) => v.trimStart();
 
 const safeNum = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(v);
@@ -62,6 +56,26 @@ interface ItemRow {
   totalKgs: number;
 }
 
+type VehicleRow = {
+  id: string;
+  vehicleNumber: string;
+  assignedDriver?: { name?: string | null } | null;
+};
+
+type ClientRow = {
+  id: string;
+  partyName: string;
+  phone: string;
+  billingAddress: string;
+
+  accountNumber?: string | null;
+  ifsc?: string | null;
+  bankName?: string | null;
+  bankAddress?: string | null;
+
+  isActive?: boolean;
+};
+
 const todayYMD = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -73,20 +87,29 @@ const todayYMD = () => {
 export default function ClientLoadingForm() {
   const queryClient = useQueryClient();
 
-  const [village, setVillage] = useState("");
-  const [date, setDate] = useState(""); // default today in useEffect
+  // NOTE: you currently store address in `village` field in API/model.
+  // Keeping same name for compatibility.
+  const [village, setVillage] = useState(""); // used as Address
+  const [date, setDate] = useState("");
+  const [billNo, setBillNo] = useState("");
+
+  // client selection
+  const [clientSelectId, setClientSelectId] = useState<string>("");
+  const isOtherClient = clientSelectId === OTHER_CLIENT_VALUE;
+
+  // manual entry (only when "Other")
+  const [clientName, setClientName] = useState("");
+
+  // ✅ NEW: vehicle toggle checkbox
+  const [useVehicle, setUseVehicle] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
   const [otherVehicleNo, setOtherVehicleNo] = useState("");
+  const isOtherVehicle = vehicleId === OTHER_VEHICLE_VALUE;
 
-  const [billNo, setBillNo] = useState("");
-  const [clientName, setClientName] = useState("");
   const [grandTotal, setGrandTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // ✅ hide used vehicles without reload
-  const isOtherVehicle = vehicleId === OTHER_VEHICLE_VALUE;
-
-  // ✅ Hide used vehicles immediately (no reload)
   const [usedVehicleIds, setUsedVehicleIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -103,40 +126,103 @@ export default function ClientLoadingForm() {
     },
   ]);
 
-  // ✅ default today's date (editable)
   useEffect(() => {
     if (!date) setDate(todayYMD());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Available varieties (net stock)
-  const { data: availableVarieties = [] } = useQuery<AvailableVariety[]>({
+  // ✅ Clients list
+  const {
+    data: clients = [],
+    isLoading: clientsLoading,
+    isError: clientsError,
+    refetch: refetchClients,
+  } = useQuery<ClientRow[]>({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const res = await axios.get("/api/client");
+      return res.data?.data || [];
+    },
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 2,
+  });
+
+  const activeClients = useMemo(() => {
+    return (clients || []).filter((c) => c?.isActive !== false);
+  }, [clients]);
+
+  const selectedClient = useMemo(() => {
+    if (!clientSelectId || clientSelectId === OTHER_CLIENT_VALUE) return null;
+    return activeClients.find((c) => c.id === clientSelectId) ?? null;
+  }, [activeClients, clientSelectId]);
+
+  // Auto-fill when client selected
+  useEffect(() => {
+    if (selectedClient) {
+      setClientName(selectedClient.partyName || "");
+      // Auto-fill address into "village"
+      setVillage(selectedClient.billingAddress || "");
+    }
+  }, [selectedClient]);
+
+  // If other selected, clear name/address for manual entry
+  useEffect(() => {
+    if (isOtherClient) {
+      setClientName("");
+      setVillage("");
+    }
+  }, [isOtherClient]);
+
+  useEffect(() => {
+    if (clientsError) toast.error("Failed to load clients");
+  }, [clientsError]);
+
+  // ✅ Available varieties (make it robust)
+  const {
+    data: availableVarieties = [],
+    isError: varietiesError,
+    refetch: refetchVarieties,
+    isFetching: varietiesFetching,
+  } = useQuery<AvailableVariety[]>({
     queryKey: ["available-varieties"],
     queryFn: async () => {
       const res = await axios.get("/api/stocks/available-varieties");
-      return res.data.data || [];
+      return res.data?.data || [];
     },
+    staleTime: 0,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 3,
   });
 
-  // Vehicles
-  const { data: vehicles = [] } = useQuery({
+  useEffect(() => {
+    if (varietiesError) toast.error("Failed to load varieties");
+  }, [varietiesError]);
+
+  // ✅ Vehicles
+  const { data: vehicles = [] } = useQuery<VehicleRow[]>({
     queryKey: ["assigned-vehicles"],
     queryFn: async () => {
       const res = await axios.get("/api/vehicles/assign-driver");
-      return res.data.data || [];
+      return res.data?.data || [];
     },
+    staleTime: 0,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 2,
   });
 
-  // ✅ Filter vehicles: hide used instantly; keep current selection visible
   const availableVehicles = useMemo(() => {
-    return (vehicles ?? []).filter((v: any) => {
+    return (vehicles ?? []).filter((v) => {
       if (!v?.id) return false;
       if (v.id === vehicleId) return true;
       return !usedVehicleIds.has(v.id);
     });
   }, [vehicles, usedVehicleIds, vehicleId]);
 
-  // Bill No
+  // ✅ Bill No
   const {
     data: billData,
     isLoading: billLoading,
@@ -145,10 +231,16 @@ export default function ClientLoadingForm() {
   } = useQuery({
     queryKey: ["client-bill-no"],
     queryFn: async () => {
-      const res = await fetch("/api/client-loading/next-bill-no");
+      const res = await fetch("/api/client-loading/next-bill-no", {
+        cache: "no-store",
+      });
       const data = await res.json();
-      return data.billNo;
+      return data.billNo as string;
     },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: true,
+    retry: 2,
   });
 
   useEffect(() => {
@@ -165,16 +257,23 @@ export default function ClientLoadingForm() {
     return m;
   }, [availableVarieties]);
 
+  const totalTrays = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        sum = sum + safeNum(item.noTrays);
+        return sum;
+      }, 0),
+    [items]
+  );
+
   const getVarietyName = (code: string) =>
     availableVarieties.find((v) => v.code === code)?.name || "";
 
-  // ✅ Update row: clamps to >= 0 and recalculates totals safely
   const updateRow = (id: string, field: keyof ItemRow, value: any) => {
     setItems((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
 
-        // handle variety
         if (field === "varietyCode") {
           const code = String(value ?? "");
           const nextNoTrays = safeNum(row.noTrays);
@@ -191,14 +290,10 @@ export default function ClientLoadingForm() {
           };
         }
 
-        // handle name
-        if (field === "name") {
-          return { ...row, name: String(value ?? "") };
-        }
+        if (field === "name") return { ...row, name: String(value ?? "") };
 
-        // handle numeric fields
         if (field === "noTrays" || field === "loose") {
-          const n = Math.max(0, safeNum(value)); // ✅ clamp
+          const n = Math.max(0, safeNum(value));
           const next = { ...row, [field]: n } as ItemRow;
           const trayKgs = safeNum(next.noTrays) * TRAY_KG;
           const totalKgs = trayKgs + safeNum(next.loose);
@@ -238,12 +333,24 @@ export default function ClientLoadingForm() {
     return { trays, loose };
   };
 
-  // ✅ Grand total with 5% deduction
+  // ✅ Grand total:
   useEffect(() => {
     const total = items.reduce((a, b) => a + safeNum(b.totalKgs), 0);
-    const after = total * (1 - DEDUCTION_PERCENT / 100);
-    setGrandTotal(Math.round(after));
-  }, [items]);
+    if (useVehicle) {
+      setGrandTotal(Math.round(total));
+    } else {
+      const after = total * (1 - DEDUCTION_PERCENT / 100);
+      setGrandTotal(Math.round(after));
+    }
+  }, [items, useVehicle]);
+
+  // ✅ if user unticks checkbox, clear vehicle fields immediately
+  useEffect(() => {
+    if (!useVehicle) {
+      setVehicleId("");
+      setOtherVehicleNo("");
+    }
+  }, [useVehicle]);
 
   const addRow = () => {
     setItems((prev) => [
@@ -267,9 +374,12 @@ export default function ClientLoadingForm() {
   };
 
   const resetForm = () => {
+    setClientSelectId("");
     setClientName("");
     setVillage("");
     setDate(todayYMD());
+
+    setUseVehicle(false);
     setVehicleId("");
     setOtherVehicleNo("");
 
@@ -287,33 +397,58 @@ export default function ClientLoadingForm() {
 
     setGrandTotal(0);
     refetchBillNo();
+    refetchVarieties();
+    refetchClients();
   };
 
-  // ✅ VALIDATION
   const validateForm = () => {
     if (billLoading || billError || !billNo) {
       toast.error("Bill number not available");
       return false;
     }
 
+    // client validation
+    if (!clientSelectId) {
+      toast.error("Select Client");
+      return false;
+    }
+
     const name = clientName.trim();
-    if (!name) return toast.error("Enter Client Name"), false;
-    if (!CLIENT_NAME_REGEX.test(name))
-      return (
-        toast.error("Client Name should contain only letters and spaces"), false
-      );
+    if (!name) {
+      toast.error("Enter Client Name");
+      return false;
+    }
+    // if (!CLIENT_NAME_REGEX.test(name)) {
+    //   toast.error("Client Name should contain only letters and spaces");
+    //   return false;
+    // }
 
-    const vil = village.trim();
-    if (vil && !VILLAGE_REGEX.test(vil))
-      return (
-        toast.error("Village should contain only letters and spaces"), false
-      );
+    // const addr = village.trim();
+    // if (!addr) {
+    //   toast.error("Address is required");
+    //   return false;
+    // }
+    // if (!ADDRESS_REGEX.test(addr)) {
+    //   toast.error("Address contains invalid characters");
+    //   return false;
+    // }
 
-    if (!date.trim()) return toast.error("Select Date"), false;
+    if (!date.trim()) {
+      toast.error("Select Date");
+      return false;
+    }
 
-    if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
-    if (isOtherVehicle && !otherVehicleNo.trim())
-      return toast.error("Enter Vehicle Number"), false;
+    // vehicle validation
+    if (useVehicle) {
+      if (isOtherVehicle && !otherVehicleNo.trim()) {
+        toast.error("Enter Vehicle Number");
+        return false;
+      }
+      if (!isOtherVehicle && !vehicleId.trim()) {
+        toast.error("Select Vehicle");
+        return false;
+      }
+    }
 
     const activeRows = items.filter(
       (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0
@@ -345,38 +480,47 @@ export default function ClientLoadingForm() {
     setLoading(true);
 
     const firstCode = items.find((r) => r.varietyCode)?.varietyCode;
-    if (!firstCode) return toast.error("Select at least one variety");
+    if (!firstCode) {
+      toast.error("Select at least one variety");
+      setLoading(false);
+      return;
+    }
 
     const activeRows = items.filter(
       (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0
     );
 
+    const payload = {
+      billNo,
+      // If selected existing client -> send clientId, else null
+      clientId: !isOtherClient && clientSelectId ? clientSelectId : null,
+
+      clientName: clientName.trim(),
+      village: village.trim(), // address in your schema
+      date,
+
+      useVehicle,
+      vehicleId: useVehicle && !isOtherVehicle ? vehicleId : null,
+      vehicleNo: useVehicle && isOtherVehicle ? otherVehicleNo.trim() : null,
+
+      fishCode: firstCode,
+
+      items: activeRows.map((r) => ({
+        varietyCode: r.varietyCode,
+        noTrays: safeNum(r.noTrays),
+        loose: safeNum(r.loose),
+      })),
+    };
+
     try {
-      await axios.post("/api/client-loading", {
-        billNo,
-        clientName: clientName.trim(),
-        village: village.trim(),
-        date,
-
-        vehicleId: isOtherVehicle ? null : vehicleId,
-        vehicleNo: isOtherVehicle ? otherVehicleNo.trim() : null,
-
-        fishCode: firstCode,
-
-        items: activeRows.map((r) => ({
-          varietyCode: r.varietyCode,
-          noTrays: safeNum(r.noTrays),
-          loose: safeNum(r.loose),
-        })),
-      });
+      await axios.post("/api/client-loading", payload);
 
       toast.success("Client loading saved!");
 
-      // optional: keep this if your backend changes vehicle assignment
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicles"] });
 
-      // ✅ hide vehicle instantly without reload
-      if (!isOtherVehicle && vehicleId) {
+      // hide vehicle instantly without reload
+      if (useVehicle && !isOtherVehicle && vehicleId) {
         setUsedVehicleIds((prev) => {
           const next = new Set(prev);
           next.add(vehicleId);
@@ -387,6 +531,7 @@ export default function ClientLoadingForm() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["available-varieties"] }),
         queryClient.invalidateQueries({ queryKey: ["client-bill-no"] }),
+        queryClient.invalidateQueries({ queryKey: ["clients"] }),
       ]);
 
       resetForm();
@@ -434,22 +579,64 @@ export default function ClientLoadingForm() {
             />
           </Field>
 
+          {/* ✅ CLIENT DROPDOWN */}
           <Field>
-            <FieldLabel>Client Name *</FieldLabel>
-            <Input
-              value={clientName}
-              onChange={(e) => setClientName(cleanClientName(e.target.value))}
-              placeholder="Enter client name"
-              className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
-            />
+            <FieldLabel>Client *</FieldLabel>
+            <Select
+              value={clientSelectId}
+              onValueChange={(v) => setClientSelectId(v)}
+            >
+              <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
+                <SelectValue
+                  placeholder={
+                    clientsLoading ? "Loading clients..." : "Select client"
+                  }
+                />
+              </SelectTrigger>
+
+              <SelectContent className="max-h-72">
+                {activeClients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.partyName} — {c.phone}
+                  </SelectItem>
+                ))}
+
+                <SelectItem value={OTHER_CLIENT_VALUE}>
+                  Other / New Client
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </Field>
 
+          {/* If Other -> manual name */}
+          {isOtherClient ? (
+            <Field>
+              <FieldLabel>Client Name *</FieldLabel>
+              <Input
+                value={clientName}
+                onChange={(e) => setClientName(cleanClientName(e.target.value))}
+                placeholder="Enter client name"
+                className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
+              />
+            </Field>
+          ) : (
+            <Field>
+              <FieldLabel>Client Name</FieldLabel>
+              <Input
+                value={clientName}
+                readOnly
+                className="bg-slate-50 border-slate-200"
+              />
+            </Field>
+          )}
+
+          {/* Address / Village field */}
           <Field>
-            <FieldLabel>Village</FieldLabel>
+            <FieldLabel>{isOtherClient ? "Address *" : "Address"}</FieldLabel>
             <Input
               value={village}
-              onChange={(e) => setVillage(cleanVillage(e.target.value))}
-              placeholder="Enter village"
+              onChange={(e) => setVillage(cleanAddress(e.target.value))}
+              placeholder="Auto filled address (editable)"
               className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
@@ -464,30 +651,47 @@ export default function ClientLoadingForm() {
             />
           </Field>
 
+          {/* ✅ Vehicle checkbox */}
           <Field className="sm:col-span-2 md:col-span-1">
-            <FieldLabel>Select Vehicle *</FieldLabel>
-            <Select
-              value={vehicleId}
-              onValueChange={(v) => {
-                setVehicleId(v);
-                if (v !== OTHER_VEHICLE_VALUE) setOtherVehicleNo("");
-              }}
-            >
-              <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
-                <SelectValue placeholder="Select Vehicle" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableVehicles.map((v: any) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
-                  </SelectItem>
-                ))}
-                <SelectItem value={OTHER_VEHICLE_VALUE}>Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <FieldLabel>Vehicle</FieldLabel>
+            <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[#139BC3]"
+                checked={useVehicle}
+                onChange={(e) => setUseVehicle(e.target.checked)}
+              />
+              Add Vehicle? (If checked: No 5% deduction)
+            </label>
           </Field>
 
-          {isOtherVehicle && (
+          {useVehicle && (
+            <Field className="sm:col-span-2 md:col-span-1">
+              <FieldLabel>Select Vehicle</FieldLabel>
+              <Select
+                value={vehicleId}
+                onValueChange={(v) => {
+                  setVehicleId(v);
+                  if (v !== OTHER_VEHICLE_VALUE) setOtherVehicleNo("");
+                }}
+              >
+                <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
+                  <SelectValue placeholder="Select Vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableVehicles.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.vehicleNumber} –{" "}
+                      {v.assignedDriver?.name || "No Driver"}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={OTHER_VEHICLE_VALUE}>Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+
+          {useVehicle && isOtherVehicle && (
             <Field className="sm:col-span-2 md:col-span-1">
               <FieldLabel>Other Vehicle Number *</FieldLabel>
               <Input
@@ -526,10 +730,9 @@ export default function ClientLoadingForm() {
               </div>
 
               <div className="mt-3 space-y-3">
-                {/* Variety */}
                 <div>
                   <div className="text-xs font-semibold text-slate-500 mb-1">
-                    Variety *
+                    Variety * {varietiesFetching ? "(refreshing...)" : ""}
                   </div>
 
                   <Select
@@ -544,7 +747,7 @@ export default function ClientLoadingForm() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
 
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                       {availableVarieties.map((v) => (
                         <SelectItem key={v.code} value={v.code}>
                           {v.code} ({v.netTrays} trays)
@@ -558,7 +761,6 @@ export default function ClientLoadingForm() {
                   </div>
                 </div>
 
-                {/* Qty */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs font-semibold text-slate-500 mb-1">
@@ -601,7 +803,6 @@ export default function ClientLoadingForm() {
                   </div>
                 </div>
 
-                {/* Total */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
                   <div className="text-sm text-slate-600">Total</div>
                   <div className="text-lg font-extrabold text-slate-900">
@@ -632,9 +833,6 @@ export default function ClientLoadingForm() {
                 </th>
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Variety *
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-700">
-                  Name
                 </th>
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Trays
@@ -672,7 +870,7 @@ export default function ClientLoadingForm() {
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
 
-                      <SelectContent>
+                      <SelectContent className="max-h-72">
                         {availableVarieties.map((v) => (
                           <SelectItem key={v.code} value={v.code}>
                             {v.code} ({v.netTrays} trays)
@@ -680,10 +878,6 @@ export default function ClientLoadingForm() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </td>
-
-                  <td className="px-3 py-3 text-slate-700">
-                    {row.name || "—"}
                   </td>
 
                   <td className="px-3 py-3">
@@ -740,7 +934,7 @@ export default function ClientLoadingForm() {
             </tbody>
           </table>
 
-          <div className="p-4">
+          <div className="p-4 flex items-center gap-2">
             <Button
               onClick={addRow}
               variant="outline"
@@ -749,17 +943,41 @@ export default function ClientLoadingForm() {
               <PlusCircle className="w-4 h-4" />
               Add Row
             </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                refetchVarieties();
+                toast.success("Varieties refreshed");
+              }}
+              className="rounded-xl border-slate-200"
+            >
+              Refresh Varieties
+            </Button>
           </div>
         </div>
 
         {/* FOOTER */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="hidden md:block" />
-          <div className="text-left sm:text-right">
-            <p className="text-sm text-slate-500">Grand Total</p>
-            <p className="text-2xl font-bold text-slate-900">
-              {grandTotal} <span className="text-slate-500">Kgs</span>
-            </p>
+        <div className="text-right">
+          <div className="space-y-1">
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">Total Trays:</span>
+              <span className="text-2xl font-bold">
+                {totalTrays.toFixed(1)}
+                <span className="text-lg text-slate-500 ml-1">Trays</span>
+              </span>
+            </div>
+
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">
+                Grand Total {useVehicle ? "(No deduction)" : "(5% deduction)"}:
+              </span>
+              <span className="text-2xl font-bold">
+                {grandTotal}
+                <span className="text-lg text-slate-500 ml-1">Kgs</span>
+              </span>
+            </div>
           </div>
         </div>
       </CardContent>

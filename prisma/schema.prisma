@@ -177,6 +177,9 @@ model ClientLoading {
   bankName      String?
   bankAddress   String?
 
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
   items           ClientItem[]
   clientPayments  ClientPayment[]
   dispatchCharges DispatchCharge[] @relation("ClientDispatchCharges")
@@ -223,37 +226,89 @@ model VendorPayment {
   referenceNo       String?
   vendorInvoice     VendorInvoice[]
 
+  sourceRecordId String?
+
   @@index([vendorId])
   @@index([vendorKey])
   @@index([source])
 }
 
-model ClientPayment {
-  id                String   @id @default(uuid())
-  clientId          String
-  clientKey         String
-  clientName        String
-  date              DateTime
-  amount            Float
-  paymentMode       String
-  referenceNo       String?
-  paymentRef        String?
-  accountNumber     String?
-  ifsc              String?
-  bankName          String?
-  bankAddress       String?
-  paymentdetails    String?
-  isInstallment     Boolean  @default(false)
-  installments      Int?
-  installmentNumber Int?
-  createdAt         DateTime @default(now())
+// model ClientPayment {
+//   id                String   @id @default(uuid())
+//   clientId          String
+//   clientKey         String
+//   clientName        String
+//   date              DateTime
+//   amount            Float
+//   paymentMode       String
+//   isInstallment     Boolean  @default(false)
+//   installments      Int?
+//   installmentNumber Int?
+//   createdAt         DateTime @default(now())
 
-  client        ClientLoading  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  clientInvoice ClientInvoice?
+//   client        ClientLoading  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+//   clientInvoice ClientInvoice?
 
-  @@index([clientId])
-  @@index([clientKey])
-  @@index([date])
+//   clientDetailsId String
+//   clientDetails   Client @relation(fields: [clientDetailsId], references: [id], onDelete: Cascade)
+
+//   @@index([clientId])
+//   @@index([clientKey])
+//   @@index([date])
+// }
+
+enum GstType {
+  REGISTERED
+  UNREGISTERED
+  CONSUMER
+}
+
+enum BalanceType {
+  RECEIVABLE
+  PAYABLE
+}
+
+model Client {
+  id String @id @default(uuid())
+
+  // --- Basic Party Info ---
+  partyName  String
+  partyGroup String?
+
+  phone String
+  email String?
+
+  // --- GST Info ---
+  gstType GstType @default(UNREGISTERED)
+  gstin   String?
+  state   String?
+
+  // --- Address ---
+  billingAddress String
+
+  // --- Credit & Balance ---
+  openingBalance Float       @default(0)
+  balanceType    BalanceType @default(RECEIVABLE)
+  creditLimit    Float?
+  referenceNo    String?
+  accountNumber  String?
+  ifsc           String?
+  bankName       String?
+  bankAddress    String?
+  paymentdetails String?
+
+  // --- Status ---
+  isActive Boolean @default(true)
+
+  // --- Relations (UNCHANGED as per instruction) ---
+  payments ClientPayment[]
+  loadings ClientLoading[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partyName])
+  @@index([phone])
 }
 
 enum VehicleOwnership {
@@ -468,23 +523,51 @@ model VendorInvoice {
   @@index([source])
 }
 
+model ClientPayment {
+  id                String   @id @default(uuid())
+  clientId          String
+  clientKey         String
+  clientName        String
+  date              DateTime
+  amount            Float
+  paymentMode       String
+  isInstallment     Boolean  @default(false)
+  installments      Int?
+  installmentNumber Int?
+  createdAt         DateTime @default(now())
+
+  client ClientLoading @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // ✅ Fix relation (explicit)
+  clientInvoice ClientInvoice? @relation("ClientPaymentInvoice")
+
+  clientDetailsId String
+  clientDetails   Client @relation(fields: [clientDetailsId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([clientKey])
+  @@index([date])
+}
+
 model ClientInvoice {
   id           String   @id @default(uuid())
-  paymentId    String   @unique // ← This must be present
+  paymentId    String   @unique
   clientId     String
   clientName   String
   invoiceNo    String   @unique
   invoiceDate  DateTime
   billTo       String
-  hsn          String   @default("0302")
-  gstPercent   Float    @default(5)
+  hsn          String
+  description  String? // ✅ now exists
+  gstPercent   Float    @default(0)
   taxableValue Float
   gstAmount    Float
   totalAmount  Float
   isFinalized  Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  payment ClientPayment @relation(fields: [paymentId], references: [id])
+  // ✅ Fix relation (explicit)
+  payment ClientPayment @relation("ClientPaymentInvoice", fields: [paymentId], references: [id])
 
   @@index([clientId])
 }
@@ -605,4 +688,31 @@ model Employee {
 model Counter {
   id    String @id
   value Int
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  userId   String
+  userRole String
+
+  email String?
+
+  module   String
+  action   String
+  recordId String
+
+  label String?
+
+  oldValues Json?
+  newValues Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([module, recordId])
+  @@index([userId])
+  @@index([createdAt])
 }

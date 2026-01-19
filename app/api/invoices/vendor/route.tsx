@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       source, // "farmer" | "agent"
       invoiceNo,
       description,
-      vendorAddress,
+      // vendorAddress,
     } = body;
 
     // Required fields check (updated — no billTo/shipTo)
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     // Fetch the payment to get amount
     const payment = await prisma.vendorPayment.findUnique({
       where: { id: paymentId },
-      select: { amount: true, date: true },
+      select: { amount: true, date: true, sourceRecordId: true },
     });
 
     if (!payment) {
@@ -44,6 +44,29 @@ export async function POST(req: NextRequest) {
     const gstAmount = 0; // Since GST = 0%
     const totalAmount = taxableValue;
 
+    let vendorAddress: string | null = null;
+    let sourceRecordId: string | null = null;
+
+    if (source === "farmer" && payment.sourceRecordId) {
+      const loading = await prisma.formerLoading.findFirst({
+        where: { id: payment.sourceRecordId },
+        select: { id: true, village: true },
+      });
+
+      vendorAddress = loading?.village ?? null;
+      sourceRecordId = loading?.id ?? null;
+    }
+
+    if (source === "agent" && payment.sourceRecordId) {
+      const loading = await prisma.agentLoading.findFirst({
+        where: { id: payment.sourceRecordId },
+        select: { id: true, village: true },
+      });
+
+      vendorAddress = loading?.village ?? null;
+      sourceRecordId = loading?.id ?? null;
+    }
+
     // Upsert the invoice
     const invoice = await prisma.vendorInvoice.upsert({
       where: { paymentId },
@@ -58,7 +81,8 @@ export async function POST(req: NextRequest) {
         gstAmount,
         totalAmount,
         description: description?.trim() || null,
-        vendorAddress: vendorAddress?.trim() || null,
+        vendorAddress,
+        sourceRecordId: payment.sourceRecordId,
         isFinalized: true,
       },
       create: {
@@ -73,8 +97,9 @@ export async function POST(req: NextRequest) {
         taxableValue,
         gstAmount,
         totalAmount,
-          description: description?.trim() || null,
-          vendorAddress: vendorAddress?.trim() || null,
+        description: description?.trim() || null,
+        vendorAddress,
+        sourceRecordId: payment.sourceRecordId,
         isFinalized: true,
       },
     });

@@ -12,7 +12,7 @@ export async function GET() {
         let nextNumber = 1;
 
         if (lastRecord?.billNo) {
-            const match = lastRecord.billNo.match(/RS-Agent-\d{2}-(\d+)/);
+            const match = lastRecord.billNo.match(/RS-A-\d{2}-(\d+)/);
             if (match) {
                 nextNumber = Number(match[1]) + 1;
             }
@@ -22,7 +22,7 @@ export async function GET() {
             ? String(nextNumber).padStart(4, "0")
             : String(nextNumber);
 
-        const newBillNo = `RS-Agent-${currentYear}-${displayNumber}`;
+        const newBillNo = `RS-A-${currentYear}-${displayNumber}`;
 
         return NextResponse.json({
             success: true,

@@ -1,7 +1,7 @@
 // app/api/payments/dispatch/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { DispatchChargeType, DispatchSourceType } from "@prisma/client";
+import { DispatchChargeType } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -14,27 +14,37 @@ function asPositiveNumber(value: unknown): number | null {
   return Number.isFinite(num) && num > 0 ? num : null;
 }
 
+async function computeBaseTotalPrice(clientLoadingId: string): Promise<number> {
+  const loading = await prisma.clientLoading.findUnique({
+    where: { id: clientLoadingId },
+    select: {
+      totalPrice: true,
+      items: { select: { totalPrice: true } }, // ✅ fallback if totalPrice is 0
+    },
+  });
+
+  if (!loading) return 0;
+
+  const apiTotal = Number(loading.totalPrice || 0);
+  if (apiTotal > 0) return apiTotal;
+
+  const itemsSum = (loading.items || []).reduce(
+    (s, it) => s + Number(it.totalPrice || 0),
+    0
+  );
+
+  return Number.isFinite(itemsSum) ? itemsSum : 0;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const sourceTypeRaw = body.sourceType;
     const sourceRecordId = asString(body.sourceRecordId);
     const typeRaw = body.type;
     const label = asString(body.label) || null;
     const notes = asString(body.notes) || null;
     const amount = asPositiveNumber(body.amount);
-
-    if (
-      !sourceTypeRaw ||
-      !Object.values(DispatchSourceType).includes(sourceTypeRaw as any)
-    ) {
-      return NextResponse.json(
-        { error: "Invalid or missing sourceType" },
-        { status: 400 }
-      );
-    }
-    const sourceType = sourceTypeRaw as DispatchSourceType;
 
     if (!sourceRecordId) {
       return NextResponse.json(
@@ -58,142 +68,78 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if ((type === "OTHER" || type === "PACKING") && !label) {
+    if (type === "OTHER" && !label) {
       return NextResponse.json(
-        { error: "Label required for OTHER or PACKING" },
+        { error: "Label required for OTHER" },
         { status: 400 }
       );
     }
 
-    // ✅ Verify loading exists + get base price from correct table
-    let baseTotalPrice = 0;
+    // ✅ Verify loading exists (Client only)
+    const loadingExists = await prisma.clientLoading.findUnique({
+      where: { id: sourceRecordId },
+      select: { id: true, vehicleId: true, vehicleNo: true },
+    });
 
-    if (sourceType === DispatchSourceType.CLIENT) {
-      const loading = await prisma.clientLoading.findUnique({
-        where: { id: sourceRecordId },
-        select: { id: true, totalPrice: true },
-      });
-      if (!loading) {
-        return NextResponse.json(
-          { error: "Loading record not found" },
-          { status: 404 }
-        );
-      }
-      baseTotalPrice = loading.totalPrice || 0;
+    if (!loadingExists) {
+      return NextResponse.json(
+        { error: "Loading record not found" },
+        { status: 404 }
+      );
     }
 
-    if (sourceType === DispatchSourceType.FORMER) {
-      const loading = await prisma.formerLoading.findUnique({
-        where: { id: sourceRecordId },
-        select: { id: true, totalPrice: true },
-      });
-      if (!loading) {
+    // ✅ Enforce: TRANSPORT allowed only if vehicle exists
+    if (type === "TRANSPORT") {
+      const hasVehicle = Boolean(
+        (loadingExists.vehicleId && loadingExists.vehicleId.trim()) ||
+          (loadingExists.vehicleNo && loadingExists.vehicleNo.trim())
+      );
+      if (!hasVehicle) {
         return NextResponse.json(
-          { error: "Loading record not found" },
-          { status: 404 }
+          { error: "Transport charge not allowed: vehicle not assigned" },
+          { status: 400 }
         );
       }
-      baseTotalPrice = loading.totalPrice || 0;
     }
 
-    if (sourceType === DispatchSourceType.AGENT) {
-      const loading = await prisma.agentLoading.findUnique({
-        where: { id: sourceRecordId },
-        select: { id: true, totalPrice: true },
-      });
-      if (!loading) {
-        return NextResponse.json(
-          { error: "Loading record not found" },
-          { status: 404 }
-        );
-      }
-      baseTotalPrice = loading.totalPrice || 0;
-    }
-
-    // ✅ Create DispatchCharge with correct relation FK
-    const relationData: any = {};
-    if (sourceType === DispatchSourceType.CLIENT)
-      relationData.clientLoadingId = sourceRecordId;
-    if (sourceType === DispatchSourceType.FORMER)
-      relationData.formerLoadingId = sourceRecordId;
-    if (sourceType === DispatchSourceType.AGENT)
-      relationData.agentLoadingId = sourceRecordId;
-
+    // ✅ Create DispatchCharge (Client only relation)
     const dispatchCharge = await prisma.dispatchCharge.create({
       data: {
-        sourceType,
         sourceRecordId,
         type,
         label,
         amount,
         notes,
-        ...relationData,
+        clientLoadingId: sourceRecordId,
       },
     });
 
-    // ✅ Recalculate totals from actual tables
-    const [dispatchSum, packingSum] = await Promise.all([
+    // ✅ Recalculate totals
+    const [dispatchSum, packingSum, baseTotalPrice] = await Promise.all([
       prisma.dispatchCharge.aggregate({
-        where: {
-          OR: [
-            { clientLoadingId: sourceRecordId },
-            { formerLoadingId: sourceRecordId },
-            { agentLoadingId: sourceRecordId },
-          ],
-        },
+        where: { clientLoadingId: sourceRecordId },
         _sum: { amount: true },
       }),
       prisma.packingAmount.aggregate({
-        where: {
-          OR: [
-            { clientLoadingId: sourceRecordId },
-            { formerLoadingId: sourceRecordId },
-            { agentLoadingId: sourceRecordId },
-          ],
-        },
+        where: { clientLoadingId: sourceRecordId },
         _sum: { totalAmount: true },
       }),
+      computeBaseTotalPrice(sourceRecordId),
     ]);
 
     const newDispatchTotal = dispatchSum._sum.amount || 0;
     const newPackingTotal = packingSum._sum.totalAmount || 0;
-
-    // ✅ Correct grandTotal
     const newGrandTotal = baseTotalPrice + newDispatchTotal + newPackingTotal;
 
     // ✅ Update parent
-    if (sourceType === DispatchSourceType.CLIENT) {
-      await prisma.clientLoading.update({
-        where: { id: sourceRecordId },
-        data: {
-          dispatchChargesTotal: newDispatchTotal,
-          packingAmountTotal: newPackingTotal,
-          grandTotal: newGrandTotal,
-        },
-      });
-    }
-
-    if (sourceType === DispatchSourceType.FORMER) {
-      await prisma.formerLoading.update({
-        where: { id: sourceRecordId },
-        data: {
-          dispatchChargesTotal: newDispatchTotal,
-          packingAmountTotal: newPackingTotal,
-          grandTotal: newGrandTotal,
-        },
-      });
-    }
-
-    if (sourceType === DispatchSourceType.AGENT) {
-      await prisma.agentLoading.update({
-        where: { id: sourceRecordId },
-        data: {
-          dispatchChargesTotal: newDispatchTotal,
-          packingAmountTotal: newPackingTotal,
-          grandTotal: newGrandTotal,
-        },
-      });
-    }
+    await prisma.clientLoading.update({
+      where: { id: sourceRecordId },
+      data: {
+        dispatchChargesTotal: newDispatchTotal,
+        packingAmountTotal: newPackingTotal,
+        grandTotal: newGrandTotal,
+      },
+    });
 
     return NextResponse.json(
       { success: true, data: dispatchCharge },
@@ -211,33 +157,12 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const sourceTypeRaw = searchParams.get("sourceType");
-    const sourceRecordId = searchParams.get("sourceRecordId");
+    const sourceRecordId = searchParams.get("sourceRecordId")?.trim() || "";
 
     const where: any = {};
+    if (sourceRecordId) where.sourceRecordId = sourceRecordId;
 
-    if (sourceTypeRaw) {
-      if (!Object.values(DispatchSourceType).includes(sourceTypeRaw as any)) {
-        return NextResponse.json(
-          { error: "Invalid sourceType" },
-          { status: 400 }
-        );
-      }
-      where.sourceType = sourceTypeRaw as DispatchSourceType;
-    }
-
-    if (sourceRecordId) {
-      where.sourceRecordId = sourceRecordId;
-    }
-
-    // Require at least sourceType or sourceRecordId
-    if (!sourceTypeRaw && !sourceRecordId) {
-      return NextResponse.json(
-        { error: "At least sourceType or sourceRecordId is required" },
-        { status: 400 }
-      );
-    }
-
+    // Require at least sourceRecordId (or return all charges)
     const dispatchCharges = await prisma.dispatchCharge.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -248,7 +173,6 @@ export async function GET(req: NextRequest) {
         amount: true,
         notes: true,
         createdAt: true,
-        sourceType: true,
         sourceRecordId: true,
       },
     });

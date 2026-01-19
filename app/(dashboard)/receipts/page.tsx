@@ -1,3 +1,4 @@
+// app\(dashboard)\receipts\page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -5,21 +6,16 @@ import { CardCustom } from "@/components/ui/card-custom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, User, Package, FileText, Search } from "lucide-react";
+import { Calendar, User, FileText, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import type {
-  Tab,
   Receipt,
   VendorReceipt,
   ClientReceipt,
   EmployeeReceipt,
-  PackingReceipt,
 } from "../../../lib/receipts";
-
-import { generatePackingPDF } from "@/lib/pdf/packing";
 import { generatePayslipPDF } from "@/lib/pdf/payslip";
-
 import { VendorInvoiceModal } from "./components/invoice/VendorInvoiceModal";
 import { ClientInvoiceModal } from "./components/invoice/ClientInvoiceModal";
 
@@ -36,7 +32,7 @@ const formatDate = (date: string | Date | null | undefined) => {
   return Number.isNaN(d.getTime()) ? "N/A" : d.toLocaleDateString("en-IN");
 };
 
-type TabId = Tab;
+type TabId = "vendor" | "client" | "employee";
 
 function cn(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(" ");
@@ -71,13 +67,7 @@ function TabsTrigger({
 }) {
   const isActive = value === activeValue;
   const mobileLabel =
-    value === "vendor"
-      ? "Vendor"
-      : value === "client"
-      ? "Client"
-      : value === "employee"
-      ? "Employee"
-      : "Packing";
+    value === "vendor" ? "Vendor" : value === "client" ? "Client" : "Employee";
 
   return (
     <button
@@ -117,16 +107,13 @@ export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [search, setSearch] = useState<string>("");
 
-  // Pagination
   const PAGE_SIZE = 15;
   const [page, setPage] = useState(1);
 
-  // Modals
   const [openVendorInvoice, setOpenVendorInvoice] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<VendorReceipt | null>(
     null
@@ -137,26 +124,23 @@ export default function ReceiptsPage() {
     null
   );
 
-  // "invoice exists" map for Generate button enable/disable
   const [invoiceMap, setInvoiceMap] = useState<Record<string, boolean>>({});
 
   const isVendorReceipt = (r: Receipt): r is VendorReceipt =>
     (r as VendorReceipt).vendorId !== undefined;
   const isClientReceipt = (r: Receipt): r is ClientReceipt =>
-    (r as ClientReceipt).clientId !== undefined;
+    (r as ClientReceipt).clientDetailsId !== undefined;
 
   const tabs = [
     { id: "vendor" as const, label: "Vendor Receipt", icon: User },
     { id: "client" as const, label: "Client Receipt", icon: User },
     { id: "employee" as const, label: "Employee Receipt", icon: User },
-    { id: "packing" as const, label: "Packing Receipt", icon: Package },
   ];
 
-  const apiMap: Record<Tab, string> = {
+  const apiMap: Record<TabId, string> = {
     vendor: "/api/payments/vendor",
     client: "/api/payments/client",
     employee: "/api/payments/employee",
-    packing: "/api/payments/packing-amount",
   };
 
   useEffect(() => {
@@ -188,7 +172,6 @@ export default function ReceiptsPage() {
 
         setReceipts(normalized);
 
-        // Build invoiceMap ONLY for vendor/client
         if (activeTab === "vendor" || activeTab === "client") {
           const map: Record<string, boolean> = {};
           await Promise.all(
@@ -197,7 +180,6 @@ export default function ReceiptsPage() {
                 activeTab === "vendor"
                   ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
                   : `/api/invoices/client/by-payment?paymentId=${r.id}`;
-
               const x = await fetch(endpoint);
               map[r.id] = x.ok;
             })
@@ -219,26 +201,17 @@ export default function ReceiptsPage() {
     fetchData();
   }, [activeTab, dateFrom, dateTo]);
 
-  // Reset page whenever tab/filter changes
   useEffect(() => {
     setPage(1);
   }, [activeTab, dateFrom, dateTo, search]);
 
   const getTitle = () => {
-    const map: Record<Tab, string> = {
+    const map: Record<TabId, string> = {
       vendor: "Vendor Payment Receipts",
       client: "Client Payment Receipts",
       employee: "Employee Salary Receipts",
-      packing: "Packing Amount Receipts",
     };
     return map[activeTab];
-  };
-
-  const getActionLabel = (): string => {
-    if (activeTab === "vendor" || activeTab === "client")
-      return "Generate Invoice";
-    if (activeTab === "employee") return "Generate Payslip";
-    return "Generate Receipt";
   };
 
   const getPartyName = (r: Receipt) => {
@@ -246,7 +219,6 @@ export default function ReceiptsPage() {
     if (activeTab === "client") return (r as ClientReceipt).clientName || "—";
     if (activeTab === "employee")
       return (r as EmployeeReceipt).employeeName || "—";
-    if (activeTab === "packing") return (r as PackingReceipt).partyName || "—";
     return "—";
   };
 
@@ -266,7 +238,6 @@ export default function ReceiptsPage() {
 
     const matchSearch = (r: Receipt) => {
       if (!q) return true;
-
       const party = (getPartyName(r) || "").toLowerCase();
       const mode = String((r as any).paymentMode || "").toLowerCase();
       const ref = String(
@@ -274,7 +245,6 @@ export default function ReceiptsPage() {
       ).toLowerCase();
       const billNo = String((r as any).billNo || "").toLowerCase();
       const invoiceNo = String((r as any).invoiceNo || "").toLowerCase();
-
       return (
         party.includes(q) ||
         mode.includes(q) ||
@@ -299,18 +269,16 @@ export default function ReceiptsPage() {
   }, [receipts, search, dateFrom, dateTo, activeTab]);
 
   const totalPages = Math.ceil(filteredReceipts.length / PAGE_SIZE);
-
   const paginatedReceipts = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return filteredReceipts.slice(start, start + PAGE_SIZE);
   }, [filteredReceipts, page]);
 
-  // ✅ Shared generator (used for mobile + desktop)
   const handleGenerateInvoice = async (r: any) => {
-    const endpoint =
-      activeTab === "vendor"
-        ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
-        : `/api/invoices/client/by-payment?paymentId=${r.id}`;
+    const isVendor = activeTab === "vendor";
+    const endpoint = isVendor
+      ? `/api/invoices/vendor/by-payment?paymentId=${r.id}`
+      : `/api/invoices/client/by-payment?paymentId=${r.id}`;
 
     const res = await fetch(endpoint);
     if (!res.ok) {
@@ -318,34 +286,31 @@ export default function ReceiptsPage() {
       return;
     }
 
-    // ✅ IMPORTANT: now we read BOTH invoice and payment (client route returns payment)
     const json = await res.json();
     const invoice = json?.invoice;
-    const payment = json?.payment; // may be undefined for vendor if you didn't add it
+    const payment = json?.payment;
 
     const { jsPDF } = await import("jspdf");
     await import("jspdf-autotable");
 
     const LOGO_PATH = "/assets/favicon.png";
-    if (activeTab === "vendor") {
-      const { generateVendorInvoicePDF, loadImageAsDataUrl } = await import(
+    let logoDataUrl: string | undefined;
+    try {
+      const { loadImageAsDataUrl } = await import("@/lib/pdf/client-invoice");
+      logoDataUrl = await loadImageAsDataUrl(LOGO_PATH);
+    } catch (e) {
+      console.error("Failed to load logo:", e);
+    }
+
+    if (isVendor) {
+      const { generateVendorInvoicePDF } = await import(
         "@/lib/pdf/vendor-invoice"
       );
-
-      let logoDataUrl: string | undefined;
-      try {
-        logoDataUrl = await loadImageAsDataUrl(LOGO_PATH);
-      } catch (e) {
-        console.error("Failed to load logo:", e);
-      }
-
       await generateVendorInvoicePDF(
         jsPDF,
         {
           ...invoice,
           description: invoice?.description ?? "",
-
-          // ✅ Payment details from API
           paymentMode: payment?.paymentMode,
           referenceNo: payment?.referenceNo,
           paymentRef: payment?.paymentRef,
@@ -353,49 +318,39 @@ export default function ReceiptsPage() {
         },
         { logoDataUrl }
       );
+    } else {
+      const clientRes = await fetch(`/api/client/${r.clientDetailsId}`);
+      const clientData = await clientRes.json();
+      const client = clientData?.data;
 
-      return;
+      const { generateClientInvoicePDF } = await import(
+        "@/lib/pdf/client-invoice"
+      );
+
+      const baseAmount = Number(invoice?.taxableValue ?? 0);
+
+      await generateClientInvoicePDF(
+        jsPDF,
+        {
+          invoiceNo: invoice.invoiceNo,
+          invoiceDate: invoice.invoiceDate || new Date().toISOString(),
+          clientName: payment?.clientName || "Client",
+          billTo: invoice.billTo,
+          contactNo: client?.phone,
+          state: client?.state,
+          gstin: client?.gstin,
+          description: invoice.description,
+          hsn: invoice.hsn,
+          gstPercent: 0,
+          taxableValue: baseAmount,
+          gstAmount: 0,
+          totalAmount: baseAmount,
+          paymentMode: payment?.paymentMode,
+          placeOfSupply: client?.state,
+        },
+        { logoDataUrl }
+      );
     }
-
-    // CLIENT
-    const { generateClientInvoicePDF, loadImageAsDataUrl } = await import(
-      "@/lib/pdf/client-invoice"
-    );
-
-    let logoDataUrl: string | undefined;
-    try {
-      logoDataUrl = await loadImageAsDataUrl(LOGO_PATH);
-    } catch (e) {
-      console.error("Failed to load logo:", e);
-    }
-
-    const baseAmount = Number(invoice?.taxableValue ?? 0);
-
-    await generateClientInvoicePDF(
-      jsPDF,
-      {
-        invoiceNo: invoice.invoiceNo,
-        invoiceDate: invoice.invoiceDate || new Date().toISOString(),
-        clientName: (r as ClientReceipt).clientName || "Client",
-        billTo: invoice.billTo,
-        shipTo: invoice.shipTo,
-
-        description: invoice.description || "Supply of fresh fish",
-        hsn: invoice.hsn || "0302",
-
-        gstPercent: 0,
-        taxableValue: baseAmount,
-        gstAmount: 0,
-        totalAmount: baseAmount,
-
-        // ✅ Payment details shown in PDF
-        paymentMode: payment?.paymentMode,
-        referenceNo: payment?.referenceNo,
-        paymentRef: payment?.paymentRef,
-        paymentdetails: payment?.paymentdetails,
-      },
-      { logoDataUrl }
-    );
   };
 
   return (
@@ -406,7 +361,7 @@ export default function ReceiptsPage() {
             Receipts
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            View and generate receipts & invoices
+            View and generate invoices & payslips
           </p>
         </div>
 
@@ -424,7 +379,7 @@ export default function ReceiptsPage() {
         </TabsList>
       </header>
 
-      {/* Filters row */}
+      {/* Filters */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
         <div className="sm:col-span-3">
           <Label htmlFor="from">From Date</Label>
@@ -456,7 +411,7 @@ export default function ReceiptsPage() {
               id="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by party, bill no, reference, mode…"
+              placeholder="Search by party, reference, mode..."
               className="pl-9"
             />
           </div>
@@ -505,64 +460,22 @@ export default function ReceiptsPage() {
                       <div className="mt-2 font-extrabold text-slate-900 truncate">
                         {getPartyName(r)}
                       </div>
-
-                      {activeTab === "packing" && r.billNo && (
-                        <div className="text-xs font-semibold text-[#139BC3] mt-1">
-                          Bill: {r.billNo}
-                        </div>
-                      )}
-
-                      {activeTab === "packing" &&
-                        (r as PackingReceipt).mode && (
-                          <div className="text-xs text-slate-500 capitalize mt-1">
-                            {(r as PackingReceipt).mode}
-                          </div>
-                        )}
                     </div>
 
                     <div className="shrink-0 text-right">
                       <div className="text-xs text-slate-500">Amount</div>
                       <div className="text-lg font-extrabold text-emerald-600">
-                        {formatCurrency(r.amount || r.totalAmount || 0)}
+                        {formatCurrency(r.amount || 0)}
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                    {activeTab === "packing" ? (
-                      <>
-                        <div>
-                          Payment:{" "}
-                          {r.paymentMode === "CASH"
-                            ? "Cash"
-                            : r.paymentMode === "AC"
-                            ? "A/C Transfer"
-                            : r.paymentMode === "UPI"
-                            ? "UPI/PhonePe"
-                            : r.paymentMode === "CHEQUE"
-                            ? "Cheque"
-                            : "N/A"}
-                          {r.reference && (
-                            <span className="text-slate-500">
-                              {" "}
-                              | Ref: {r.reference}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 text-slate-500">
-                          Workers: {(r as PackingReceipt).workers} | Temp:{" "}
-                          {(r as PackingReceipt).temperature}°C
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div>{r.paymentMode || "—"}</div>
-                        {r.reference && (
-                          <div className="mt-1 text-slate-500">
-                            Ref: {r.reference}
-                          </div>
-                        )}
-                      </>
+                    <div>{r.paymentMode || "—"}</div>
+                    {(r.reference || r.referenceNo) && (
+                      <div className="mt-1 text-slate-500">
+                        Ref: {r.reference || r.referenceNo}
+                      </div>
                     )}
                   </div>
 
@@ -603,16 +516,10 @@ export default function ReceiptsPage() {
                         variant="outline"
                         size="sm"
                         className="w-full gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
-                        onClick={() => {
-                          if (activeTab === "packing") {
-                            generatePackingPDF(r as PackingReceipt);
-                          } else if (activeTab === "employee") {
-                            generatePayslipPDF(r as EmployeeReceipt);
-                          }
-                        }}
+                        onClick={() => generatePayslipPDF(r as EmployeeReceipt)}
                       >
                         <FileText className="w-4 h-4" />
-                        {getActionLabel()}
+                        Generate Payslip
                       </Button>
                     )}
                   </div>
@@ -620,9 +527,9 @@ export default function ReceiptsPage() {
               ))}
             </div>
 
-            {/* DESKTOP: Table */}
+            {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
-              <div className="min-w-[900px] rounded-2xl border border-slate-200 bg-white">
+              <div className="min-w-[800px] rounded-2xl border border-slate-200 bg-white">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur border-b border-slate-200">
                     <tr className="text-left">
@@ -661,60 +568,22 @@ export default function ReceiptsPage() {
                           <div className="font-semibold text-slate-900">
                             {getPartyName(r)}
                           </div>
-                          {activeTab === "packing" && r.billNo && (
-                            <div className="text-xs font-semibold text-[#139BC3] mt-1">
-                              Bill: {r.billNo}
-                            </div>
-                          )}
-                          {activeTab === "packing" &&
-                            (r as PackingReceipt).mode && (
-                              <div className="text-xs text-slate-500 capitalize mt-1">
-                                {(r as PackingReceipt).mode}
-                              </div>
-                            )}
                         </td>
 
                         <td className="py-4 px-4">
-                          {activeTab === "packing" ? (
-                            <>
-                              <div className="text-xs text-slate-600">
-                                Payment:{" "}
-                                {r.paymentMode === "CASH"
-                                  ? "Cash"
-                                  : r.paymentMode === "AC"
-                                  ? "A/C Transfer"
-                                  : r.paymentMode === "UPI"
-                                  ? "UPI/PhonePe"
-                                  : r.paymentMode === "CHEQUE"
-                                  ? "Cheque"
-                                  : "N/A"}
-                                {r.reference && (
-                                  <span className="text-slate-500">
-                                    {" "}
-                                    | Ref: {r.reference}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-slate-500 mt-1">
-                                Workers: {(r as PackingReceipt).workers} | Temp:{" "}
-                                {(r as PackingReceipt).temperature}°C
-                              </div>
-                            </>
-                          ) : (
-                            <div className="text-xs text-slate-600">
-                              {r.paymentMode || "—"}
-                              {r.reference && (
-                                <span className="block mt-1 text-slate-500">
-                                  Ref: {r.reference}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                          <div className="text-xs text-slate-600">
+                            {r.paymentMode || "—"}
+                            {(r.reference || r.referenceNo) && (
+                              <span className="block mt-1 text-slate-500">
+                                Ref: {r.reference || r.referenceNo}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="py-4 px-4 text-right">
                           <div className="text-lg font-extrabold text-emerald-600">
-                            {formatCurrency(r.amount || r.totalAmount || 0)}
+                            {formatCurrency(r.amount || 0)}
                           </div>
                         </td>
 
@@ -756,16 +625,12 @@ export default function ReceiptsPage() {
                                 variant="outline"
                                 size="sm"
                                 className="gap-2 border-slate-200 bg-[#139BC3] text-white hover:bg-[#1088AA] hover:text-white"
-                                onClick={() => {
-                                  if (activeTab === "packing") {
-                                    generatePackingPDF(r as PackingReceipt);
-                                  } else if (activeTab === "employee") {
-                                    generatePayslipPDF(r as EmployeeReceipt);
-                                  }
-                                }}
+                                onClick={() =>
+                                  generatePayslipPDF(r as EmployeeReceipt)
+                                }
                               >
                                 <FileText className="w-4 h-4" />
-                                {getActionLabel()}
+                                Generate Payslip
                               </Button>
                             </div>
                           )}
@@ -778,7 +643,7 @@ export default function ReceiptsPage() {
             </div>
 
             {/* Pagination */}
-            {totalPages >= 1 && (
+            {totalPages > 1 && (
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-sm text-slate-500">
                   Showing{" "}
@@ -795,7 +660,7 @@ export default function ReceiptsPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap justify-center">
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -805,22 +670,19 @@ export default function ReceiptsPage() {
                     Prev
                   </Button>
 
-                  {Array.from({ length: totalPages }).map((_, i) => {
-                    const pageNo = i + 1;
-                    return (
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                    (p) => (
                       <Button
-                        key={pageNo}
+                        key={p}
                         size="sm"
-                        variant={page === pageNo ? "default" : "outline"}
-                        onClick={() => setPage(pageNo)}
-                        className={
-                          page === pageNo ? "bg-[#139BC3] text-white" : ""
-                        }
+                        variant={page === p ? "default" : "outline"}
+                        onClick={() => setPage(p)}
+                        className={page === p ? "bg-[#139BC3] text-white" : ""}
                       >
-                        {pageNo}
+                        {p}
                       </Button>
-                    );
-                  })}
+                    )
+                  )}
 
                   <Button
                     variant="outline"
@@ -837,7 +699,7 @@ export default function ReceiptsPage() {
         )}
       </CardCustom>
 
-      {openVendorInvoice && selectedVendor && (
+      {openVendorInvoice && selectedVendor ? (
         <VendorInvoiceModal
           open={openVendorInvoice}
           vendorId={selectedVendor.vendorId}
@@ -847,30 +709,24 @@ export default function ReceiptsPage() {
           onClose={() => setOpenVendorInvoice(false)}
           onSaved={() => {
             setOpenVendorInvoice(false);
-            setInvoiceMap((prev) => ({
-              ...prev,
-              [selectedVendor.id]: true,
-            }));
+            setInvoiceMap((prev) => ({ ...prev, [selectedVendor.id]: true }));
           }}
         />
-      )}
+      ) : null}
 
-      {openClientInvoice && selectedClient && (
+      {openClientInvoice && selectedClient ? (
         <ClientInvoiceModal
           open={openClientInvoice}
-          clientId={selectedClient.clientId}
+          clientDetailsId={(selectedClient as any).clientDetailsId} // ✅ FIX
           clientName={selectedClient.clientName}
           paymentId={selectedClient.id}
           onClose={() => setOpenClientInvoice(false)}
           onSaved={() => {
             setOpenClientInvoice(false);
-            setInvoiceMap((prev) => ({
-              ...prev,
-              [selectedClient.id]: true,
-            }));
+            setInvoiceMap((prev) => ({ ...prev, [selectedClient.id]: true }));
           }}
         />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -3,13 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 const TRAY_KG = 35;
-const MONEY_DEDUCTION_PERCENT = 5;
+const DEDUCTION_PERCENT = 5;
 
 type FormerItemInput = {
   varietyCode: string;
   noTrays: number | string;
   loose: number | string;
-  pricePerKg: number | string;
 };
 
 type FormerLoadingBody = {
@@ -18,8 +17,13 @@ type FormerLoadingBody = {
   FarmerName?: string;
   village?: string;
   date?: string;
-  vehicleId?: string;
-  vehicleNo?: string;
+
+  // ✅ NEW
+  useVehicle?: boolean;
+
+  vehicleId?: string | null;
+  vehicleNo?: string | null;
+
   items: FormerItemInput[];
 };
 
@@ -44,6 +48,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const farmerName = asTrim(body.FarmerName);
+    if (!farmerName) {
+      return NextResponse.json(
+        { success: false, message: "Farmer name is required" },
+        { status: 400 }
+      );
+    }
+
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json(
         { success: false, message: "At least one item is required" },
@@ -59,27 +71,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const vehicleId = asTrim(body.vehicleId) || null;
-    const vehicleNo = asTrim(body.vehicleNo) || null;
+    const useVeh = Boolean(body.useVehicle);
 
-    if (!vehicleId && !vehicleNo) {
-      return NextResponse.json(
-        { success: false, message: "Vehicle is required" },
-        { status: 400 }
-      );
-    }
+    const normalizedVehicleId =
+      useVeh && typeof body.vehicleId === "string" && body.vehicleId.trim()
+        ? body.vehicleId.trim()
+        : null;
+
+    const normalizedVehicleNo =
+      useVeh && typeof body.vehicleNo === "string" && body.vehicleNo.trim()
+        ? body.vehicleNo.trim()
+        : null;
 
     const items = body.items.map((it) => {
       const varietyCode = asTrim(it.varietyCode);
       const noTrays = Math.max(0, Math.floor(toNum(it.noTrays)));
       const loose = Math.max(0, toNum(it.loose));
-      const pricePerKg = Math.max(0, toNum(it.pricePerKg));
 
       const trayKgs = noTrays * TRAY_KG;
       const totalKgs = trayKgs + loose;
-
-      const gross = totalKgs * pricePerKg;
-      const totalPrice = round2(gross * (1 - MONEY_DEDUCTION_PERCENT / 100));
 
       return {
         varietyCode,
@@ -87,8 +97,8 @@ export async function POST(req: Request) {
         trayKgs,
         loose,
         totalKgs,
-        pricePerKg,
-        totalPrice,
+        pricePerKg: 0,
+        totalPrice: 0,
       };
     });
 
@@ -97,13 +107,17 @@ export async function POST(req: Request) {
     const totalTrayKgs = round2(items.reduce((s, i) => s + i.trayKgs, 0));
     const totalKgs = round2(items.reduce((s, i) => s + i.totalKgs, 0));
 
-    const totalPrice = round2(items.reduce((s, i) => s + i.totalPrice, 0));
+    // ✅ NET KGS logic like client
+    const grandTotal = useVeh
+      ? Math.round(totalKgs)
+      : Math.round(totalKgs * (1 - DEDUCTION_PERCENT / 100));
 
-    const createData: Parameters<typeof prisma.formerLoading.create>[0]["data"] = {
+    const createData: Parameters<typeof prisma.formerLoading.create>[0]["data"] =
+    {
       fishCode: asTrim(body.fishCode) || "NA",
       billNo,
-      FarmerName: asTrim(body.FarmerName) || null,
-      village: asTrim(body.village) || "",
+      FarmerName: farmerName, // keep string (not null)
+      village: asTrim(body.village) || "", // avoid null
       date: loadingDate,
 
       totalTrays,
@@ -111,19 +125,24 @@ export async function POST(req: Request) {
       totalTrayKgs,
       totalKgs,
 
-      totalPrice,
+      totalPrice: 0,
       dispatchChargesTotal: 0,
       packingAmountTotal: 0,
-      grandTotal: totalPrice,
+
+      // ✅ store net kgs
+      grandTotal,
 
       items: { create: items },
     };
 
-    if (vehicleId) {
-      createData.vehicle = { connect: { id: vehicleId } };
+    // ✅ attach vehicle ONLY if useVeh true
+    if (useVeh && normalizedVehicleId) {
+      createData.vehicle = { connect: { id: normalizedVehicleId } };
       createData.vehicleNo = null;
+    } else if (useVeh && normalizedVehicleNo) {
+      createData.vehicleNo = normalizedVehicleNo;
     } else {
-      createData.vehicleNo = vehicleNo;
+      createData.vehicleNo = null;
     }
 
     const saved = await prisma.formerLoading.create({
@@ -132,11 +151,16 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, data: saved }, { status: 201 });
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error("FormerLoading POST error:", err);
-    const message =
-      err instanceof Error ? err.message : "Failed to save farmer loading";
-    return NextResponse.json({ success: false, message }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to save farmer loading",
+        prisma: { code: err?.code, meta: err?.meta }, // ✅ debug
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -146,13 +170,8 @@ export async function GET() {
       include: {
         items: true,
         vehicle: { select: { vehicleNumber: true } },
-        // Include all dispatch charges
         dispatchCharges: {
-          select: {
-            type: true,
-            label: true,
-            amount: true,
-          },
+          select: { type: true, label: true, amount: true },
           orderBy: { createdAt: "desc" },
         },
       },
@@ -160,13 +179,6 @@ export async function GET() {
     });
 
     const data = rows.map((l) => {
-      const itemsTotalPrice = round2(
-        l.items.reduce((s, it) => s + toNum(it.totalPrice), 0)
-      );
-
-      const totalPrice = itemsTotalPrice;
-
-      // ✅ Calculate breakdown from real dispatch charges
       const breakdown = {
         iceCooling: 0,
         transportCharges: 0,
@@ -178,28 +190,16 @@ export async function GET() {
         const amt = Number(c.amount);
         breakdown.dispatchChargesTotal += amt;
 
-        if (c.type === "ICE_COOLING") {
-          breakdown.iceCooling += amt;
-        } else if (c.type === "TRANSPORT") {
-          breakdown.transportCharges += amt;
-        } else if (c.type === "OTHER" && c.label) {
-          breakdown.otherCharges.push({
-            label: c.label,
-            amount: amt,
-          });
+        if (c.type === "ICE_COOLING") breakdown.iceCooling += amt;
+        else if (c.type === "TRANSPORT") breakdown.transportCharges += amt;
+        else if (c.type === "OTHER" && c.label) {
+          breakdown.otherCharges.push({ label: c.label, amount: amt });
         }
       });
 
-      const packingTotal = toNum(l.packingAmountTotal);
-
-      const grandTotal = round2(totalPrice + breakdown.dispatchChargesTotal + packingTotal);
-
       return {
         ...l,
-        totalPrice,
-        grandTotal,
         vehicleNo: l.vehicle?.vehicleNumber ?? l.vehicleNo ?? "",
-        // ✅ Add breakdown to response
         dispatchBreakdown: breakdown,
       };
     });

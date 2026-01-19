@@ -44,7 +44,7 @@ export type VendorInvoiceAssets = {
 
 const COMPANY = {
     name: "RS FISHERIES PVT LTD",
-    title: "Tax Invoice",
+    title: "Payment Receipt ",
     addressLine: "Hyderabad, Telangana - 500072",
 
     phone: "+91 40 1234 5678",

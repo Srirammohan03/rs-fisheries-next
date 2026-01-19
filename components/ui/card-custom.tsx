@@ -7,6 +7,8 @@ interface CardCustomProps {
   title: string;
   actions?: ReactNode;
   children: ReactNode;
+  className?: string;
+  icon?: ReactNode;
 }
 
 export function CardCustom({ title, actions, children }: CardCustomProps) {

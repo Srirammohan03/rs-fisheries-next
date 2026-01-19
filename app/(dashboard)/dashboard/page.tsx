@@ -4,8 +4,9 @@ import { verifyToken } from "@/lib/jwt";
 import { getDashboardMetrics } from "@/lib/dashboard";
 import DashboardClient from "./components/DashboardClient";
 import { startOfDay, endOfDay, subDays } from "date-fns";
+import { redirect } from "next/navigation";
 
-type SP = { from?: string; to?: string };
+type SP = { from?: string; to?: string; agg?: string };
 
 function parseDateSafe(v?: string) {
   if (!v) return null;
@@ -16,25 +17,26 @@ function parseDateSafe(v?: string) {
 export default async function Dashboard({
   searchParams,
 }: {
-  // Next 15/16 can give Promise OR object depending on build/runtime
   searchParams?: SP | Promise<SP>;
 }) {
   const cookieStore = await cookies();
   const token = cookieStore.get("session")?.value;
 
-  if (token) {
-    try {
-      verifyToken(token);
-    } catch {
-      console.log("Invalid token");
-    }
+  if (!token) {
+    redirect("/login");
+  }
+
+  try {
+    verifyToken(token);
+  } catch {
+    redirect("/login");
   }
 
   const sp = await Promise.resolve(searchParams || {});
   const fromQ = parseDateSafe(sp.from);
   const toQ = parseDateSafe(sp.to);
+  const agg = (sp.agg || "day") as "day" | "week" | "month";
 
-  // ✅ default = last 7 days
   const defaultFrom = startOfDay(subDays(new Date(), 6));
   const defaultTo = endOfDay(new Date());
 
@@ -43,7 +45,7 @@ export default async function Dashboard({
     to: toQ ? endOfDay(toQ) : defaultTo,
   };
 
-  const data = await getDashboardMetrics(range);
+  const data = await getDashboardMetrics(range, agg);
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
@@ -51,6 +53,7 @@ export default async function Dashboard({
         data={data}
         initialFrom={range.from.toISOString()}
         initialTo={range.to.toISOString()}
+        initialAgg={agg}
       />
     </div>
   );

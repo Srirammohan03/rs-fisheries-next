@@ -16,7 +16,7 @@ export async function GET() {
 
         if (last?.billNo) {
             // Extract number from: RS-Farmer-25-9999 or RS-Farmer-24-12345
-            const match = last.billNo.match(/RS-Farmer-\d{2}-(\d+)/);
+            const match = last.billNo.match(/RS-F-\d{2}-(\d+)/);
             if (match) {
                 nextNumber = Number(match[1]) + 1;
             }
@@ -26,7 +26,7 @@ export async function GET() {
         const displayNumber =
             nextNumber <= 9999 ? String(nextNumber).padStart(4, "0") : String(nextNumber);
 
-        const billNo = `RS-Farmer-${currentYear}-${displayNumber}`;
+        const billNo = `RS-F-${currentYear}-${displayNumber}`;
 
         return NextResponse.json({
             success: true,
@@ -35,7 +35,7 @@ export async function GET() {
     } catch (error) {
         console.error("Error:", error);
         return NextResponse.json({
-            billNo: `RS-Farmer-${new Date().getFullYear().toString().slice(-2)}-0001`,
+            billNo: `RS-F-${new Date().getFullYear().toString().slice(-2)}-0001`,
         });
     }
 }

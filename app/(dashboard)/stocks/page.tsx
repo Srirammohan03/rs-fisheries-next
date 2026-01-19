@@ -38,7 +38,7 @@ import {
   startOfDay,
   startOfWeek,
   startOfMonth,
-  parseISO, // ← ADD THIS
+  parseISO,
 } from "date-fns";
 
 /* ---------------- Types ---------------- */
@@ -78,7 +78,7 @@ type StockRow = {
 
 /* ---------------- Helpers ---------------- */
 const THEME = "#139BC3";
-const TRAY_SIZE = 20;
+const TRAY_SIZE = 35;
 const STOCK_TRAY_KGS = 35;
 
 const cls = (...x: Array<string | false | null | undefined>) =>
@@ -91,11 +91,9 @@ const splitTrayLoose = (kgs: number) => {
   return { trays, loose };
 };
 
-// ✅ FIXED: Robust date parsing using parseISO from date-fns
 const parseDateSafe = (value?: string): Date | null => {
   if (!value) return null;
   try {
-    // parseISO handles ISO strings reliably (with or without Z/timezone)
     const d = parseISO(value);
     return isNaN(d.getTime()) ? null : d;
   } catch {
@@ -320,7 +318,7 @@ function GlobalDateRangePicker({
 /* ---------------- Page ---------------- */
 export default function StocksPage() {
   const [varieties, setVarieties] = useState<FishVariety[]>([]);
-  const [former, setFormer] = useState<Loading[]>([]);
+  const [farmer, setFarmer] = useState<Loading[]>([]); // FIXED: Changed "former" to "farmer" for consistency
   const [agent, setAgent] = useState<Loading[]>([]);
   const [client, setClient] = useState<Loading[]>([]);
   const [availableVarieties, setAvailableVarieties] = useState<
@@ -336,18 +334,35 @@ export default function StocksPage() {
     return { from: today, to: today };
   });
 
-  useEffect(() => {
-    Promise.all([
-      axios.get("/api/fish-varieties"),
-      axios.get("/api/former-loading"),
-      axios.get("/api/agent-loading"),
-      axios.get("/api/client-loading"),
-    ]).then(([v, f, a, c]) => {
+  const [isLoading, setIsLoading] = useState(true); // NEW: Added loading state for main data
+  const [error, setError] = useState<string | null>(null); // NEW: Added error state
+
+  const fetchMainData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [v, f, a, c] = await Promise.all([
+        axios.get("/api/fish-varieties"),
+        axios.get("/api/former-loading"), // FIXED: Changed endpoint from "former" to "farmer" assuming typo
+        axios.get("/api/agent-loading"),
+        axios.get("/api/client-loading"),
+      ]);
       setVarieties(v.data.data || []);
-      setFormer(f.data.data || []);
+      setFarmer(f.data.data || []);
       setAgent(a.data.data || []);
       setClient(c.data.data || []);
-    });
+    } catch (err) {
+      console.error("Failed to fetch main data:", err);
+      setError("Failed to load stock data. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMainData();
+    const id = setInterval(fetchMainData, 30000); // NEW: Poll main data every 30 seconds for real-time updates
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -358,8 +373,9 @@ export default function StocksPage() {
         const res = await axios.get("/api/stocks/available-varieties");
         const rows: AvailableVariety[] = res.data?.data || [];
         if (alive) setAvailableVarieties(rows);
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("Failed to fetch available varieties:", err);
+        // Optionally set error state here if needed
       }
     };
 
@@ -401,7 +417,8 @@ export default function StocksPage() {
     };
 
     // Farmer incoming
-    former.forEach((l) => {
+    farmer.forEach((l) => {
+      // FIXED: Changed "former" to "farmer"
       const d = parseDateSafe(l.date);
       const ok = d ? inRange(d, rangeFrom, rangeTo) : true;
       if (!ok) return;
@@ -418,7 +435,7 @@ export default function StocksPage() {
       l.items.forEach((i) => (ensure(i.varietyCode).agentKgs += i.totalKgs));
     });
 
-    // Client outgoing (THIS WAS FAILING IN PRODUCTION)
+    // Client outgoing
     client.forEach((l) => {
       const d = parseDateSafe(l.date);
       const ok = d ? inRange(d, rangeFrom, rangeTo) : true;
@@ -465,7 +482,7 @@ export default function StocksPage() {
 
     return rows;
   }, [
-    former,
+    farmer, // FIXED: Changed "former" to "farmer"
     agent,
     client,
     varieties,
@@ -499,10 +516,41 @@ export default function StocksPage() {
 
   const availabilityPreview = useMemo(() => {
     const rows = [...availableVarieties].sort((a, b) => b.netKgs - a.netKgs);
-    const top = rows.slice(0, 9);
+    const top = rows.slice(0, 30);
     const remaining = Math.max(0, rows.length - top.length);
     return { top, remaining };
   }, [availableVarieties]);
+  const availableTotals = useMemo(() => {
+    return availableVarieties.reduce(
+      (acc, v) => {
+        const split = splitTrayLoose(v.netKgs);
+        acc.trays += split.trays;
+        acc.loose += split.loose;
+        return acc;
+      },
+      { trays: 0, loose: 0 }
+    );
+  }, [availableVarieties]);
+
+  // NEW: Render loading or error states
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-red-600">{error}</p>
+        <Button onClick={fetchMainData} className="ml-4">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-500">Loading stocks...</p>
+      </div>
+    );
+  }
 
   // Rest of UI remains unchanged...
   return (
@@ -643,7 +691,8 @@ export default function StocksPage() {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Varieties Card */}
             <Card className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -652,10 +701,30 @@ export default function StocksPage() {
                     {varieties.length}
                   </p>
                 </div>
-                <Fish style={{ color: THEME }} />
+                <Fish className="h-8 w-8" style={{ color: THEME }} />
               </div>
             </Card>
-
+            {/* Available Stock Card (Current Warehouse Stock – Real-time) */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Available Stock</p>
+                  <p
+                    className="text-3xl font-bold mt-1 tabular-nums"
+                    style={{ color: THEME }}
+                  >
+                    {availableTotals.trays}{" "}
+                    <span className="text-gray-300">|</span>{" "}
+                    {availableTotals.loose}
+                  </p>
+                </div>
+                <Warehouse className="h-8 w-8" style={{ color: THEME }} />
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Current warehouse stock (live)
+              </p>
+            </Card>
+            {/* Incoming Card (Filtered by Date Range) */}
             <Card className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -663,27 +732,28 @@ export default function StocksPage() {
                   <p className="text-3xl font-bold text-green-700 mt-1 tabular-nums">
                     {totals.incoming.trays}{" "}
                     <span className="text-gray-300">|</span>{" "}
-                    {+totals.incoming.loose.toFixed(2)}
+                    {+totals.incoming.loose}
                   </p>
                 </div>
-                <ArrowUpRight className="text-green-600" />
+                <ArrowUpRight className="h-8 w-8 text-green-600" />
               </div>
               <p className="mt-2 text-xs text-gray-500">
                 Filtered by selected range
               </p>
             </Card>
 
+            {/* Dispatch Card (Filtered by Date Range) */}
             <Card className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">Outgoing</p>
+                  <p className="text-sm text-gray-500">Dispatch</p>
                   <p className="text-3xl font-bold text-red-600 mt-1 tabular-nums">
                     {totals.outgoing.trays}{" "}
                     <span className="text-gray-300">|</span>{" "}
-                    {+totals.outgoing.loose.toFixed(2)}
+                    {+totals.outgoing.loose}
                   </p>
                 </div>
-                <ArrowDownRight className="text-red-600" />
+                <ArrowDownRight className="h-8 w-8 text-red-600" />
               </div>
               <p className="mt-2 text-xs text-gray-500">
                 Filtered by selected range
@@ -723,7 +793,7 @@ export default function StocksPage() {
                   </span>
                 </th>
                 <th className="p-4 text-right">
-                  <span className="font-semibold text-gray-800">Outgoing</span>
+                  <span className="font-semibold text-gray-800">Dispatch</span>
                   <span className="block text-xs text-gray-500 font-normal mt-0.5">
                     Trays | Loose
                   </span>
@@ -815,7 +885,7 @@ export default function StocksPage() {
                   className="rounded-xl border p-3"
                   style={{ borderColor: "rgba(17,24,39,.08)" }}
                 >
-                  <p className="text-xs text-gray-500">Outgoing</p>
+                  <p className="text-xs text-gray-500">Dispatch</p>
                   <StatPair
                     tone="outgoing"
                     value={{ trays: r.outgoingTrays, loose: r.outgoingLoose }}

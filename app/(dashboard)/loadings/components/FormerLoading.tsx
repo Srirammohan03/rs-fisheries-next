@@ -18,9 +18,11 @@ import {
 
 import { Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { set } from "zod";
+import { Textarea } from "@/components/ui/textarea";
 
 const TRAY_WEIGHT = 35;
+const DEDUCTION_PERCENT = 5;
+const OTHER_VEHICLE_VALUE = "__OTHER__";
 
 const todayYMD = () => {
   const d = new Date();
@@ -28,6 +30,18 @@ const todayYMD = () => {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+};
+
+type VehicleRow = {
+  id: string;
+  vehicleNumber: string;
+  assignedDriver?: { name?: string | null } | null;
+};
+
+type VarietyRow = {
+  id: string;
+  code: string;
+  name: string;
 };
 
 interface ItemRow {
@@ -39,30 +53,47 @@ interface ItemRow {
 
 const safeNum = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return 0;
-  return n;
+  return Number.isFinite(n) ? n : 0;
 };
 
+// allow letters + space + dot + apostrophe + hyphen
+const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
+
+const cleanName = (value: string) =>
+  value
+    .replace(/[^A-Za-z .'-]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trimStart();
+
 export default function FormerLoading() {
-  const [FarmerName, setFarmerName] = useState("");
+  const queryClient = useQueryClient();
+
+  const [farmerName, setFarmerName] = useState("");
   const [village, setVillage] = useState("");
   const [date, setDate] = useState(todayYMD());
+
+  // ✅ Vehicle toggle like client
+  const [useVehicle, setUseVehicle] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
   const [otherVehicleNo, setOtherVehicleNo] = useState("");
+
   const [loading, setLoading] = useState(false);
+
   // ✅ local set to hide vehicles without page reload
   const [usedVehicleIds, setUsedVehicleIds] = useState<Set<string>>(
     () => new Set()
   );
 
-  const queryClient = useQueryClient();
+  const isOtherVehicle = vehicleId === OTHER_VEHICLE_VALUE;
 
+  // Bill No
   const {
     data: billNoData,
     isLoading: isLoadingBillNo,
     isError: isErrorBillNo,
-  } = useQuery({
-    queryKey: ["next-bill-no"],
+    refetch: refetchBillNo,
+  } = useQuery<{ billNo: string }>({
+    queryKey: ["former-next-bill-no"],
     queryFn: async () => {
       const res = await axios.get("/api/former-loading/next-bill-no");
       return res.data;
@@ -73,7 +104,14 @@ export default function FormerLoading() {
     if (isErrorBillNo) toast.error("Failed to load bill number");
   }, [isErrorBillNo]);
 
-  const { data: vehicles = [] } = useQuery({
+  const displayBillNo = isLoadingBillNo
+    ? "Loading..."
+    : isErrorBillNo
+    ? "Failed to load"
+    : billNoData?.billNo ?? "";
+
+  // Vehicles
+  const { data: vehicles = [] } = useQuery<VehicleRow[]>({
     queryKey: ["assigned-vehicles"],
     queryFn: async () => {
       const res = await axios.get("/api/vehicles/assign-driver");
@@ -81,17 +119,31 @@ export default function FormerLoading() {
     },
   });
 
-  const [items, setItems] = useState<ItemRow[]>([
-    { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
-  ]);
+  const availableVehicles = useMemo(() => {
+    return (vehicles ?? []).filter((v) => {
+      if (!v?.id) return false;
+      if (v.id === vehicleId) return true;
+      return !usedVehicleIds.has(v.id);
+    });
+  }, [vehicles, usedVehicleIds, vehicleId]);
 
-  const { data: varieties = [] } = useQuery({
-    queryKey: ["varieties"],
+  // Varieties
+  const { data: varieties = [] } = useQuery<VarietyRow[]>({
+    queryKey: ["fish-varieties"],
     queryFn: async () => {
       const res = await axios.get("/api/fish-varieties");
       return res.data.data ?? [];
     },
   });
+
+  const getVarietyName = (code: string) => {
+    const v = varieties.find((x) => x.code === code);
+    return v?.name || "-";
+  };
+
+  const [items, setItems] = useState<ItemRow[]>([
+    { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
+  ]);
 
   // ---- helpers ----
   const calculateRowTotal = (item: ItemRow) => {
@@ -103,37 +155,43 @@ export default function FormerLoading() {
     [items]
   );
 
+  const totalTrays = useMemo(
+    () => items.reduce((sum, item) => sum + safeNum(item.noTrays), 0),
+    [items]
+  );
+
+  // ✅ Same logic as client:
+  // if useVehicle => NO deduction
+  // else => 5% deduction
+  const netKgs = useMemo(() => {
+    const t = totalKgs;
+    if (useVehicle) return Math.round(t);
+    return Math.round(t * (1 - DEDUCTION_PERCENT / 100));
+  }, [totalKgs, useVehicle]);
+
+  // ✅ if untick vehicle, clear fields
+  useEffect(() => {
+    if (!useVehicle) {
+      setVehicleId("");
+      setOtherVehicleNo("");
+    }
+  }, [useVehicle]);
+
   const resetForm = () => {
     setFarmerName("");
     setVillage("");
     setDate(todayYMD());
+
+    setUseVehicle(false);
     setVehicleId("");
     setOtherVehicleNo("");
+
     setItems([
       { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
     ]);
+
+    refetchBillNo();
   };
-
-  const getVarietyName = (code: string) => {
-    const v = varieties.find((x: any) => x.code === code);
-    return v?.name || "-";
-  };
-
-  const displayBillNo = isLoadingBillNo
-    ? "Loading..."
-    : isErrorBillNo
-    ? "Failed to load"
-    : billNoData?.billNo ?? "";
-
-  const isOtherVehicle = vehicleId === "__OTHER__";
-
-  const availableVehicles = useMemo(() => {
-    return (vehicles ?? []).filter((v: any) => {
-      if (!v?.id) return false;
-      if (v.id === vehicleId) return true;
-      return !usedVehicleIds.has(v.id);
-    });
-  }, [vehicles, usedVehicleIds, vehicleId]);
 
   // ---- items CRUD ----
   const addRow = () => {
@@ -158,9 +216,8 @@ export default function FormerLoading() {
           return { ...r, varietyCode: String(value ?? "") };
         }
 
-        const n = safeNum(value);
-        // ✅ no negative numbers
-        return { ...r, [field]: Math.max(0, n) } as ItemRow;
+        const n = Math.max(0, safeNum(value));
+        return { ...r, [field]: n } as ItemRow;
       })
     );
   };
@@ -172,55 +229,39 @@ export default function FormerLoading() {
       return false;
     }
 
-    if (!FarmerName.trim()) {
-      toast.error("Enter Farmer Name");
+    const name = farmerName.trim();
+    if (!name) return toast.error("Enter Farmer Name"), false;
+    if (!NAME_REGEX.test(name)) {
+      toast.error("Farmer Name should contain only letters and spaces");
       return false;
     }
 
-    if (!date) {
-      toast.error("Select Date");
-      return false;
+    if (!date) return toast.error("Select Date"), false;
+
+    // ✅ Vehicle validation ONLY if checkbox checked
+    if (useVehicle) {
+      if (isOtherVehicle && !otherVehicleNo.trim()) {
+        toast.error("Enter Vehicle Number");
+        return false;
+      }
+      if (!isOtherVehicle && !vehicleId.trim()) {
+        toast.error("Select Vehicle");
+        return false;
+      }
     }
 
-    if (!vehicleId) {
-      toast.error("Select Vehicle");
-      return false;
-    }
-
-    if (isOtherVehicle && !otherVehicleNo.trim()) {
-      toast.error("Enter Vehicle Number");
-      return false;
-    }
-
-    // rows with any qty entered
     const activeRows = items.filter(
       (i) => safeNum(i.noTrays) > 0 || safeNum(i.loose) > 0
     );
-
     if (activeRows.length === 0) {
       toast.error("Enter at least one item");
       return false;
     }
 
-    // validate each active row
     for (let idx = 0; idx < activeRows.length; idx++) {
       const row = activeRows[idx];
-
       if (!row.varietyCode?.trim()) {
         toast.error(`Select variety for row #${idx + 1}`);
-        return false;
-      }
-
-      const trays = safeNum(row.noTrays);
-      const loose = safeNum(row.loose);
-
-      if (trays < 0 || loose < 0) {
-        toast.error(`Negative values are not allowed (row #${idx + 1})`);
-        return false;
-      }
-
-      if (!Number.isFinite(trays) || !Number.isFinite(loose)) {
-        toast.error(`Invalid number in row #${idx + 1}`);
         return false;
       }
     }
@@ -230,38 +271,47 @@ export default function FormerLoading() {
 
   const handleSave = async () => {
     if (!validateForm()) return;
+
     setLoading(true);
 
     const activeRows = items.filter(
       (i) => safeNum(i.noTrays) > 0 || safeNum(i.loose) > 0
     );
 
-    const fishCodeValue = activeRows[0].varietyCode.toUpperCase();
+    const fishCodeValue = String(
+      activeRows[0]?.varietyCode || ""
+    ).toUpperCase();
+    if (!fishCodeValue) {
+      toast.error("Select at least one variety");
+      setLoading(false);
+      return;
+    }
 
     try {
       await axios.post("/api/former-loading", {
-        billNo: billNoData.billNo,
+        billNo: billNoData!.billNo,
         fishCode: fishCodeValue,
-        FarmerName: FarmerName.trim(),
+        FarmerName: farmerName.trim(),
         village: village.trim(),
         date,
-        vehicleId: isOtherVehicle ? null : vehicleId,
-        vehicleNo: isOtherVehicle ? otherVehicleNo.trim() : null,
+
+        // ✅ send flag like client
+        useVehicle,
+
+        vehicleId: useVehicle && !isOtherVehicle ? vehicleId : null,
+        vehicleNo: useVehicle && isOtherVehicle ? otherVehicleNo.trim() : null,
+
         items: activeRows.map((i) => ({
           varietyCode: i.varietyCode,
           noTrays: safeNum(i.noTrays),
-          trayKgs: safeNum(i.noTrays) * TRAY_WEIGHT,
           loose: safeNum(i.loose),
-          totalKgs: safeNum(i.noTrays) * TRAY_WEIGHT + safeNum(i.loose),
-          pricePerKg: 0,
-          totalPrice: 0,
         })),
       });
 
-      toast.success("Former loading saved successfully!");
+      toast.success("Farmer loading saved successfully!");
 
-      // ✅ mark vehicle used immediately (no refresh)
-      if (!isOtherVehicle && vehicleId) {
+      // ✅ hide vehicle instantly (only for selected vehicleId)
+      if (useVehicle && !isOtherVehicle && vehicleId) {
         setUsedVehicleIds((prev) => {
           const next = new Set(prev);
           next.add(vehicleId);
@@ -270,33 +320,18 @@ export default function FormerLoading() {
       }
 
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ["next-bill-no"] });
-      // optional: keep this if your backend changes vehicle assignment
+      queryClient.invalidateQueries({ queryKey: ["former-next-bill-no"] });
       queryClient.invalidateQueries({ queryKey: ["assigned-vehicles"] });
-      setLoading(false);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save");
+      // Optional: show prisma meta if returned
+      if (err?.response?.data?.prisma?.meta) {
+        console.log("PRISMA META:", err.response.data.prisma.meta);
+      }
     } finally {
       setLoading(false);
     }
   };
-  // allow letters + space + dot + apostrophe + hyphen
-  const NAME_REGEX = /^[A-Za-z][A-Za-z .'-]*$/;
-
-  // allow letters + space only (you can add dot/hyphen if needed)
-  const VILLAGE_REGEX = /^[A-Za-z][A-Za-z ]*$/;
-
-  const cleanName = (value: string) =>
-    value
-      .replace(/[^A-Za-z .'-]/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trimStart();
-
-  const cleanVillage = (value: string) =>
-    value
-      .replace(/[^A-Za-z ]/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trimStart();
 
   return (
     <Card className="p-4 sm:p-6 rounded-2xl space-y-6 border border-[#139BC3]/15 bg-white shadow-[0_18px_45px_-30px_rgba(19,155,195,0.35)]">
@@ -330,11 +365,12 @@ export default function FormerLoading() {
             className="bg-slate-50 font-semibold"
           />
         </Field>
+
         <Field>
           <FieldLabel>Farmer Name *</FieldLabel>
           <Input
             type="text"
-            value={FarmerName}
+            value={farmerName}
             onChange={(e) => setFarmerName(cleanName(e.target.value))}
             placeholder="Enter farmer name"
             inputMode="text"
@@ -342,13 +378,11 @@ export default function FormerLoading() {
         </Field>
 
         <Field>
-          <FieldLabel>Village</FieldLabel>
-          <Input
-            type="text"
+          <FieldLabel>Address</FieldLabel>
+          <Textarea
             value={village}
-            onChange={(e) => setVillage(cleanVillage(e.target.value))}
-            placeholder="Enter village"
-            inputMode="text"
+            onChange={(e) => setVillage(e.target.value)}
+            placeholder="Enter full address"
           />
         </Field>
 
@@ -361,31 +395,48 @@ export default function FormerLoading() {
           />
         </Field>
 
+        {/* ✅ vehicle toggle */}
         <Field className="sm:col-span-2 md:col-span-1">
-          <FieldLabel>Select Vehicle *</FieldLabel>
-          <Select
-            value={vehicleId}
-            onValueChange={(v) => {
-              setVehicleId(v);
-              if (v !== "__OTHER__") setOtherVehicleNo("");
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select Vehicle" />
-            </SelectTrigger>
-
-            <SelectContent>
-              {availableVehicles.map((v: any) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
-                </SelectItem>
-              ))}
-              <SelectItem value="__OTHER__">Other</SelectItem>
-            </SelectContent>
-          </Select>
+          <FieldLabel>Vehicle</FieldLabel>
+          <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[#139BC3]"
+              checked={useVehicle}
+              onChange={(e) => setUseVehicle(e.target.checked)}
+            />
+            Add Vehicle? (If checked: No 5% deduction)
+          </label>
         </Field>
 
-        {isOtherVehicle && (
+        {/* ✅ Vehicle fields only when checkbox checked */}
+        {useVehicle && (
+          <Field className="sm:col-span-2 md:col-span-1">
+            <FieldLabel>Select Vehicle</FieldLabel>
+            <Select
+              value={vehicleId}
+              onValueChange={(v) => {
+                setVehicleId(v);
+                if (v !== OTHER_VEHICLE_VALUE) setOtherVehicleNo("");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Vehicle" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {availableVehicles.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
+                  </SelectItem>
+                ))}
+                <SelectItem value={OTHER_VEHICLE_VALUE}>Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
+        {useVehicle && isOtherVehicle && (
           <Field>
             <FieldLabel>Other Vehicle Number *</FieldLabel>
             <Input
@@ -429,7 +480,7 @@ export default function FormerLoading() {
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    {varieties.map((v: any) => (
+                    {varieties.map((v) => (
                       <SelectItem key={v.code} value={v.code}>
                         {v.code}
                       </SelectItem>
@@ -492,7 +543,6 @@ export default function FormerLoading() {
             <tr>
               <th className="px-4 py-3 text-left">S.No</th>
               <th className="px-4 py-3 text-left">Variety *</th>
-              <th className="px-4 py-3 text-left">Name</th>
               <th className="px-4 py-3 text-left">Trays</th>
               <th className="px-4 py-3 text-left">Loose</th>
               <th className="px-4 py-3 text-left">Total Kgs</th>
@@ -514,17 +564,13 @@ export default function FormerLoading() {
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
                     <SelectContent>
-                      {varieties.map((v: any) => (
+                      {varieties.map((v) => (
                         <SelectItem key={v.code} value={v.code}>
                           {v.code}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </td>
-
-                <td className="px-4 py-3">
-                  {getVarietyName(item.varietyCode)}
                 </td>
 
                 <td className="px-4 py-3">
@@ -581,14 +627,25 @@ export default function FormerLoading() {
         </Button>
 
         <div className="text-right">
-          <p className="text-sm text-slate-500">Total Weight</p>
-          <p className="text-2xl font-bold">
-            {(totalKgs * 0.95).toFixed(2)}{" "}
-            <span className="text-lg text-slate-500">Kgs</span>
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            * 5% deduction applied on final payment in Vendor Bills
-          </p>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-slate-500">Total Trays:</span>
+              <span className="text-2xl font-bold">
+                {totalTrays.toFixed(1)}
+                <span className="text-lg text-slate-500 ml-1">Trays</span>
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-slate-500">
+                Net Weight {useVehicle ? "(No deduction)" : "(5% deduction)"}:
+              </span>
+              <span className="text-2xl font-bold">
+                {netKgs}
+                <span className="text-lg text-slate-500 ml-1">Kgs</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </Card>

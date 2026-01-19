@@ -1,3 +1,4 @@
+// app\(dashboard)\loadings\components\AgentLoading.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -17,6 +18,7 @@ import {
 import { PlusCircle, Save, Trash2 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { fi } from "date-fns/locale";
+import { Textarea } from "@/components/ui/textarea";
 
 const TRAY_WEIGHT = 35;
 const DEDUCTION_PERCENT = 5;
@@ -39,11 +41,7 @@ const cleanAgentName = (v: string) =>
     .replace(/\s{2,}/g, " ")
     .trimStart();
 
-const cleanVillage = (v: string) =>
-  v
-    .replace(/[^A-Za-z ]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimStart();
+const cleanVillage = (v: string) => v.trimStart();
 
 const safeNum = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(v);
@@ -71,6 +69,7 @@ export default function AgentLoading() {
   const [vehicleId, setVehicleId] = useState("");
   const [otherVehicleNo, setOtherVehicleNo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [useVehicle, setUseVehicle] = useState(false);
 
   const isOtherVehicle = vehicleId === "__OTHER__";
 
@@ -131,6 +130,12 @@ export default function AgentLoading() {
   useEffect(() => {
     if (billError) toast.error("Failed to load bill number");
   }, [billError]);
+  useEffect(() => {
+    if (!useVehicle) {
+      setVehicleId("");
+      setOtherVehicleNo("");
+    }
+  }, [useVehicle]);
 
   // ✅ Vehicles filtered (hide used instantly; keep selected visible)
   const availableVehicles = useMemo(() => {
@@ -204,10 +209,19 @@ export default function AgentLoading() {
     [items]
   );
 
+  const totalTrays = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        sum = sum + safeNum(item.noTrays);
+        return sum;
+      }, 0),
+    [items]
+  );
+
   const grandTotal = useMemo(() => {
-    const after = totalKgs * (1 - DEDUCTION_PERCENT / 100);
-    return Math.round(after);
-  }, [totalKgs]);
+    if (useVehicle) return Math.round(totalKgs);
+    return Math.round(totalKgs * (1 - DEDUCTION_PERCENT / 100));
+  }, [totalKgs, useVehicle]);
 
   const resetForm = () => {
     setAgentName("");
@@ -245,17 +259,17 @@ export default function AgentLoading() {
         toast.error("Agent Name should contain only letters and spaces"), false
       );
 
-    const vil = village.trim();
-    if (vil && !VILLAGE_REGEX.test(vil))
-      return (
-        toast.error("Village should contain only letters and spaces"), false
-      );
+    // const vil = village.trim();
+    // if (vil && !VILLAGE_REGEX.test(vil))
+    //   return (
+    //     toast.error("Village should contain only letters and spaces"), false
+    //   );
 
     if (!date.trim()) return toast.error("Select Date"), false;
 
-    if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
-    if (isOtherVehicle && !otherVehicleNo.trim())
-      return toast.error("Enter Vehicle Number"), false;
+    // if (!vehicleId.trim()) return toast.error("Select Vehicle"), false;
+    // if (isOtherVehicle && !otherVehicleNo.trim())
+    //   return toast.error("Enter Vehicle Number"), false;
 
     // active rows = any qty
     const activeRows = items.filter(
@@ -311,18 +325,15 @@ export default function AgentLoading() {
         village: village.trim(),
         date,
 
-        vehicleId: isOtherVehicle ? null : vehicleId,
-        vehicleNo: isOtherVehicle ? otherVehicleNo.trim() : null,
+        useVehicle,
 
-        ...totals,
-        grandTotal,
+        vehicleId: useVehicle && !isOtherVehicle ? vehicleId : null,
+        vehicleNo: useVehicle && isOtherVehicle ? otherVehicleNo.trim() : null,
 
         items: activeRows.map((r) => ({
           varietyCode: r.varietyCode,
           noTrays: safeNum(r.noTrays),
-          trayKgs: safeNum(r.noTrays) * TRAY_WEIGHT,
           loose: safeNum(r.loose),
-          totalKgs: safeNum(r.totalKgs),
         })),
       });
 
@@ -395,11 +406,11 @@ export default function AgentLoading() {
           </Field>
 
           <Field>
-            <FieldLabel>Village</FieldLabel>
-            <Input
+            <FieldLabel>Address</FieldLabel>
+            <Textarea
               value={village}
               onChange={(e) => setVillage(cleanVillage(e.target.value))}
-              placeholder="Enter village"
+              placeholder="Enter full address"
               className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
@@ -413,32 +424,44 @@ export default function AgentLoading() {
               className="border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
             />
           </Field>
-
-          <Field className="sm:col-span-2 md:col-span-1">
-            <FieldLabel>Select Vehicle *</FieldLabel>
-            <Select
-              value={vehicleId}
-              onValueChange={(v) => {
-                setVehicleId(v);
-                if (v !== "__OTHER__") setOtherVehicleNo("");
-              }}
-            >
-              <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
-                <SelectValue placeholder="Select Vehicle" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {availableVehicles.map((v: any) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.vehicleNumber} – {v.assignedDriver?.name || "No Driver"}
-                  </SelectItem>
-                ))}
-                <SelectItem value="__OTHER__">Other</SelectItem>
-              </SelectContent>
-            </Select>
+          <Field>
+            <FieldLabel>Vehicle</FieldLabel>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useVehicle}
+                onChange={(e) => setUseVehicle(e.target.checked)}
+              />
+              Add vehicle (no 5% deduction)
+            </label>
           </Field>
+          {useVehicle && (
+            <Field className="sm:col-span-2 md:col-span-1">
+              <FieldLabel>Select Vehicle</FieldLabel>
+              <Select
+                value={vehicleId}
+                onValueChange={(v) => {
+                  setVehicleId(v);
+                  if (v !== "__OTHER__") setOtherVehicleNo("");
+                }}
+              >
+                <SelectTrigger className="border-slate-200 focus:ring-2 focus:ring-[#139BC3]/30">
+                  <SelectValue placeholder="Select Vehicle" />
+                </SelectTrigger>
 
-          {isOtherVehicle && (
+                <SelectContent>
+                  {availableVehicles.map((v: any) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.vehicleNumber} –{" "}
+                      {v.assignedDriver?.name || "No Driver"}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__OTHER__">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+          {useVehicle && isOtherVehicle && (
             <Field className="sm:col-span-2 md:col-span-1">
               <FieldLabel>Other Vehicle Number *</FieldLabel>
               <Input
@@ -573,9 +596,9 @@ export default function AgentLoading() {
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Variety *
                 </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-700">
+                {/* <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Name
-                </th>
+                </th> */}
                 <th className="px-3 py-3 text-left font-semibold text-slate-700">
                   Trays
                 </th>
@@ -619,9 +642,9 @@ export default function AgentLoading() {
                     </Select>
                   </td>
 
-                  <td className="px-3 py-3 text-slate-700">
+                  {/* <td className="px-3 py-3 text-slate-700">
                     {row.name || "—"}
-                  </td>
+                  </td> */}
 
                   <td className="px-3 py-3">
                     <Input
@@ -684,14 +707,25 @@ export default function AgentLoading() {
         </div>
 
         {/* GRAND TOTAL */}
-        <div className="flex justify-end">
-          <div className="text-right">
-            <p className="text-sm text-slate-500">
-              Grand Total (after 5% deduction)
-            </p>
-            <p className="text-2xl font-bold text-slate-900">
-              {grandTotal} <span className="text-slate-500">Kgs</span>
-            </p>
+        <div className="text-right">
+          <div className="space-y-1">
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">Total Trays:</span>
+              <span className="text-2xl font-bold">
+                {totalTrays.toFixed(1)}
+                <span className="text-lg text-slate-500 ml-1">Trays</span>
+              </span>
+            </div>
+
+            <div className="flex justify-end items-center gap-4">
+              <span className="text-slate-500">
+                Grand Total (after 5% deduction):
+              </span>
+              <span className="text-2xl font-bold">
+                {grandTotal}
+                <span className="text-lg text-slate-500 ml-1">Kgs</span>
+              </span>
+            </div>
           </div>
         </div>
       </CardContent>

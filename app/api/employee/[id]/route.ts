@@ -6,6 +6,9 @@ import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import { uploadEmployeeFile } from "@/lib/helper";
+import { withAuth } from "@/lib/withAuth";
+import { logAudit } from "@/lib/auditLogger";
+import { diffObjects } from "@/lib/auditDiff";
 
 export const GET = apiHandler(async (req: Request, context: any) => {
   const { id } = await context.params;
@@ -28,192 +31,243 @@ export const GET = apiHandler(async (req: Request, context: any) => {
   );
 });
 
-export const PATCH = apiHandler(async (req: Request, context: any) => {
-  const { id } = await context.params;
-  if (!id) throw new ApiError(400, "Employee ID is required");
+export const PATCH = withAuth(
+  apiHandler(async (req: Request, context: any) => {
+    const { id } = await context.params;
+    if (!id) throw new ApiError(400, "Employee ID is required");
 
-  const formData = await req.formData();
+    const formData = await req.formData();
 
-  const employee = await prisma.employee.findUnique({ where: { id } });
-  if (!employee) throw new ApiError(404, "Employee not found");
+    const employee = await prisma.employee.findUnique({ where: { id } });
+    if (!employee) throw new ApiError(404, "Employee not found");
 
-  /* ---------- Helpers ---------- */
+    /* ---------- Helpers ---------- */
 
-  const optionalString = (key: string) =>
-    (formData.get(key) as string | null) ?? undefined;
+    const optionalString = (key: string) =>
+      (formData.get(key) as string | null) ?? undefined;
 
-  const optionalNumber = (key: string) => {
-    const val = formData.get(key);
-    return val !== null ? Number(val) : undefined;
-  };
+    const optionalNumber = (key: string) => {
+      const val = formData.get(key);
+      return val !== null ? Number(val) : undefined;
+    };
 
-  const parseDate = (key: string) => {
-    const val = formData.get(key);
-    return val ? new Date(val as string) : undefined;
-  };
+    const parseDate = (key: string) => {
+      const val = formData.get(key);
+      return val ? new Date(val as string) : undefined;
+    };
 
-  /* ---------- Files ---------- */
+    /* ---------- Files ---------- */
 
-  const passportPhoto = formData.get("passportPhoto") as File | null;
-  const aadhaarImage = formData.get("aadhaarImage") as File | null;
-  const panImage = formData.get("panImage") as File | null;
+    const passportPhoto = formData.get("passportPhoto") as File | null;
+    const aadhaarImage = formData.get("aadhaarImage") as File | null;
+    const panImage = formData.get("panImage") as File | null;
 
-  let photoPath = employee.photo;
-  let aadhaarPath = employee.aadhaarProof;
-  let panPath = employee.panProof;
+    let photoPath = employee.photo;
+    let aadhaarPath = employee.aadhaarProof;
+    let panPath = employee.panProof;
 
-  try {
-    if (passportPhoto?.size) {
-      if (photoPath)
-        await fs
-          .unlink(path.join(process.cwd(), "uploads", photoPath))
-          .catch(() => {});
+    try {
+      if (passportPhoto?.size) {
+        if (photoPath)
+          await fs
+            .unlink(path.join(process.cwd(), "uploads", photoPath))
+            .catch(() => {});
 
-      photoPath = await uploadEmployeeFile(passportPhoto, "employees/photos");
-    }
+        photoPath = await uploadEmployeeFile(passportPhoto, "employees/photos");
+      }
 
-    if (aadhaarImage?.size) {
-      if (aadhaarPath)
-        await fs
-          .unlink(path.join(process.cwd(), "uploads", aadhaarPath))
-          .catch(() => {});
+      if (aadhaarImage?.size) {
+        if (aadhaarPath)
+          await fs
+            .unlink(path.join(process.cwd(), "uploads", aadhaarPath))
+            .catch(() => {});
 
-      aadhaarPath = await uploadEmployeeFile(aadhaarImage, "employees/aadhaar");
-    }
+        aadhaarPath = await uploadEmployeeFile(
+          aadhaarImage,
+          "employees/aadhaar"
+        );
+      }
 
-    if (panImage?.size) {
-      if (panPath)
-        await fs
-          .unlink(path.join(process.cwd(), "uploads", panPath))
-          .catch(() => {});
+      if (panImage?.size) {
+        if (panPath)
+          await fs
+            .unlink(path.join(process.cwd(), "uploads", panPath))
+            .catch(() => {});
 
-      panPath = await uploadEmployeeFile(panImage, "employees/pan");
-    }
+        panPath = await uploadEmployeeFile(panImage, "employees/pan");
+      }
 
-    /* ---------- Unique Field Checks ---------- */
+      /* ---------- Unique Field Checks ---------- */
 
-    const uniqueFields: any[] = [];
+      const uniqueFields: any[] = [];
 
-    const aadhaar = optionalString("aadhaar");
-    const pan = optionalString("pan");
-    const mobile = optionalString("mobile");
-    const email = optionalString("email");
-    const accountNumber = optionalString("accountNumber");
+      const aadhaar = optionalString("aadhaar");
+      const pan = optionalString("pan");
+      const mobile = optionalString("mobile");
+      const email = optionalString("email");
+      const accountNumber = optionalString("accountNumber");
 
-    if (aadhaar && aadhaar !== employee.aadhaar) uniqueFields.push({ aadhaar });
-    if (pan && pan !== employee.pan) uniqueFields.push({ pan });
-    if (mobile && mobile !== employee.mobile) uniqueFields.push({ mobile });
-    if (email && email !== employee.email) uniqueFields.push({ email });
-    if (accountNumber && accountNumber !== employee.accountNumber)
-      uniqueFields.push({ accountNumber });
+      if (aadhaar && aadhaar !== employee.aadhaar)
+        uniqueFields.push({ aadhaar });
+      if (pan && pan !== employee.pan) uniqueFields.push({ pan });
+      if (mobile && mobile !== employee.mobile) uniqueFields.push({ mobile });
+      if (email && email !== employee.email) uniqueFields.push({ email });
+      if (accountNumber && accountNumber !== employee.accountNumber)
+        uniqueFields.push({ accountNumber });
 
-    if (uniqueFields.length) {
-      const conflict = await prisma.employee.findFirst({
-        where: { id: { not: id }, OR: uniqueFields },
+      if (uniqueFields.length) {
+        const conflict = await prisma.employee.findFirst({
+          where: { id: { not: id }, OR: uniqueFields },
+        });
+        if (conflict)
+          throw new ApiError(400, "Duplicate unique field detected");
+      }
+
+      /* ---------- Update ---------- */
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const before = await prisma.employee.findUnique({ where: { id } });
+        if (!before) throw new ApiError(404, "Employee not found");
+
+        const updatedEmployee = await tx.employee.update({
+          where: { id },
+          data: {
+            doj: parseDate("doj"),
+            department: optionalString("department"),
+            designation: optionalString("designation"),
+
+            basicSalary: optionalNumber("basicSalary"),
+            hra: optionalNumber("hra"),
+            conveyanceAllowance: optionalNumber("conveyanceAllowance"),
+            specialAllowance: optionalNumber("specialAllowance"),
+            grossSalary: optionalNumber("grossSalary"),
+            ctc: optionalNumber("ctc"),
+
+            workLocation: optionalString("workLocation"),
+            shiftType: optionalString("shiftType"),
+
+            fullName: optionalString("fullName"),
+            fatherName: optionalString("fatherName"),
+            dob: parseDate("dob"),
+            gender: optionalString("gender") as any,
+
+            aadhaar,
+            pan,
+            mobile,
+            altMobile: optionalString("altMobile"),
+            email,
+
+            maritalStatus: optionalString("maritalStatus") as any,
+            nationality: optionalString("nationality"),
+
+            currentAddress: optionalString("currentAddress"),
+            permanentAddress: optionalString("permanentAddress"),
+
+            bankName: optionalString("bankName"),
+            branchName: optionalString("branchName"),
+            accountNumber,
+            ifsc: optionalString("ifsc"),
+
+            photo: photoPath,
+            aadhaarProof: aadhaarPath,
+            panProof: panPath,
+          },
+        });
+
+        const { oldValues, newValues } = diffObjects(before, updatedEmployee);
+        if (Object.keys(newValues).length) {
+          await logAudit({
+            user: (req as any).user,
+            action: "UPDATE",
+            module: "Employee",
+            recordId: updatedEmployee.id,
+            request: req,
+            oldValues,
+            newValues,
+          });
+        }
+
+        return updatedEmployee;
       });
-      if (conflict) throw new ApiError(400, "Duplicate unique field detected");
+
+      return NextResponse.json(
+        new ApiResponse(200, updated, "Employee updated successfully"),
+        { status: 200 }
+      );
+    } catch (err) {
+      /* rollback newly uploaded files */
+      const uploaded = [
+        passportPhoto && photoPath !== employee.photo && photoPath,
+        aadhaarImage && aadhaarPath !== employee.aadhaarProof && aadhaarPath,
+        panImage && panPath !== employee.panProof && panPath,
+      ];
+
+      for (const file of uploaded) {
+        if (file)
+          await fs
+            .unlink(path.join(process.cwd(), "uploads", file))
+            .catch(() => {});
+      }
+
+      throw err;
     }
+  })
+);
 
-    /* ---------- Update ---------- */
+export const DELETE = withAuth(
+  apiHandler(async (req: Request, context: any) => {
+    const { id } = await context.params;
+    if (!id) throw new ApiError(400, "Employee ID is required");
 
-    const updated = await prisma.employee.update({
+    const employee = await prisma.employee.findUnique({
       where: { id },
-      data: {
-        doj: parseDate("doj"),
-        department: optionalString("department"),
-        designation: optionalString("designation"),
-
-        basicSalary: optionalNumber("basicSalary"),
-        hra: optionalNumber("hra"),
-        conveyanceAllowance: optionalNumber("conveyanceAllowance"),
-        specialAllowance: optionalNumber("specialAllowance"),
-        grossSalary: optionalNumber("grossSalary"),
-        ctc: optionalNumber("ctc"),
-
-        workLocation: optionalString("workLocation"),
-        shiftType: optionalString("shiftType"),
-
-        fullName: optionalString("fullName"),
-        fatherName: optionalString("fatherName"),
-        dob: parseDate("dob"),
-        gender: optionalString("gender") as any,
-
-        aadhaar,
-        pan,
-        mobile,
-        altMobile: optionalString("altMobile"),
-        email,
-
-        maritalStatus: optionalString("maritalStatus") as any,
-        nationality: optionalString("nationality"),
-
-        currentAddress: optionalString("currentAddress"),
-        permanentAddress: optionalString("permanentAddress"),
-
-        bankName: optionalString("bankName"),
-        branchName: optionalString("branchName"),
-        accountNumber,
-        ifsc: optionalString("ifsc"),
-
-        photo: photoPath,
-        aadhaarProof: aadhaarPath,
-        panProof: panPath,
-      },
     });
 
-    return NextResponse.json(
-      new ApiResponse(200, updated, "Employee updated successfully"),
-      { status: 200 }
-    );
-  } catch (err) {
-    /* rollback newly uploaded files */
-    const uploaded = [
-      passportPhoto && photoPath !== employee.photo && photoPath,
-      aadhaarImage && aadhaarPath !== employee.aadhaarProof && aadhaarPath,
-      panImage && panPath !== employee.panProof && panPath,
-    ];
+    if (!employee) {
+      throw new ApiError(404, "Employee not found");
+    }
+    /* ---------- Delete Employee ---------- */
+    await prisma.$transaction(async (tx) => {
+      const deletedEmployee = await tx.employee.delete({
+        where: { id },
+      });
+      await logAudit({
+        user: (req as any).user,
+        action: "DELETE",
+        module: "Employee",
+        recordId: deletedEmployee.id,
+        request: req,
+        oldValues: {
+          employeeId: deletedEmployee.employeeId,
+          fullName: deletedEmployee.fullName,
+          department: deletedEmployee.department,
+          designation: deletedEmployee.designation,
+          doj: deletedEmployee.doj,
+          mobile: deletedEmployee.mobile,
+          email: deletedEmployee.email,
+          workLocation: deletedEmployee.workLocation,
+          shiftType: deletedEmployee.shiftType,
+          grossSalary: deletedEmployee.grossSalary,
+          ctc: deletedEmployee.ctc,
+        },
+        newValues: null,
+      });
+    });
 
-    for (const file of uploaded) {
-      if (file)
+    /* ---------- Cleanup Files ---------- */
+    const files = [employee.photo, employee.aadhaarProof, employee.panProof];
+
+    for (const file of files) {
+      if (file) {
         await fs
           .unlink(path.join(process.cwd(), "uploads", file))
           .catch(() => {});
+      }
     }
 
-    throw err;
-  }
-});
-
-export const DELETE = apiHandler(async (_req: Request, context: any) => {
-  const { id } = await context.params;
-  if (!id) throw new ApiError(400, "Employee ID is required");
-
-  const employee = await prisma.employee.findUnique({
-    where: { id },
-  });
-
-  if (!employee) {
-    throw new ApiError(404, "Employee not found");
-  }
-
-  /* ---------- Delete Employee ---------- */
-  await prisma.employee.delete({
-    where: { id },
-  });
-
-  /* ---------- Cleanup Files ---------- */
-  const files = [employee.photo, employee.aadhaarProof, employee.panProof];
-
-  for (const file of files) {
-    if (file) {
-      await fs
-        .unlink(path.join(process.cwd(), "uploads", file))
-        .catch(() => {});
-    }
-  }
-
-  return NextResponse.json(
-    new ApiResponse(200, null, "Employee deleted successfully"),
-    { status: 200 }
-  );
-});
+    return NextResponse.json(
+      new ApiResponse(200, null, "Employee deleted successfully"),
+      { status: 200 }
+    );
+  })
+);

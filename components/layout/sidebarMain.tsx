@@ -15,6 +15,8 @@ import {
   Warehouse,
   Users,
   User2,
+  IdCard,
+  Logs,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -39,14 +41,15 @@ const menuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/loadings", label: "Loadings", icon: Truck },
   { href: "/stocks", label: "Stock", icon: Warehouse },
-  { href: "/vendor-bills", label: "Vendor Bills", icon: FileText },
-  { href: "/client-bills", label: "Client Bills", icon: Receipt },
+  { href: "/vendor-bills", label: "Farmer Bills", icon: FileText },
+  { href: "/client-bills", label: "Party Bills", icon: Receipt },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/receipts", label: "Receipts", icon: Receipt },
   { href: "/vehicles", label: "Vehicles", icon: Car },
-  // { href: "/salaries", label: "Salaries", icon: Wallet },
+  { href: "/client", label: "Clients", icon: IdCard },
   { href: "/employee", label: "Employee", icon: User2 },
   { href: "/teams-members", label: "Team Members", icon: Users },
+  { href: "/audit-logs", label: "Audit Logs", icon: Logs },
 ];
 
 export default function AppSidebar() {
