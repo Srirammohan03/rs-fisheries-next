@@ -1,13 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
 import ClientLoading from "./components/ClientLoading";
 import AgentLoading from "./components/AgentLoading";
 import FormerLoading from "./components/FormerLoading";
 
+import { usePermissions } from "@/hooks/usePermissions";
+
 export default function LoadingsPage() {
-  const [activeTab, setActiveTab] = useState("fish");
+  const { permissions, role, loading } = usePermissions();
+
+  const canFormer =
+    role === "admin" || permissions.includes("loadings.former.view");
+  const canClient =
+    role === "admin" || permissions.includes("loadings.client.view");
+  const canAgent =
+    role === "admin" || permissions.includes("loadings.agent.view");
+
+  // choose first allowed tab automatically
+  const firstTab = useMemo(() => {
+    if (canFormer) return "fish";
+    if (canClient) return "client";
+    if (canAgent) return "agent";
+    return "";
+  }, [canFormer, canClient, canAgent]);
+
+  const [activeTab, setActiveTab] = useState("");
+
+  useEffect(() => {
+    if (!loading) setActiveTab(firstTab);
+  }, [loading, firstTab]);
+
+  // ⛔ wait until permission loaded
+  if (loading) return null;
+
+  // ⛔ no permission at all
+  if (!canFormer && !canClient && !canAgent) {
+    return (
+      <div className="p-6 text-center text-red-500 font-semibold">
+        No permission to view loadings
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -23,78 +59,53 @@ export default function LoadingsPage() {
         onValueChange={setActiveTab}
         className="space-y-6"
       >
-        {/* ✅ YOUR THEME: #139BC3 (no blue-600) */}
-        <TabsList
-          className="
-        relative inline-flex h-14 w-full max-w-2xl items-center justify-between
-        rounded-full border border-[#139BC3]/25 bg-white/70 p-1
-        shadow-[0_10px_30px_-18px_rgba(19,155,195,0.45)]
-        backdrop-blur supports-[backdrop-filter]:bg-white/55
-      "
-        >
-          {/* soft inner glow */}
-          <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-[#139BC3]/15" />
+        {/* TAB BAR */}
+        <TabsList className="relative inline-flex h-14 w-full max-w-2xl items-center justify-between rounded-full border border-[#139BC3]/25 bg-white/70 p-1 shadow-[0_10px_30px_-18px_rgba(19,155,195,0.45)] backdrop-blur supports-[backdrop-filter]:bg-white/55">
+          {canFormer && (
+            <TabsTrigger
+              value="fish"
+              className="relative h-12 flex-1 rounded-full px-3 sm:px-6 text-sm sm:text-base font-semibold"
+            >
+              Farmer
+            </TabsTrigger>
+          )}
 
-          <TabsTrigger
-            value="fish"
-            className="
-          relative h-12 flex-1 rounded-full px-3 sm:px-6 text-sm sm:text-base font-semibold
-          text-slate-600 transition-all duration-200
-          hover:text-slate-900
-          data-[state=active]:bg-white
-          data-[state=active]:text-[#139BC3]
-          data-[state=active]:shadow-[0_10px_22px_-14px_rgba(19,155,195,0.55)]
-          data-[state=active]:ring-1 data-[state=active]:ring-[#139BC3]/25
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#139BC3]/35
-        "
-          >
-            Farmer
-          </TabsTrigger>
+          {canClient && (
+            <TabsTrigger
+              value="client"
+              className="relative h-12 flex-1 rounded-full px-3 sm:px-6 text-sm sm:text-base font-semibold"
+            >
+              Client
+            </TabsTrigger>
+          )}
 
-          <TabsTrigger
-            value="client"
-            className="
-          relative h-12 flex-1 rounded-full px-3 sm:px-6 text-sm sm:text-base font-semibold
-          text-slate-600 transition-all duration-200
-          hover:text-slate-900
-          data-[state=active]:bg-white
-          data-[state=active]:text-[#139BC3]
-          data-[state=active]:shadow-[0_10px_22px_-14px_rgba(19,155,195,0.55)]
-          data-[state=active]:ring-1 data-[state=active]:ring-[#139BC3]/25
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#139BC3]/35
-        "
-          >
-            Client
-          </TabsTrigger>
-
-          <TabsTrigger
-            value="agent"
-            className="
-          relative h-12 flex-1 rounded-full px-3 sm:px-6 text-sm sm:text-base font-semibold
-          text-slate-600 transition-all duration-200
-          hover:text-slate-900
-          data-[state=active]:bg-white
-          data-[state=active]:text-[#139BC3]
-          data-[state=active]:shadow-[0_10px_22px_-14px_rgba(19,155,195,0.55)]
-          data-[state=active]:ring-1 data-[state=active]:ring-[#139BC3]/25
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#139BC3]/35
-        "
-          >
-            Agent
-          </TabsTrigger>
+          {canAgent && (
+            <TabsTrigger
+              value="agent"
+              className="relative h-12 flex-1 rounded-full px-3 sm:px-6 text-sm sm:text-base font-semibold"
+            >
+              Agent
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="fish" className="mt-2">
-          <FormerLoading />
-        </TabsContent>
+        {canFormer && (
+          <TabsContent value="fish" className="mt-2">
+            <FormerLoading />
+          </TabsContent>
+        )}
 
-        <TabsContent value="client" className="mt-2">
-          <ClientLoading />
-        </TabsContent>
+        {canClient && (
+          <TabsContent value="client" className="mt-2">
+            <ClientLoading />
+          </TabsContent>
+        )}
 
-        <TabsContent value="agent" className="mt-2">
-          <AgentLoading />
-        </TabsContent>
+        {canAgent && (
+          <TabsContent value="agent" className="mt-2">
+            <AgentLoading />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

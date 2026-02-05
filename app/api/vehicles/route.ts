@@ -1,3 +1,4 @@
+// app\api\vehicles\route.ts
 import prisma from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { apiHandler } from "@/utils/apiHandler";

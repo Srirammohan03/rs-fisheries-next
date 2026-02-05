@@ -34,50 +34,82 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useVendorBillsBadge } from "../providers/VendorBillsBadgeProvider";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const BRAND = "#139BC3";
 
 const menuItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/loadings", label: "Loadings", icon: Truck },
-  { href: "/stocks", label: "Stock", icon: Warehouse },
-  { href: "/vendor-bills", label: "Farmer Bills", icon: FileText },
-  { href: "/client-bills", label: "Party Bills", icon: Receipt },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/receipts", label: "Receipts", icon: Receipt },
-  { href: "/vehicles", label: "Vehicles", icon: Car },
-  { href: "/client", label: "Clients", icon: IdCard },
-  { href: "/employee", label: "Employee", icon: User2 },
-  { href: "/teams-members", label: "Team Members", icon: Users },
-  { href: "/audit-logs", label: "Audit Logs", icon: Logs },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    perm: "dashboard",
+  },
+  { href: "/loadings", label: "Loadings", icon: Truck, perm: "loadings.view" },
+  { href: "/stocks", label: "Stock", icon: Warehouse, perm: "stock.view" },
+  {
+    href: "/vendor-bills",
+    label: "Farmer Bills",
+    icon: FileText,
+    perm: "partyBills.view",
+  },
+  {
+    href: "/client-bills",
+    label: "Party Bills",
+    icon: Receipt,
+    perm: "partyBills.view",
+  },
+  {
+    href: "/payments",
+    label: "Payments",
+    icon: CreditCard,
+    perm: "payments.view",
+  },
+  {
+    href: "/receipts",
+    label: "Receipts",
+    icon: Receipt,
+    perm: "receipts.view",
+  },
+  { href: "/vehicles", label: "Vehicles", icon: Car, perm: "vehicles.view" },
+  { href: "/client", label: "Clients", icon: IdCard, perm: "clients.view" },
+  { href: "/employee", label: "Employee", icon: User2, perm: "employees.view" },
+  {
+    href: "/teams-members",
+    label: "Team Members",
+    icon: Users,
+    perm: "teams.view",
+  },
+  { href: "/audit-logs", label: "Audit Logs", icon: Logs, perm: "audit.view" },
+  {
+    href: "/superadmin",
+    label: "Role Management",
+    icon: Wallet,
+    perm: "teams.view",
+  },
 ];
 
 export default function AppSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
-
+  const { permissions, role, loading } = usePermissions();
   const pathname = usePathname();
-  // const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   const { newVendorBillsCount, markVendorBillsAsSeen } = useVendorBillsBadge();
+
+  const collapsed = state === "collapsed";
 
   useEffect(() => {
     if (pathname === "/vendor-bills") markVendorBillsAsSeen();
-  }, [pathname, markVendorBillsAsSeen]);
+  }, [pathname]);
+
   useEffect(() => {
     if (isMobile) setOpenMobile(false);
-  }, [pathname, isMobile, setOpenMobile]);
+  }, [pathname]);
+
+  // ✅ AFTER all hooks
+  if (loading) return null;
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="border-r bg-white"
-      style={
-        {
-          boxShadow: "0 0 0 1px rgba(15, 23, 42, 0.04)",
-        } as React.CSSProperties
-      }
-    >
+    <Sidebar collapsible="icon" className="border-r bg-white">
       {/* HEADER */}
       <SidebarHeader className="border-b bg-white p-4">
         {!collapsed ? (
@@ -121,113 +153,86 @@ export default function AppSidebar() {
 
           <SidebarGroupContent>
             <SidebarMenu className="px-2 space-y-1.5">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
+              {menuItems
+                .filter((item) => {
+                  if (role === "admin") return true;
+                  return permissions.includes(item.perm);
+                })
+                .map((item) => {
+                  const Icon = item.icon;
 
-                // ✅ active if exact OR nested route like /vendor-bills/123
-                const isActive =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
+                  const isActive =
+                    pathname === item.href ||
+                    pathname.startsWith(item.href + "/");
 
-                const showBadge =
-                  item.href === "/vendor-bills" && newVendorBillsCount > 0;
+                  const showBadge =
+                    item.href === "/vendor-bills" && newVendorBillsCount > 0;
 
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.label}
-                      className={[
-                        "relative rounded-xl text-sm transition-all active:scale-[0.99]",
-                        "hover:bg-slate-50",
-                        collapsed
-                          ? "justify-center px-2 py-3" // ✅ more space when collapsed
-                          : "px-3 py-2.5 gap-3", // normal expanded
-                        isActive ? "bg-slate-50 shadow-sm" : "text-slate-700",
-                      ].join(" ")}
-                      style={
-                        isActive
-                          ? ({
-                              border: "1px solid rgba(19,155,195,0.18)",
-                            } as React.CSSProperties)
-                          : undefined
-                      }
-                    >
-                      <Link
-                        href={item.href}
-                        onClick={() => {
-                          if (isMobile) setOpenMobile(false);
-                        }}
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.label}
                         className={[
-                          "flex w-full items-center",
-                          collapsed ? "justify-center" : "gap-3",
+                          "relative rounded-xl text-sm transition-all",
+                          "hover:bg-slate-50",
+                          collapsed
+                            ? "justify-center px-2 py-3"
+                            : "px-3 py-2.5 gap-3",
+                          isActive ? "bg-slate-50 shadow-sm" : "text-slate-700",
                         ].join(" ")}
                       >
-                        {/* ✅ left accent only in expanded */}
-                        {isActive && !collapsed && (
-                          <span
-                            className="absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-full"
-                            style={{ backgroundColor: BRAND }}
+                        <Link
+                          href={item.href}
+                          onClick={() => {
+                            if (isMobile) setOpenMobile(false);
+                          }}
+                          className={[
+                            "flex w-full items-center",
+                            collapsed ? "justify-center" : "gap-3",
+                          ].join(" ")}
+                        >
+                          {isActive && !collapsed && (
+                            <span
+                              className="absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-full"
+                              style={{ backgroundColor: BRAND }}
+                            />
+                          )}
+
+                          <Icon
+                            className={collapsed ? "h-5 w-5" : "h-4 w-4"}
+                            style={{ color: isActive ? BRAND : "#64748B" }}
                           />
-                        )}
 
-                        <Icon
-                          className={collapsed ? "h-5 w-5" : "h-4 w-4"}
-                          style={
-                            isActive
-                              ? ({ color: BRAND } as React.CSSProperties)
-                              : ({ color: "#64748B" } as React.CSSProperties)
-                          }
-                        />
+                          {!collapsed && (
+                            <span
+                              className={[
+                                "truncate",
+                                isActive ? "font-semibold text-slate-900" : "",
+                              ].join(" ")}
+                            >
+                              {item.label}
+                            </span>
+                          )}
 
-                        {/* ✅ hide text on collapse */}
-                        {!collapsed && (
-                          <span
-                            className={[
-                              "truncate",
-                              isActive ? "font-semibold text-slate-900" : "",
-                            ].join(" ")}
-                          >
-                            {item.label}
-                          </span>
-                        )}
-
-                        {/* Badge (expanded) */}
-                        {showBadge && !collapsed && (
-                          <Badge
-                            className="ml-auto rounded-full px-2 py-0.5 text-[11px]"
-                            style={{
-                              backgroundColor: "rgba(239,68,68,0.12)",
-                              color: "#ef4444",
-                              border: "1px solid rgba(239,68,68,0.25)",
-                            }}
-                          >
-                            {newVendorBillsCount > 99
-                              ? "99+"
-                              : newVendorBillsCount}
-                          </Badge>
-                        )}
-
-                        {/* small dot indicator when collapsed */}
-                        {showBadge && collapsed && (
-                          <span
-                            className="absolute right-2 top-2 h-2 w-2 rounded-full"
-                            style={{
-                              backgroundColor: "#ef4444",
-                              boxShadow: "0 0 0 3px rgba(239,68,68,0.15)",
-                            }}
-                          />
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+                          {showBadge && !collapsed && (
+                            <Badge className="ml-auto rounded-full px-2 py-0.5 text-[11px]">
+                              {newVendorBillsCount > 99
+                                ? "99+"
+                                : newVendorBillsCount}
+                            </Badge>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
       {/* FOOTER */}
       <div className="border-t bg-white px-4 py-3">
         <p className="text-center text-xs text-slate-500">
@@ -235,7 +240,6 @@ export default function AppSidebar() {
           <a
             href="https://www.outrightcreators.com/"
             target="_blank"
-            rel="noopener noreferrer"
             className="font-medium text-[#139BC3] hover:underline"
           >
             Outright Creators
