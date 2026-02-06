@@ -1,10 +1,10 @@
-// app/(dashboard)/dashboard/page.tsx
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/jwt";
 import { getDashboardMetrics } from "@/lib/dashboard";
 import DashboardClient from "./components/DashboardClient";
 import { startOfDay, endOfDay, subDays } from "date-fns";
 import { redirect } from "next/navigation";
+import prisma from "@/lib/prisma";
 
 type SP = { from?: string; to?: string; agg?: string };
 
@@ -22,16 +22,36 @@ export default async function Dashboard({
   const cookieStore = await cookies();
   const token = cookieStore.get("session")?.value;
 
-  if (!token) {
-    redirect("/login");
-  }
+  /* 🔐 no login */
+  if (!token) redirect("/login");
+
+  let payload: any;
 
   try {
-    verifyToken(token);
+    payload = verifyToken(token);
   } catch {
     redirect("/login");
   }
 
+  const role = payload.role;
+
+  /* 🔥 ADMIN FULL ACCESS */
+  if (role !== "admin") {
+    const hasPermission = await prisma.rolePermission.findFirst({
+      where: {
+        role,
+        permission: "dashboard.view",
+      },
+      select: { id: true },
+    });
+
+    /* ❌ NO DASHBOARD PERMISSION → STOCKS */
+    if (!hasPermission) {
+      redirect("/stocks");
+    }
+  }
+
+  /* ===== DATE FILTER ===== */
   const sp = await Promise.resolve(searchParams || {});
   const fromQ = parseDateSafe(sp.from);
   const toQ = parseDateSafe(sp.to);

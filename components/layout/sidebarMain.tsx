@@ -38,15 +38,17 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 const BRAND = "#139BC3";
 
-const menuItems = [
+/* ================= MENU ================= */
+const menuItems: any[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
-    perm: "dashboard",
+    perm: "dashboard.view",
   },
   { href: "/loadings", label: "Loadings", icon: Truck, perm: "loadings.view" },
   { href: "/stocks", label: "Stock", icon: Warehouse, perm: "stock.view" },
+
   {
     href: "/vendor-bills",
     label: "Farmer Bills",
@@ -59,6 +61,7 @@ const menuItems = [
     icon: Receipt,
     perm: "partyBills.view",
   },
+
   {
     href: "/payments",
     label: "Payments",
@@ -71,21 +74,26 @@ const menuItems = [
     icon: Receipt,
     perm: "receipts.view",
   },
+
   { href: "/vehicles", label: "Vehicles", icon: Car, perm: "vehicles.view" },
   { href: "/client", label: "Clients", icon: IdCard, perm: "clients.view" },
   { href: "/employee", label: "Employee", icon: User2, perm: "employees.view" },
+
   {
     href: "/teams-members",
     label: "Team Members",
     icon: Users,
     perm: "teams.view",
   },
+
   { href: "/audit-logs", label: "Audit Logs", icon: Logs, perm: "audit.view" },
+
+  /* 🔒 ADMIN ONLY */
   {
     href: "/superadmin",
     label: "Role Management",
     icon: Wallet,
-    perm: "teams.view",
+    adminOnly: true,
   },
 ];
 
@@ -105,8 +113,28 @@ export default function AppSidebar() {
     if (isMobile) setOpenMobile(false);
   }, [pathname]);
 
-  // ✅ AFTER all hooks
   if (loading) return null;
+
+  /* ================= FILTER ================= */
+  const filteredMenu = menuItems.filter((item) => {
+    /* 🔒 admin only pages */
+    if (item.adminOnly) {
+      return role === "admin";
+    }
+
+    /* admin full access */
+    if (role === "admin") return true;
+
+    /* no permission required */
+    if (!item.perm) return true;
+
+    /* permission check */
+    return (
+      permissions.includes("*") ||
+      permissions.includes(item.perm) ||
+      permissions.includes(item.perm.replace(".view", ""))
+    );
+  });
 
   return (
     <Sidebar collapsible="icon" className="border-r bg-white">
@@ -153,81 +181,76 @@ export default function AppSidebar() {
 
           <SidebarGroupContent>
             <SidebarMenu className="px-2 space-y-1.5">
-              {menuItems
-                .filter((item) => {
-                  if (role === "admin") return true;
-                  return permissions.includes(item.perm);
-                })
-                .map((item) => {
-                  const Icon = item.icon;
+              {filteredMenu.map((item) => {
+                const Icon = item.icon;
 
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(item.href + "/");
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
 
-                  const showBadge =
-                    item.href === "/vendor-bills" && newVendorBillsCount > 0;
+                const showBadge =
+                  item.href === "/vendor-bills" && newVendorBillsCount > 0;
 
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={item.label}
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.label}
+                      className={[
+                        "relative rounded-xl text-sm transition-all",
+                        "hover:bg-slate-50",
+                        collapsed
+                          ? "justify-center px-2 py-3"
+                          : "px-3 py-2.5 gap-3",
+                        isActive ? "bg-slate-50 shadow-sm" : "text-slate-700",
+                      ].join(" ")}
+                    >
+                      <Link
+                        href={item.href}
+                        onClick={() => {
+                          if (isMobile) setOpenMobile(false);
+                        }}
                         className={[
-                          "relative rounded-xl text-sm transition-all",
-                          "hover:bg-slate-50",
-                          collapsed
-                            ? "justify-center px-2 py-3"
-                            : "px-3 py-2.5 gap-3",
-                          isActive ? "bg-slate-50 shadow-sm" : "text-slate-700",
+                          "flex w-full items-center",
+                          collapsed ? "justify-center" : "gap-3",
                         ].join(" ")}
                       >
-                        <Link
-                          href={item.href}
-                          onClick={() => {
-                            if (isMobile) setOpenMobile(false);
-                          }}
-                          className={[
-                            "flex w-full items-center",
-                            collapsed ? "justify-center" : "gap-3",
-                          ].join(" ")}
-                        >
-                          {isActive && !collapsed && (
-                            <span
-                              className="absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-full"
-                              style={{ backgroundColor: BRAND }}
-                            />
-                          )}
-
-                          <Icon
-                            className={collapsed ? "h-5 w-5" : "h-4 w-4"}
-                            style={{ color: isActive ? BRAND : "#64748B" }}
+                        {isActive && !collapsed && (
+                          <span
+                            className="absolute left-0 top-1/2 -translate-y-1/2 h-7 w-1 rounded-full"
+                            style={{ backgroundColor: BRAND }}
                           />
+                        )}
 
-                          {!collapsed && (
-                            <span
-                              className={[
-                                "truncate",
-                                isActive ? "font-semibold text-slate-900" : "",
-                              ].join(" ")}
-                            >
-                              {item.label}
-                            </span>
-                          )}
+                        <Icon
+                          className={collapsed ? "h-5 w-5" : "h-4 w-4"}
+                          style={{ color: isActive ? BRAND : "#64748B" }}
+                        />
 
-                          {showBadge && !collapsed && (
-                            <Badge className="ml-auto rounded-full px-2 py-0.5 text-[11px]">
-                              {newVendorBillsCount > 99
-                                ? "99+"
-                                : newVendorBillsCount}
-                            </Badge>
-                          )}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
+                        {!collapsed && (
+                          <span
+                            className={[
+                              "truncate",
+                              isActive ? "font-semibold text-slate-900" : "",
+                            ].join(" ")}
+                          >
+                            {item.label}
+                          </span>
+                        )}
+
+                        {showBadge && !collapsed && (
+                          <Badge className="ml-auto rounded-full px-2 py-0.5 text-[11px]">
+                            {newVendorBillsCount > 99
+                              ? "99+"
+                              : newVendorBillsCount}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

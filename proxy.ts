@@ -1,20 +1,37 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
-import prisma from "@/lib/prisma";
-import { ROUTE_PERMISSIONS } from "@/lib/routePermissions";
 
-const PUBLIC_PATHS = ["/login"];
+/* ---------------- PUBLIC PAGES ---------------- */
+const PUBLIC_PAGES = ["/login"];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+/* ---------------- PUBLIC APIs ---------------- */
+const PUBLIC_APIS = [
+  "/api/login",
+  "/api/logout",
+  "/api/me",
+];
+
+/* ---------------- HELPERS ---------------- */
+function isPublicPage(pathname: string) {
+  return PUBLIC_PAGES.some((p) => pathname.startsWith(p));
 }
 
-export async function proxy(req: NextRequest) {
+function isPublicApi(pathname: string) {
+  return PUBLIC_APIS.some((p) => pathname.startsWith(p));
+}
+
+/* ================= MAIN ================= */
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("session")?.value;
 
-  /* ---------------- ROOT REDIRECT ---------------- */
+  /* ===== NEVER BLOCK API ===== */
+  if (isPublicApi(pathname)) {
+    return NextResponse.next();
+  }
+
+  /* ===== ROOT ===== */
   if (pathname === "/") {
     if (!token) return NextResponse.redirect(new URL("/login", req.url));
 
@@ -26,8 +43,8 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  /* ---------------- PUBLIC ROUTES ---------------- */
-  if (isPublicPath(pathname)) {
+  /* ===== LOGIN PAGE ===== */
+  if (isPublicPage(pathname)) {
     if (!token) return NextResponse.next();
 
     try {
@@ -38,53 +55,19 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  /* ---------------- NO TOKEN ---------------- */
+  /* ===== PROTECTED ROUTES ===== */
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  /* ---------------- VERIFY TOKEN ---------------- */
-  let payload: any;
   try {
-    payload = jwt.verify(token, process.env.JWT_SECRET!);
+    jwt.verify(token, process.env.JWT_SECRET!);
+    return NextResponse.next();
   } catch {
     return NextResponse.redirect(new URL("/login", req.url));
   }
-
-  const role: string = payload.role;
-
-  /* ---------------- ADMIN BYPASS ---------------- */
-  if (role === "admin") {
-    return NextResponse.next();
-  }
-
-  /* ---------------- FIND REQUIRED PERMISSION ---------------- */
-  const matched = Object.entries(ROUTE_PERMISSIONS).find(([route]) =>
-    pathname.startsWith(route)
-  );
-
-  if (!matched) {
-    return NextResponse.next(); // no permission required
-  }
-
-  const requiredPermission = matched[1];
-
-  /* ---------------- CHECK DB PERMISSION ---------------- */
-  const has = await prisma.rolePermission.findFirst({
-    where: {
-      role,
-      permission: requiredPermission,
-    },
-    select: { id: true },
-  });
-
-  if (!has) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|assets).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|assets).*)"],
 };

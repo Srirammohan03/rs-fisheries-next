@@ -9,7 +9,7 @@ export const GET = withAuth(async () => {
         orderBy: { role: "asc" },
     });
 
-    return NextResponse.json({ roles });
+    return NextResponse.json({ roles });    
 });
 
 

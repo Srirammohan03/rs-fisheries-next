@@ -10,9 +10,9 @@ export function hasPermission(role: string | undefined, permission: string) {
 
     // fallback basic permissions (until DB loads)
     const basic: Record<string, string[]> = {
-        finance: ["dashboard", "partyBills.view", "payments.view", "receipts.view", "stock.view"],
-        sales: ["dashboard", "loadings.view", "stock.view", "partyBills.view"],
-        clerk: ["dashboard", "loadings.view"],
+        finance: ["dashboard.view", "partyBills.view", "payments.view", "receipts.view", "stock.view"],
+        sales: ["dashboard.view", "loadings.view", "stock.view", "partyBills.view"],
+        clerk: ["dashboard.view", "loadings.view"],
     };
 
     const perms = basic[role] || [];

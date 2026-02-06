@@ -1,4 +1,3 @@
-// components/RoleGuard.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -12,25 +11,33 @@ export default function RoleGuard({
   permission: string;
   children: React.ReactNode;
 }) {
-  const { permissions, role, loading } = usePermissions();
   const router = useRouter();
+  const { permissions, role, loading } = usePermissions();
 
   useEffect(() => {
     if (loading) return;
 
-    // admin always allowed
+    // admin full access
     if (role === "admin") return;
 
-    // no permission
-    if (!permissions.includes(permission)) {
-      router.replace("/dashboard");
+    // if no permission → go stocks
+    if (
+      !permissions.includes("*") &&
+      !permissions.includes(permission) &&
+      !permissions.includes(permission.replace(".view", ""))
+    ) {
+      router.replace("/stocks");
     }
   }, [permissions, role, loading, permission, router]);
 
-  // wait until permission loads
   if (loading) return null;
 
-  if (role !== "admin" && !permissions.includes(permission)) {
+  if (
+    role !== "admin" &&
+    !permissions.includes("*") &&
+    !permissions.includes(permission) &&
+    !permissions.includes(permission.replace(".view", ""))
+  ) {
     return null;
   }
 

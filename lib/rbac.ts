@@ -14,7 +14,7 @@ export type Role =
 
 export type Permission =
     | "*"
-    | "dashboard"
+    | "dashboard.view"
     | "loadings.view"
     | "loadings.client.view"
     | "loadings.client.edit"

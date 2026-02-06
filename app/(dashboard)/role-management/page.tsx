@@ -1,9 +1,10 @@
-//app\(dashboard)\role-management\page.tsx
-
+// app/(dashboard)/role-management/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import RoleGuard from "@/components/RoleGuard";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,9 +17,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Users, Shield } from "lucide-react";
 
-// ---------------- TYPES ----------------
+/* ---------------- TYPES ---------------- */
 type Role =
-  // | "admin"
   | "finance"
   | "clerk"
   | "documentation"
@@ -41,7 +41,6 @@ interface UserRow {
 }
 
 const roles: Role[] = [
-  // "admin",
   "finance",
   "clerk",
   "documentation",
@@ -54,7 +53,17 @@ const roles: Role[] = [
   "others",
 ];
 
-export default function RoleManagementPage() {
+/* ---------------- WRAPPER (PROTECT PAGE) ---------------- */
+export default function RoleManagementWrapper() {
+  return (
+    <RoleGuard permission="teams.view">
+      <RoleManagementPage />
+    </RoleGuard>
+  );
+}
+
+/* ---------------- MAIN PAGE ---------------- */
+function RoleManagementPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -66,9 +75,9 @@ export default function RoleManagementPage() {
   async function fetchUsers() {
     try {
       const res = await axios.get("/api/admin/users");
-      setUsers(res.data.users);
+      setUsers(res.data.users || []);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch users failed", err);
     } finally {
       setLoading(false);
     }
@@ -77,15 +86,17 @@ export default function RoleManagementPage() {
   async function updateRole(userId: string, role: Role) {
     try {
       setSavingId(userId);
+
       await axios.put("/api/admin/users", { userId, role });
 
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role } : u)),
       );
 
-      // 🔥 LIVE REFRESH TRIGGER
+      // 🔥 refresh sidebar + permissions live
       window.dispatchEvent(new Event("role-updated"));
     } catch (err) {
+      console.error(err);
       alert("Failed to update role");
     } finally {
       setSavingId(null);
@@ -96,11 +107,13 @@ export default function RoleManagementPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* HEADER */}
       <div className="flex items-center gap-3">
         <Shield className="w-7 h-7 text-[#139BC3]" />
         <h1 className="text-3xl font-bold">Role Management</h1>
       </div>
 
+      {/* USERS */}
       <Card className="rounded-2xl shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -115,6 +128,7 @@ export default function RoleManagementPage() {
               key={user.id}
               className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border rounded-2xl p-4"
             >
+              {/* USER INFO */}
               <div>
                 <p className="font-semibold text-slate-900">
                   {user.employee?.fullName || "Unknown"}
@@ -131,6 +145,7 @@ export default function RoleManagementPage() {
                 </div>
               </div>
 
+              {/* ROLE SELECT */}
               <div className="flex items-center gap-3">
                 <Select
                   defaultValue={user.role}
@@ -139,6 +154,7 @@ export default function RoleManagementPage() {
                   <SelectTrigger className="w-[180px] rounded-xl">
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
+
                   <SelectContent>
                     {roles.map((r) => (
                       <SelectItem key={r} value={r}>

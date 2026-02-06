@@ -1,6 +1,6 @@
 // lib\routePermissions.ts
 export const ROUTE_PERMISSIONS: Record<string, string> = {
-    "/dashboard": "dashboard",
+    "/dashboard": "dashboard.view",
 
     "/loadings": "loadings.view",
 

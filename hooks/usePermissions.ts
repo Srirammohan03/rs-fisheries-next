@@ -1,3 +1,4 @@
+// hooks\usePermissions.ts
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,7 +13,7 @@ export function usePermissions() {
             const res = await fetch("/api/me", { cache: "no-store" });
             const data = await res.json();
 
-            const userRole = data?.user?.role || "";
+            const userRole = (data?.user?.role || "").toLowerCase().trim();
             setRole(userRole);
 
             // admin gets all access
@@ -31,7 +32,7 @@ export function usePermissions() {
 
             const rolePerms =
                 permData?.roles
-                    ?.filter((p: any) => p.role === userRole)
+                    ?.filter((p: any) => p.role.toLowerCase().trim() === userRole)
                     ?.map((p: any) => p.permission) || [];
 
             setPermissions(rolePerms);

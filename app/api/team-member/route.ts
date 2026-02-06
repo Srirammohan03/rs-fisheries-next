@@ -1,6 +1,7 @@
 // app\api\team-member\route.ts
 import { logAudit } from "@/lib/auditLogger";
 import prisma from "@/lib/prisma";
+import { mapDesignationToRole } from "@/lib/roleMapper";
 import { withAuth } from "@/lib/withAuth";
 import { ApiError } from "@/utils/ApiError";
 import { apiHandler } from "@/utils/apiHandler";
@@ -26,13 +27,26 @@ export const POST = withAuth(
     const hasedPassowrd = await bcrypt.hash(password, 10);
 
     const user = await prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.findUnique({
+        where: { id: employeeId },
+        select: { designation: true },
+      });
+
+      console.log("EMPLOYEE DESIGNATION =", employee?.designation);
+
+      const role = mapDesignationToRole(employee?.designation);
+
       const createdUser = await tx.user.create({
         data: {
           employeeId,
           password: hasedPassowrd,
           email,
+          role: role,
         },
       });
+
+
+
 
       await logAudit({
         user: (req as any).user,
