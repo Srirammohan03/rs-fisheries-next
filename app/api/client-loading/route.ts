@@ -211,7 +211,7 @@ export const POST = withAuth(
     }
 
   },
-  "loadings.client.edit"
+  "loadings.client.view"
 )
 
 type Stage = "PACKING_PENDING" | "DISPATCH_PENDING" | "PAYMENT_PENDING" | "ALL";
