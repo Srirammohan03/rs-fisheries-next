@@ -2,20 +2,38 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 
-const PUBLIC_PATHS = ["/login"];
+/* ---------------- PUBLIC PAGES ---------------- */
+const PUBLIC_PAGES = ["/login"];
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+/* ---------------- PUBLIC APIs ---------------- */
+const PUBLIC_APIS = [
+  "/api/login",
+  "/api/logout",
+  "/api/me",
+];
+
+/* ---------------- HELPERS ---------------- */
+function isPublicPage(pathname: string) {
+  return PUBLIC_PAGES.some((p) => pathname.startsWith(p));
 }
 
+function isPublicApi(pathname: string) {
+  return PUBLIC_APIS.some((p) => pathname.startsWith(p));
+}
+
+/* ================= MAIN ================= */
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("session")?.value;
 
+  /* ===== NEVER BLOCK API ===== */
+  if (isPublicApi(pathname)) {
+    return NextResponse.next();
+  }
+
+  /* ===== ROOT ===== */
   if (pathname === "/") {
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", req.url));
-    }
+    if (!token) return NextResponse.redirect(new URL("/login", req.url));
 
     try {
       jwt.verify(token, process.env.JWT_SECRET!);
@@ -25,19 +43,19 @@ export function proxy(req: NextRequest) {
     }
   }
 
-  if (isPublicPath(pathname)) {
-    if (token) {
-      try {
-        jwt.verify(token, process.env.JWT_SECRET!);
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      } catch {
-        return NextResponse.next();
-      }
-    }
+  /* ===== LOGIN PAGE ===== */
+  if (isPublicPage(pathname)) {
+    if (!token) return NextResponse.next();
 
-    return NextResponse.next();
+    try {
+      jwt.verify(token, process.env.JWT_SECRET!);
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    } catch {
+      return NextResponse.next();
+    }
   }
 
+  /* ===== PROTECTED ROUTES ===== */
   if (!token) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
@@ -51,5 +69,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|assets).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|assets).*)"],
 };

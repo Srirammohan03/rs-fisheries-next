@@ -31,18 +31,21 @@ export async function POST(req: Request) {
     const token = createToken({
       userId: user.id,
       employeeId: user.employeeId,
-      role: mapDesignationToRole(user.employee.designation),
+      role: user.role,
       email: user.email,
     });
+
 
     const res = NextResponse.json({ message: "Login successful" });
 
     res.cookies.set("session", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24,
+      secure: false,        // 🔥 MUST be false for localhost
+      sameSite: "lax",
       path: "/",
+      maxAge: 60 * 60 * 24,
     });
+
 
     return res;
   } catch (err) {

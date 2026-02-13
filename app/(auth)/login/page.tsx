@@ -1,3 +1,4 @@
+// app\(auth)\login\page.tsx
 "use client";
 
 import { useState } from "react";
@@ -33,15 +34,25 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await axios.post("/api/login", { email, password });
+      const res = await axios.post(
+        "/api/login",
+        { email, password },
+        {
+          withCredentials: true, // 🔥 important for cookies
+        },
+      );
 
       if (res.data?.message === "Login successful") {
-        router.replace("/dashboard");
+        // 🔥 wait small time so cookie is saved
+        setTimeout(() => {
+          window.location.href = "/stocks";
+        }, 300);
       } else {
         setError("Invalid email or password");
       }
-    } catch {
-      setError("Invalid email or password");
+    } catch (err: any) {
+      console.error("LOGIN ERROR:", err);
+      setError("Login failed. Check server.");
     } finally {
       setLoading(false);
     }

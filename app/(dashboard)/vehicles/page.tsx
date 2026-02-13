@@ -1,7 +1,7 @@
-// app/(dashboard)/vehicles/page.tsx
 "use client";
 
 import { useState } from "react";
+import RoleGuard from "@/components/RoleGuard";
 
 import { DriverDialog } from "@/components/helpers/AddDriverDialog";
 import { DriverTable } from "@/components/helpers/DriverTable";
@@ -14,7 +14,7 @@ import { DriverRow } from "@/components/helpers/DriverTable";
 
 type TabKey = "OWN" | "RENT" | "ACTIVE" | "DRIVERS";
 
-export default function Vehicles() {
+function VehiclesPage() {
   const [driverDialogOpen, setDriverDialogOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<DriverRow | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("OWN");
@@ -32,7 +32,6 @@ export default function Vehicles() {
           </p>
         </div>
 
-        {/* ✅ show Add Vehicle only for OWN/RENT */}
         {(activeTab === "OWN" || activeTab === "RENT") && (
           <div className="flex flex-wrap items-center gap-3">
             <div className="[&>button]:bg-[#139BC3] [&>button]:text-white [&>button]:hover:bg-[#1088AA] [&>button]:shadow-sm [&>button]:focus-visible:ring-2 [&>button]:focus-visible:ring-[#139BC3]/40">
@@ -63,7 +62,6 @@ export default function Vehicles() {
               Rent Vehicles
             </TabsTrigger>
 
-            {/* ✅ NEW TAB */}
             <TabsTrigger
               value="ACTIVE"
               className="rounded-2xl px-5 py-4 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-[#139BC3] data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -92,7 +90,6 @@ export default function Vehicles() {
           </div>
         </TabsContent>
 
-        {/* ✅ Active Trips */}
         <TabsContent value="ACTIVE" className="mt-6">
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 md:p-6">
             <ActiveTripsTable />
@@ -120,5 +117,13 @@ export default function Vehicles() {
         driver={editingDriver}
       />
     </div>
+  );
+}
+
+export default function Vehicles() {
+  return (
+    <RoleGuard permission="vehicles.view">
+      <VehiclesPage />
+    </RoleGuard>
   );
 }

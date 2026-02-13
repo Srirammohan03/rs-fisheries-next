@@ -1,3 +1,4 @@
+// app\(dashboard)\loadings\components\ClientLoading.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -111,7 +112,7 @@ export default function ClientLoadingForm() {
 
   // ✅ hide used vehicles without reload
   const [usedVehicleIds, setUsedVehicleIds] = useState<Set<string>>(
-    () => new Set()
+    () => new Set(),
   );
 
   const [items, setItems] = useState<ItemRow[]>([
@@ -263,7 +264,7 @@ export default function ClientLoadingForm() {
         sum = sum + safeNum(item.noTrays);
         return sum;
       }, 0),
-    [items]
+    [items],
   );
 
   const getVarietyName = (code: string) =>
@@ -301,7 +302,7 @@ export default function ClientLoadingForm() {
         }
 
         return { ...row, [field]: value } as ItemRow;
-      })
+      }),
     );
   };
 
@@ -369,7 +370,7 @@ export default function ClientLoadingForm() {
 
   const deleteRow = (id: string) => {
     setItems((prev) =>
-      prev.length === 1 ? prev : prev.filter((r) => r.id !== id)
+      prev.length === 1 ? prev : prev.filter((r) => r.id !== id),
     );
   };
 
@@ -451,7 +452,7 @@ export default function ClientLoadingForm() {
     }
 
     const activeRows = items.filter(
-      (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0
+      (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0,
     );
     if (activeRows.length === 0) {
       toast.error("Enter at least one item");
@@ -487,7 +488,7 @@ export default function ClientLoadingForm() {
     }
 
     const activeRows = items.filter(
-      (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0
+      (r) => safeNum(r.noTrays) > 0 || safeNum(r.loose) > 0,
     );
 
     const payload = {

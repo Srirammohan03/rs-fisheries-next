@@ -1,3 +1,4 @@
+// app\api\employee\route.ts
 import { generateEmpId, uploadEmployeeFile } from "@/lib/helper";
 import prisma from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
@@ -205,7 +206,7 @@ export const POST = withAuth(
         if (file) {
           await fs
             .unlink(path.join(process.cwd(), "uploads", file))
-            .catch(() => {});
+            .catch(() => { });
         }
       }
       throw err;
@@ -272,13 +273,13 @@ export const GET = apiHandler(async (req: Request) => {
     where.doj = {
       ...(fromDateParam
         ? {
-            gte: new Date(`${fromDateParam}T00:00:00.000Z`),
-          }
+          gte: new Date(`${fromDateParam}T00:00:00.000Z`),
+        }
         : {}),
       ...(toDateParam
         ? {
-            lte: new Date(`${toDateParam}T00:00:00.000Z`),
-          }
+          lte: new Date(`${toDateParam}T00:00:00.000Z`),
+        }
         : {}),
     };
   }

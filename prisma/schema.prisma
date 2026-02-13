@@ -20,6 +20,23 @@ enum Role {
   others
 }
 
+model RolePermission {
+  id         String @id @default(cuid())
+  role       String
+  permission String
+
+  @@unique([role, permission])
+}
+
+model UserPermissionOverride {
+  id         String  @id @default(cuid())
+  userId     String
+  permission String
+  allow      Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model User {
   id       String @id @default(cuid())
   password String
@@ -29,11 +46,12 @@ model User {
   employeeId String   @unique
   employee   Employee @relation(fields: [employeeId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  packingAmounts  PackingAmount[]
-  dispatchCharges DispatchCharge[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  role                Role                     @default(others)
+  permissionOverrides UserPermissionOverride[]
+  packingAmounts      PackingAmount[]
+  dispatchCharges     DispatchCharge[]
 }
 
 model FishVariety {
