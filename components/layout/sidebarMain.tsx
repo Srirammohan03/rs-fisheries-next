@@ -90,7 +90,7 @@ const menuItems: any[] = [
 
   /* 🔒 ADMIN ONLY */
   {
-    href: "/role-management",
+    href: "/superadmin",
     label: "Role Management",
     icon: Wallet,
     adminOnly: true,
