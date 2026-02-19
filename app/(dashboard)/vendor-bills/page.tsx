@@ -141,7 +141,7 @@ export default function VendorBillsPage() {
 
   // Expand/collapse bills
   const [expandedBills, setExpandedBills] = useState<Record<string, boolean>>(
-    {}
+    {},
   );
 
   // Filters
@@ -156,7 +156,7 @@ export default function VendorBillsPage() {
 
   const [deleteItemOpen, setDeleteItemOpen] = useState(false);
   const [deleteItemTarget, setDeleteItemTarget] = useState<VendorItem | null>(
-    null
+    null,
   );
   const [deletingItem, setDeletingItem] = useState(false);
 
@@ -249,7 +249,7 @@ export default function VendorBillsPage() {
 
     localStorage.setItem(
       "vendorBillsLastSeen",
-      JSON.stringify({ ...lastSeen, [tab]: count })
+      JSON.stringify({ ...lastSeen, [tab]: count }),
     );
 
     if (tab === "farmer") setNewFarmerCount(0);
@@ -344,7 +344,7 @@ export default function VendorBillsPage() {
 
   // ✅ Correct row recalculation using perTrayKgs
   const recalcRow = (
-    row: Pick<EditingRow, "noTrays" | "loose" | "pricePerKg" | "perTrayKgs">
+    row: Pick<EditingRow, "noTrays" | "loose" | "pricePerKg" | "perTrayKgs">,
   ) => {
     const noTrays = n(row.noTrays);
     const loose = n(row.loose);
@@ -377,7 +377,7 @@ export default function VendorBillsPage() {
 
         const varietyCount = items.length;
         const uniqueVarietyCount = new Set(
-          items.map((it) => (it.varietyCode || "").trim().toUpperCase())
+          items.map((it) => (it.varietyCode || "").trim().toUpperCase()),
         ).size;
 
         return {
@@ -404,7 +404,7 @@ export default function VendorBillsPage() {
         const billMatch = b.billNo.toLowerCase().includes(term);
         const nameMatch = b.name.toLowerCase().includes(term);
         const varietyMatch = b.items.some((it) =>
-          (it.varietyCode || "").toLowerCase().includes(term)
+          (it.varietyCode || "").toLowerCase().includes(term),
         );
         return billMatch || nameMatch || varietyMatch;
       });
@@ -426,7 +426,7 @@ export default function VendorBillsPage() {
 
   useEffect(
     () => setPage(1),
-    [activeTab, searchTerm, sortOrder, fromDate, toDate]
+    [activeTab, searchTerm, sortOrder, fromDate, toDate],
   );
 
   const totalPages = useMemo(() => {
@@ -513,7 +513,7 @@ export default function VendorBillsPage() {
     (
       itemId: string,
       field: "noTrays" | "loose" | "pricePerKg",
-      value: string
+      value: string,
     ) => {
       setEditing((prev) => {
         const current = prev[itemId];
@@ -531,7 +531,7 @@ export default function VendorBillsPage() {
         };
       });
     },
-    []
+    [],
   );
 
   // ✅ Save: send trayKgs as TOTAL tray kgs (perTrayKgs * noTrays)
@@ -558,9 +558,9 @@ export default function VendorBillsPage() {
         prev.map((rec) => ({
           ...rec,
           items: (rec.items || []).map((it) =>
-            it.id === item.id ? { ...it, ...payload } : it
+            it.id === item.id ? { ...it, ...payload } : it,
           ),
-        }))
+        })),
       );
 
       await refreshRecords();
@@ -596,7 +596,7 @@ export default function VendorBillsPage() {
       setDeletingItem(true);
 
       const res = await axios.delete(
-        `/api/vendor-bills/item/${deleteItemTarget.id}`
+        `/api/vendor-bills/item/${deleteItemTarget.id}`,
       );
 
       await refreshRecords();
@@ -614,7 +614,142 @@ export default function VendorBillsPage() {
       setDeletingItem(false);
     }
   };
+  const handlePrint = (billId: string) => {
+    const printContent = document.getElementById(`print-bill-${billId}`);
+    if (!printContent) {
+      toast.error("Print content not found");
+      return;
+    }
 
+    const printWindow = window.open("", "_blank", "width=900,height=1200");
+    if (!printWindow) {
+      toast.error("Popup blocked. Please allow popups for this site.");
+      return;
+    }
+
+    printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Bill ${billId}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 15mm 12mm;
+          }
+          body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111;
+            font-size: 13px;
+          }
+          .container {
+            width: 100%;
+            max-width: 210mm;
+            margin: 0 auto;
+            background: white;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+          }
+          .logo {
+            width: 140px;
+          }
+          .logo img {
+            width: 100%;
+            height: auto;
+          }
+          .center {
+            flex: 1;
+            text-align: center;
+            padding: 0 20px;
+          }
+          .center h1 {
+            font-size: 20px;
+            font-weight: bold;
+            color: #139BC3;
+            margin: 0 0 4px;
+          }
+          .center p {
+            font-size: 12px;
+            line-height: 1.4;
+            margin: 0;
+          }
+          .address {
+            width: 180px;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: right;
+          }
+          hr {
+            border: none;
+            border-top: 1.5px solid #000;
+            margin: 12px 0;
+          }
+          .title {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 12px 0;
+          }
+          .meta {
+            font-size: 13px;
+            margin-bottom: 16px;
+          }
+          .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+          }
+          .meta-info {
+            margin-bottom: 8px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 20px;
+          }
+          th, td {
+            border: 1.5px solid #000;
+            padding: 8px;
+          }
+          th {
+            background: #f3f4f6;
+            font-weight: bold;
+            text-align: left;
+          }
+          td {
+            text-align: right;
+          }
+          td:first-child {
+            text-align: left;
+          }
+          tfoot td {
+            background: #f9fafb;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        ${printContent.innerHTML}
+      </body>
+    </html>
+  `);
+
+    printWindow.document.close();
+    printWindow.focus();
+
+    // Give it a moment to render, then print
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
   const exportData = (type: "farmer" | "agent") => {
     const data = records
       .filter((r) => r.source === type)
@@ -632,7 +767,7 @@ export default function VendorBillsPage() {
           "Total Kgs": n(it.totalKgs),
           "Price/Kg": n(it.pricePerKg),
           "Total Price": n(it.totalPrice),
-        }))
+        })),
       );
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -640,11 +775,11 @@ export default function VendorBillsPage() {
     XLSX.utils.book_append_sheet(
       wb,
       ws,
-      type === "farmer" ? "Farmers" : "Agents"
+      type === "farmer" ? "Farmers" : "Agents",
     );
     XLSX.writeFile(
       wb,
-      `${type}-bills-${new Date().toISOString().slice(0, 10)}.xlsx`
+      `${type}-bills-${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 
@@ -864,14 +999,31 @@ export default function VendorBillsPage() {
                             </td>
 
                             <td className="p-4 text-center">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => toggleBill(bill.id)}
-                                className="bg-[#139BC3] text-white"
-                              >
-                                {open ? "Hide" : "View"}
-                              </Button>
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => toggleBill(bill.id)}
+                                  className="bg-[#139BC3] text-white hover:bg-[#0f8ca8]"
+                                >
+                                  {open ? "Hide" : "View"}
+                                </Button>
+
+                                {/* ── NEW ── Print button ── only show when bill has prices filled ── */}
+                                {bill.totalPrice > 0 &&
+                                  bill.items.every(
+                                    (it) => (it.pricePerKg ?? 0) > 0,
+                                  ) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handlePrint(bill.id)}
+                                      className="border-green-600 text-green-700 hover:bg-green-50"
+                                    >
+                                      Print
+                                    </Button>
+                                  )}
+                              </div>
                             </td>
                           </tr>
 
@@ -959,7 +1111,7 @@ export default function VendorBillsPage() {
                                                       onChangeEditField(
                                                         it.id,
                                                         "noTrays",
-                                                        e.target.value
+                                                        e.target.value,
                                                       )
                                                     }
                                                     className="w-24 text-right"
@@ -982,7 +1134,7 @@ export default function VendorBillsPage() {
                                                       onChangeEditField(
                                                         it.id,
                                                         "loose",
-                                                        e.target.value
+                                                        e.target.value,
                                                       )
                                                     }
                                                     className="w-28 text-right"
@@ -1005,7 +1157,7 @@ export default function VendorBillsPage() {
                                                       onChangeEditField(
                                                         it.id,
                                                         "pricePerKg",
-                                                        e.target.value
+                                                        e.target.value,
                                                       )
                                                     }
                                                     className="w-24 text-right"
@@ -1016,7 +1168,7 @@ export default function VendorBillsPage() {
                                                 ) : (
                                                   <span>
                                                     {n(it.pricePerKg).toFixed(
-                                                      2
+                                                      2,
                                                     )}
                                                   </span>
                                                 )}
@@ -1104,35 +1256,37 @@ export default function VendorBillsPage() {
               </div>
 
               {/* Mobile (Bills as cards) */}
-              <div className="mt-6 grid grid-cols-1 gap-3 md:hidden">
+              <div className="mt-6 grid grid-cols-1 gap-4 md:hidden">
                 {paginatedBills.map((bill) => {
                   const open = !!expandedBills[bill.id];
 
                   return (
                     <div
                       key={bill.id}
-                      className="rounded-2xl border bg-white p-4 shadow-sm"
+                      className="rounded-2xl border bg-white p-5 shadow-sm space-y-4"
                     >
+                      {/* HEADER */}
                       <button
                         type="button"
                         onClick={() => toggleBill(bill.id)}
-                        className="w-full flex items-start justify-between gap-3"
+                        className="w-full flex items-start justify-between gap-4"
                       >
-                        <div className="text-left">
-                          <div className="text-sm font-semibold text-gray-900">
+                        <div className="text-left space-y-1">
+                          <div className="text-base font-semibold text-gray-900">
                             {bill.billNo}
                           </div>
-                          <div className="text-xs text-gray-600">
+                          <div className="text-sm text-gray-600">
                             {bill.name}
                           </div>
-                          {bill.date ? (
-                            <div className="text-[11px] text-gray-500 mt-1">
+
+                          {bill.date && (
+                            <div className="text-xs text-gray-500">
                               {bill.date}
                             </div>
-                          ) : null}
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <div className="text-right">
                             <div className="text-xs text-gray-500">
                               Varieties
@@ -1141,6 +1295,7 @@ export default function VendorBillsPage() {
                               {bill.varietyCount}
                             </div>
                           </div>
+
                           {open ? (
                             <ChevronDown className="w-5 h-5 text-gray-700 mt-1" />
                           ) : (
@@ -1149,20 +1304,37 @@ export default function VendorBillsPage() {
                         </div>
                       </button>
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="text-xs text-gray-500">Total</div>
-                        <div className="font-bold text-green-600">
-                          {n(bill.totalPrice).toFixed(2)}
+                      {/* TOTAL + PRINT */}
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <div>
+                          <div className="text-xs text-gray-500">Total</div>
+                          <div className="text-lg font-bold text-green-600">
+                            {n(bill.totalPrice).toFixed(2)}
+                          </div>
                         </div>
+
+                        {bill.totalPrice > 0 &&
+                          bill.items.every(
+                            (it) => (it.pricePerKg ?? 0) > 0,
+                          ) && (
+                            <Button
+                              size="sm"
+                              onClick={() => handlePrint(bill.id)}
+                              className="h-9 px-4 border-green-600 text-green-700 bg-green-50 hover:bg-green-100"
+                            >
+                              Print
+                            </Button>
+                          )}
                       </div>
 
+                      {/* EXPANDED */}
                       {open && (
-                        <div className="mt-4 space-y-3">
-                          <div className="rounded-xl border bg-gray-50 p-3 text-xs text-gray-700">
-                            {bill.vehicleNo ? (
+                        <div className="space-y-4 pt-3 border-t">
+                          <div className="rounded-xl border bg-gray-50 p-3 text-sm text-gray-700">
+                            {bill.vehicleNo && (
                               <>Vehicle: {bill.vehicleNo} • </>
-                            ) : null}
-                            {bill.village ? <>Village: {bill.village}</> : null}
+                            )}
+                            {bill.village && <>Village: {bill.village}</>}
                           </div>
 
                           <div className="space-y-3">
@@ -1174,9 +1346,10 @@ export default function VendorBillsPage() {
                               return (
                                 <div
                                   key={it.id}
-                                  className="rounded-xl border bg-white p-3"
+                                  className="rounded-xl border bg-white p-4 space-y-3"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
+                                  {/* TITLE */}
+                                  <div className="flex items-start justify-between">
                                     <div>
                                       <div className="text-sm font-semibold">
                                         {it.varietyCode || "-"}
@@ -1200,6 +1373,7 @@ export default function VendorBillsPage() {
                                         >
                                           <Edit className="w-4 h-4" />
                                         </Button>
+
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -1225,6 +1399,7 @@ export default function VendorBillsPage() {
                                             <Check className="w-4 h-4" />
                                           )}
                                         </Button>
+
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -1236,9 +1411,10 @@ export default function VendorBillsPage() {
                                     )}
                                   </div>
 
-                                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                  {/* FIELDS */}
+                                  <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-gray-500 mb-1">
                                         Trays
                                       </div>
                                       {isEditing ? (
@@ -1248,10 +1424,10 @@ export default function VendorBillsPage() {
                                             onChangeEditField(
                                               it.id,
                                               "noTrays",
-                                              e.target.value
+                                              e.target.value,
                                             )
                                           }
-                                          className="h-9"
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                         />
@@ -1263,7 +1439,7 @@ export default function VendorBillsPage() {
                                     </div>
 
                                     <div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-gray-500 mb-1">
                                         Loose (Kgs)
                                       </div>
                                       {isEditing ? (
@@ -1273,10 +1449,10 @@ export default function VendorBillsPage() {
                                             onChangeEditField(
                                               it.id,
                                               "loose",
-                                              e.target.value
+                                              e.target.value,
                                             )
                                           }
-                                          className="h-9"
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                           step="0.1"
@@ -1289,7 +1465,7 @@ export default function VendorBillsPage() {
                                     </div>
 
                                     <div className="col-span-2">
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-gray-500 mb-1">
                                         Price/Kg
                                       </div>
                                       {isEditing ? (
@@ -1299,10 +1475,10 @@ export default function VendorBillsPage() {
                                             onChangeEditField(
                                               it.id,
                                               "pricePerKg",
-                                              e.target.value
+                                              e.target.value,
                                             )
                                           }
-                                          className="h-9"
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                           step="0.01"
@@ -1373,7 +1549,7 @@ export default function VendorBillsPage() {
                         >
                           {p}
                         </Button>
-                      )
+                      ),
                     )}
 
                     <Button
@@ -1554,6 +1730,118 @@ export default function VendorBillsPage() {
         description={`Delete this item? If this is the last item, the bill will be deleted automatically.`}
         confirmText="Delete Item"
       />
+      {/* ── Hidden printable content ── with better spacing ── */}
+      <div className="hidden">
+        {bills.map((bill) => (
+          <div
+            key={bill.id}
+            id={`print-bill-${bill.id}`}
+            className="print-container"
+          >
+            {/* Header with more breathing space */}
+            <div className="header">
+              {/* Logo with top/bottom margin */}
+              <div className="logo">
+                <img
+                  src="/assets/favicon.png" // or "/assets/favicon.png" – confirm path
+                  alt="RS Fisheries Logo"
+                  className="logo-img"
+                />
+              </div>
+
+              {/* Center company details */}
+              <div className="center">
+                <h1>RS FISHERIES PVT LTD</h1>
+                <p className="contact">
+                  Hyderabad, Telangana - 500081
+                  <br />
+                  Phone: +919494288997, +919440011704
+                  <br />
+                  Email: n.vamsikiran4@gmail.com
+                  <br />
+                  {/* GSTIN: 36AAAAA0000A1Z5 */}
+                </p>
+              </div>
+
+              {/* Right address
+              3rd floor, Above Varun Bajaj showroom, ViP Hills , 100 feet Road
+Madhapur, Hyderabad 500081
+              */}
+              <div className="address">
+                <strong>Office Address:</strong>
+                <br />
+                3rd floor, Above Varun Bajaj showroom, ViP Hills , 100 feet Road
+                Madhapur, Hyderabad 500081 India
+              </div>
+            </div>
+
+            <hr className="separator" />
+
+            <div className="title">Billing</div>
+
+            <div className="meta">
+              <div className="meta-row">
+                <div>
+                  <strong>Bill No:</strong> {bill.billNo || "—"}
+                </div>
+                <div>
+                  <strong>Date:</strong>{" "}
+                  {bill.date
+                    ? new Date(bill.date).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : new Date().toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                </div>
+              </div>
+              <div>
+                <strong>{activeTab === "farmer" ? "Farmer" : "Agent"}:</strong>{" "}
+                {bill.name || "—"}
+                {bill.village && ` • Village: ${bill.village}`}
+                {bill.vehicleNo && ` • Vehicle: ${bill.vehicleNo}`}
+              </div>
+            </div>
+
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Variety</th>
+                  <th>Trays</th>
+                  <th>Loose (kg)</th>
+                  <th>Price/Kg</th>
+                  <th>Total (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bill.items.map((item, index) => (
+                  <tr key={item.id}>
+                    <td>{index + 1}</td>
+                    <td>{item.varietyCode || "—"}</td>
+                    <td>{item.noTrays || 0}</td>
+                    <td>{(item.loose || 0).toFixed(2)}</td>
+                    <td>{(item.pricePerKg || 0).toFixed(2)}</td>
+                    <td>{(item.totalPrice || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5} className="text-right">
+                    Grand Total
+                  </td>
+                  <td>{n(bill.totalPrice).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -110,7 +110,7 @@ function n(v: unknown): number {
 function calcItemTotalPrice(
   totalKgs: number,
   pricePerKg: number,
-  hasVehicle: boolean
+  hasVehicle: boolean,
 ): number {
   const cut = hasVehicle ? 1 : 0.95;
   // keep 2 decimals like UI
@@ -136,7 +136,7 @@ export default function ClientBillsPage() {
 
   // Expand/collapse bills
   const [expandedBills, setExpandedBills] = useState<Record<string, boolean>>(
-    {}
+    {},
   );
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -243,12 +243,12 @@ export default function ClientBillsPage() {
 
       // ✅ ALWAYS SUM ITEMS (this fixes your mismatch)
       const computedTotal = Number(
-        items.reduce((sum, it) => sum + n(it.totalPrice), 0).toFixed(2)
+        items.reduce((sum, it) => sum + n(it.totalPrice), 0).toFixed(2),
       );
 
       const varietyCount = items.length;
       const uniqueVarietyCount = new Set(
-        items.map((it) => (it.varietyCode || "").trim().toUpperCase())
+        items.map((it) => (it.varietyCode || "").trim().toUpperCase()),
       ).size;
 
       return {
@@ -275,7 +275,7 @@ export default function ClientBillsPage() {
         const billMatch = b.billNo.toLowerCase().includes(term);
         const nameMatch = b.clientName.toLowerCase().includes(term);
         const varietyMatch = b.items.some((it) =>
-          (it.varietyCode || "").toLowerCase().includes(term)
+          (it.varietyCode || "").toLowerCase().includes(term),
         );
         return billMatch || nameMatch || varietyMatch;
       });
@@ -344,11 +344,16 @@ export default function ClientBillsPage() {
 
   // ✅ recompute preview based on backend formula
   const recomputePreviewPrice = useCallback(
-    (id: string, next: Partial<{ noTrays: number; loose: number; pricePerKg: number }>) => {
+    (
+      id: string,
+      next: Partial<{ noTrays: number; loose: number; pricePerKg: number }>,
+    ) => {
       const item = itemById.get(id);
       if (!item) return;
 
-      const price = n(next.pricePerKg ?? editing[id]?.pricePerKg ?? item.pricePerKg);
+      const price = n(
+        next.pricePerKg ?? editing[id]?.pricePerKg ?? item.pricePerKg,
+      );
       const totalKgs = n(item.totalKgs); // ✅ use totalKgs (not grandTotal logic)
       const totalPrice = calcItemTotalPrice(totalKgs, price, item.hasVehicle);
 
@@ -362,7 +367,7 @@ export default function ClientBillsPage() {
         },
       }));
     },
-    [itemById, editing]
+    [itemById, editing],
   );
 
   const onNumberChange = useCallback(
@@ -370,7 +375,7 @@ export default function ClientBillsPage() {
       const num = value === "" ? 0 : Math.max(0, Number(value) || 0);
       recomputePreviewPrice(id, { [field]: num } as any);
     },
-    [recomputePreviewPrice]
+    [recomputePreviewPrice],
   );
 
   const saveRow = async (item: UIItem) => {
@@ -422,7 +427,9 @@ export default function ClientBillsPage() {
 
     try {
       setDeletingItem(true);
-      const res = await axios.delete(`/api/client-bills/item/${deleteItemTarget.id}`);
+      const res = await axios.delete(
+        `/api/client-bills/item/${deleteItemTarget.id}`,
+      );
       await refreshRecords();
 
       if (res.data?.deletedBill)
@@ -440,7 +447,8 @@ export default function ClientBillsPage() {
 
   const exportToExcel = () => {
     const data = records.flatMap((rec) => {
-      const hasVehicle = Boolean(rec.vehicleId) || Boolean((rec.vehicleNo || "").trim());
+      const hasVehicle =
+        Boolean(rec.vehicleId) || Boolean((rec.vehicleNo || "").trim());
 
       return (rec.items || []).map((it) => {
         const totalKgs = n(it.totalKgs);
@@ -469,9 +477,137 @@ export default function ClientBillsPage() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Client Bills");
-    XLSX.writeFile(wb, `client-bills-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `client-bills-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
   };
+  const handlePrint = (billId: string) => {
+    const printContent = document.getElementById(`print-bill-${billId}`);
+    if (!printContent) {
+      toast.error("Print content not found");
+      return;
+    }
 
+    const printWindow = window.open("", "_blank", "width=900,height=1200");
+    if (!printWindow) {
+      toast.error("Popup blocked. Please allow popups.");
+      return;
+    }
+
+    printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Bill ${billId}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 15mm 12mm;
+          }
+          body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111;
+            font-size: 13px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+          }
+          .logo {
+            width: 140px;
+          }
+          .logo img {
+            width: 100%;
+            height: auto;
+          }
+          .center {
+            flex: 1;
+            text-align: center;
+            padding: 0 20px;
+          }
+          .center h1 {
+            font-size: 20px;
+            font-weight: bold;
+            color: #139BC3;
+            margin: 0 0 4px;
+          }
+          .center p {
+            font-size: 12px;
+            line-height: 1.4;
+            margin: 0;
+          }
+          .address {
+            width: 180px;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: right;
+          }
+          hr {
+            border: none;
+            border-top: 1.5px solid #000;
+            margin: 12px 0;
+          }
+          .title {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 12px 0;
+          }
+          .meta {
+            font-size: 13px;
+            margin-bottom: 16px;
+          }
+          .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 20px;
+          }
+          th, td {
+            border: 1.5px solid #000;
+            padding: 8px;
+          }
+          th {
+            background: #f3f4f6;
+            font-weight: bold;
+            text-align: left;
+          }
+          td {
+            text-align: right;
+          }
+          td:first-child {
+            text-align: left;
+          }
+          tfoot td {
+            background: #f9fafb;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        ${printContent.innerHTML}
+      </body>
+    </html>
+  `);
+
+    printWindow.document.close();
+    printWindow.focus();
+
+    setTimeout(() => {
+      printWindow.print();
+    }, 600);
+  };
   const resetAddForm = () => {
     setAddLoadingId("");
     setAddVarietyCode("");
@@ -482,7 +618,8 @@ export default function ClientBillsPage() {
   const addItemToBill = async () => {
     if (!addLoadingId) return toast.error("Select Bill");
     if (!addVarietyCode) return toast.error("Select Variety");
-    if (n(addTrays) <= 0 && n(addLoose) <= 0) return toast.error("Enter trays or loose");
+    if (n(addTrays) <= 0 && n(addLoose) <= 0)
+      return toast.error("Enter trays or loose");
 
     try {
       setAddingItem(true);
@@ -587,7 +724,10 @@ export default function ClientBillsPage() {
                   </svg>
                 </div>
 
-                <Select value={sortOrder} onValueChange={(v: "newest" | "oldest") => setSortOrder(v)}>
+                <Select
+                  value={sortOrder}
+                  onValueChange={(v: "newest" | "oldest") => setSortOrder(v)}
+                >
                   <SelectTrigger className="w-full sm:w-52">
                     <SelectValue />
                   </SelectTrigger>
@@ -598,8 +738,16 @@ export default function ClientBillsPage() {
                 </Select>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full sm:w-auto">
-                  <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                  <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                  />
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                  />
                   <Button
                     type="button"
                     variant="outline"
@@ -621,36 +769,56 @@ export default function ClientBillsPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-16 text-gray-500">Loading client bills...</div>
+            <div className="text-center py-16 text-gray-500">
+              Loading client bills...
+            </div>
           ) : bills.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">No client bills found</div>
+            <div className="text-center py-16 text-gray-500">
+              No client bills found
+            </div>
           ) : (
             <>
               {/* ✅ Mobile */}
-              <div className="mt-6 grid grid-cols-1 gap-3 md:hidden">
+              <div className="mt-6 grid grid-cols-1 gap-4 md:hidden">
                 {paginatedBills.map((bill) => {
                   const open = !!expandedBills[bill.id];
 
                   return (
-                    <div key={bill.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+                    <div
+                      key={bill.id}
+                      className="rounded-2xl border bg-white p-5 shadow-sm space-y-4"
+                    >
+                      {/* HEADER */}
                       <button
                         type="button"
                         onClick={() => toggleBill(bill.id)}
-                        className="w-full flex items-start justify-between gap-3"
+                        className="w-full flex items-start justify-between gap-4"
                       >
-                        <div className="text-left">
-                          <div className="text-sm font-semibold">{bill.billNo}</div>
-                          <div className="text-xs text-gray-600">{bill.clientName}</div>
-                          {bill.date ? (
-                            <div className="text-[11px] text-gray-500 mt-1">{bill.date}</div>
-                          ) : null}
+                        <div className="text-left space-y-1">
+                          <div className="text-base font-semibold text-gray-900">
+                            {bill.billNo}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {bill.clientName}
+                          </div>
+
+                          {bill.date && (
+                            <div className="text-xs text-gray-500">
+                              {bill.date}
+                            </div>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <div className="text-right">
-                            <div className="text-xs text-gray-500">Varieties</div>
-                            <div className="font-semibold text-gray-900">{bill.varietyCount}</div>
+                            <div className="text-xs text-gray-500">
+                              Varieties
+                            </div>
+                            <div className="font-semibold text-gray-900">
+                              {bill.varietyCount}
+                            </div>
                           </div>
+
                           {open ? (
                             <ChevronDown className="w-5 h-5 text-gray-700 mt-1" />
                           ) : (
@@ -659,16 +827,35 @@ export default function ClientBillsPage() {
                         </div>
                       </button>
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="text-xs text-gray-500">Total</div>
-                        <div className="font-bold text-green-600">{n(bill.totalPrice).toFixed(2)}</div>
+                      {/* TOTAL + PRINT */}
+                      <div className="flex items-center justify-between pt-3 border-t">
+                        <div>
+                          <div className="text-xs text-gray-500">Total</div>
+                          <div className="text-lg font-bold text-green-600">
+                            {n(bill.totalPrice).toFixed(2)}
+                          </div>
+                        </div>
+
+                        {bill.totalPrice > 0 &&
+                          bill.items.every((it) => n(it.pricePerKg) > 0) && (
+                            <Button
+                              size="sm"
+                              onClick={() => handlePrint(bill.id)}
+                              className="h-9 px-4 border-green-600 text-green-700 bg-green-50 hover:bg-green-100"
+                            >
+                              Print
+                            </Button>
+                          )}
                       </div>
 
+                      {/* EXPANDED */}
                       {open && (
-                        <div className="mt-4 space-y-3">
-                          <div className="rounded-xl border bg-gray-50 p-3 text-xs text-gray-700">
-                            {bill.vehicleNo ? <>Vehicle: {bill.vehicleNo} • </> : null}
-                            {bill.village ? <>Address: {bill.village}</> : null}
+                        <div className="space-y-4 pt-3 border-t">
+                          <div className="rounded-xl border bg-gray-50 p-3 text-sm text-gray-700">
+                            {bill.vehicleNo && (
+                              <>Vehicle: {bill.vehicleNo} • </>
+                            )}
+                            {bill.village && <>Address: {bill.village}</>}
                           </div>
 
                           <div className="space-y-3">
@@ -678,28 +865,43 @@ export default function ClientBillsPage() {
                               const isSaving = !!savingIds[it.id];
 
                               return (
-                                <div key={it.id} className="rounded-xl border bg-white p-3">
-                                  <div className="flex items-start justify-between gap-3">
+                                <div
+                                  key={it.id}
+                                  className="rounded-xl border bg-white p-4 space-y-3"
+                                >
+                                  {/* ITEM HEADER */}
+                                  <div className="flex items-start justify-between">
                                     <div>
-                                      <div className="text-sm font-semibold">{it.varietyCode || "-"}</div>
+                                      <div className="text-sm font-semibold">
+                                        {it.varietyCode || "-"}
+                                      </div>
                                       <div className="text-xs text-gray-500 mt-1">
                                         Total:{" "}
                                         <span className="font-semibold text-green-700">
-                                          {isEditing ? n(edit.totalPrice).toFixed(2) : n(it.totalPrice).toFixed(2)}
+                                          {isEditing
+                                            ? n(edit.totalPrice).toFixed(2)
+                                            : n(it.totalPrice).toFixed(2)}
                                         </span>
                                       </div>
                                     </div>
 
                                     {!isEditing ? (
                                       <div className="flex gap-2">
-                                        <Button size="sm" variant="ghost" onClick={() => startEdit(it)}>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => startEdit(it)}
+                                        >
                                           <Edit className="w-4 h-4" />
                                         </Button>
+
                                         <Button
                                           size="sm"
                                           variant="ghost"
                                           className="text-red-600 hover:bg-red-50"
-                                          onClick={() => openDeleteItemDialog(it)}
+                                          onClick={() =>
+                                            openDeleteItemDialog(it)
+                                          }
                                         >
                                           <Trash2 className="w-4 h-4" />
                                         </Button>
@@ -712,60 +914,100 @@ export default function ClientBillsPage() {
                                           disabled={isSaving}
                                           className="bg-green-600 hover:bg-green-700 text-white"
                                         >
-                                          {isSaving ? "..." : <Check className="w-4 h-4" />}
+                                          {isSaving ? (
+                                            "..."
+                                          ) : (
+                                            <Check className="w-4 h-4" />
+                                          )}
                                         </Button>
-                                        <Button size="sm" variant="ghost" onClick={() => cancelEdit(it.id)}>
+
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => cancelEdit(it.id)}
+                                        >
                                           <X className="w-4 h-4" />
                                         </Button>
                                       </div>
                                     )}
                                   </div>
 
-                                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                  {/* INPUT GRID */}
+                                  <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                      <div className="text-xs text-gray-500">Trays</div>
+                                      <div className="text-xs text-gray-500 mb-1">
+                                        Trays
+                                      </div>
                                       {isEditing ? (
                                         <Input
                                           value={edit.noTrays}
-                                          onChange={(e) => onNumberChange(it.id, "noTrays", e.target.value)}
-                                          className="h-9"
+                                          onChange={(e) =>
+                                            onNumberChange(
+                                              it.id,
+                                              "noTrays",
+                                              e.target.value,
+                                            )
+                                          }
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                         />
                                       ) : (
-                                        <div className="font-medium">{n(it.noTrays)}</div>
+                                        <div className="font-medium">
+                                          {n(it.noTrays)}
+                                        </div>
                                       )}
                                     </div>
 
                                     <div>
-                                      <div className="text-xs text-gray-500">Loose (Kgs)</div>
+                                      <div className="text-xs text-gray-500 mb-1">
+                                        Loose (Kgs)
+                                      </div>
                                       {isEditing ? (
                                         <Input
                                           value={edit.loose}
-                                          onChange={(e) => onNumberChange(it.id, "loose", e.target.value)}
-                                          className="h-9"
+                                          onChange={(e) =>
+                                            onNumberChange(
+                                              it.id,
+                                              "loose",
+                                              e.target.value,
+                                            )
+                                          }
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                           step="0.1"
                                         />
                                       ) : (
-                                        <div className="font-medium">{n(it.loose).toFixed(1)}</div>
+                                        <div className="font-medium">
+                                          {n(it.loose).toFixed(1)}
+                                        </div>
                                       )}
                                     </div>
 
                                     <div className="col-span-2">
-                                      <div className="text-xs text-gray-500">Price/Kg</div>
+                                      <div className="text-xs text-gray-500 mb-1">
+                                        Price/Kg
+                                      </div>
                                       {isEditing ? (
                                         <Input
                                           value={edit.pricePerKg}
-                                          onChange={(e) => onNumberChange(it.id, "pricePerKg", e.target.value)}
-                                          className="h-9"
+                                          onChange={(e) =>
+                                            onNumberChange(
+                                              it.id,
+                                              "pricePerKg",
+                                              e.target.value,
+                                            )
+                                          }
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                           step="0.01"
                                         />
                                       ) : (
-                                        <div className="font-medium">{n(it.pricePerKg).toFixed(2)}</div>
+                                        <div className="font-medium">
+                                          {n(it.pricePerKg).toFixed(2)}
+                                        </div>
                                       )}
                                     </div>
                                   </div>
@@ -815,7 +1057,9 @@ export default function ClientBillsPage() {
                                 </button>
 
                                 <div>
-                                  <div className="text-sm font-semibold">{bill.billNo}</div>
+                                  <div className="text-sm font-semibold">
+                                    {bill.billNo}
+                                  </div>
                                   <div className="text-xs text-gray-600">
                                     {bill.clientName}
                                     {bill.date ? ` • ${bill.date}` : ""}
@@ -825,7 +1069,9 @@ export default function ClientBillsPage() {
                             </td>
 
                             <td className="p-4 text-right">
-                              <div className="font-semibold text-gray-900">{bill.varietyCount}</div>
+                              <div className="font-semibold text-gray-900">
+                                {bill.varietyCount}
+                              </div>
                             </td>
 
                             <td className="p-4 text-right font-bold text-green-600">
@@ -833,14 +1079,31 @@ export default function ClientBillsPage() {
                             </td>
 
                             <td className="p-4 text-center">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-[#139BC3] text-white"
-                                onClick={() => toggleBill(bill.id)}
-                              >
-                                {open ? "Hide" : "View"}
-                              </Button>
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => toggleBill(bill.id)}
+                                  className="bg-[#139BC3] text-white hover:bg-[#0f8ca8]"
+                                >
+                                  {open ? "Hide" : "View"}
+                                </Button>
+
+                                {/* Print button – only show when prices are filled */}
+                                {bill.totalPrice > 0 &&
+                                  bill.items.every(
+                                    (it) => n(it.pricePerKg) > 0,
+                                  ) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handlePrint(bill.id)}
+                                      className="border-green-600 text-green-700 hover:bg-green-50"
+                                    >
+                                      Print
+                                    </Button>
+                                  )}
+                              </div>
                             </td>
                           </tr>
 
@@ -850,23 +1113,48 @@ export default function ClientBillsPage() {
                                 <div className="rounded-xl border border-gray-200 overflow-hidden">
                                   <div className="px-4 py-3 bg-gray-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                     <div className="text-sm text-gray-700">
-                                      <span className="font-semibold text-gray-900">Bill:</span>{" "}
-                                      {bill.billNo} <span className="text-gray-400">•</span>{" "}
+                                      <span className="font-semibold text-gray-900">
+                                        Bill:
+                                      </span>{" "}
+                                      {bill.billNo}{" "}
+                                      <span className="text-gray-400">•</span>{" "}
                                       {bill.clientName}
                                       {bill.vehicleNo ? (
                                         <>
                                           {" "}
-                                          <span className="text-gray-400">•</span> Vehicle: {bill.vehicleNo}
+                                          <span className="text-gray-400">
+                                            •
+                                          </span>{" "}
+                                          Vehicle: {bill.vehicleNo}
                                         </>
                                       ) : null}
                                       {bill.village ? (
                                         <>
                                           {" "}
-                                          <span className="text-gray-400">•</span> Address: {bill.village}
+                                          <span className="text-gray-400">
+                                            •
+                                          </span>{" "}
+                                          Address: {bill.village}
                                         </>
                                       ) : null}
                                     </div>
-
+                                    {open &&
+                                      bill.totalPrice > 0 &&
+                                      bill.items.every(
+                                        (it) => n(it.pricePerKg) > 0,
+                                      ) && (
+                                        <div className="mt-4 flex justify-end">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handlePrint(bill.id)}
+                                            className="border-green-600 text-green-700 hover:bg-green-50"
+                                          >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Print Bill
+                                          </Button>
+                                        </div>
+                                      )}
                                     <div className="text-sm font-semibold text-green-700">
                                       Total: {n(bill.totalPrice).toFixed(2)}
                                     </div>
@@ -877,11 +1165,21 @@ export default function ClientBillsPage() {
                                       <thead className="bg-white text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                                         <tr>
                                           <th className="p-4">Variety</th>
-                                          <th className="p-4 text-right">Trays</th>
-                                          <th className="p-4 text-right">Loose</th>
-                                          <th className="p-4 text-right">Price/Kg</th>
-                                          <th className="p-4 text-right">Total Price</th>
-                                          <th className="p-4 text-center">Actions</th>
+                                          <th className="p-4 text-right">
+                                            Trays
+                                          </th>
+                                          <th className="p-4 text-right">
+                                            Loose
+                                          </th>
+                                          <th className="p-4 text-right">
+                                            Price/Kg
+                                          </th>
+                                          <th className="p-4 text-right">
+                                            Total Price
+                                          </th>
+                                          <th className="p-4 text-center">
+                                            Actions
+                                          </th>
                                         </tr>
                                       </thead>
 
@@ -892,18 +1190,31 @@ export default function ClientBillsPage() {
                                           const isSaving = !!savingIds[it.id];
 
                                           return (
-                                            <tr key={it.id} className="hover:bg-gray-50 transition">
-                                              <td className="p-4 font-medium">{it.varietyCode || "-"}</td>
+                                            <tr
+                                              key={it.id}
+                                              className="hover:bg-gray-50 transition"
+                                            >
+                                              <td className="p-4 font-medium">
+                                                {it.varietyCode || "-"}
+                                              </td>
 
                                               <td className="p-4 text-right">
                                                 {isEditing ? (
                                                   <Input
                                                     value={edit.noTrays}
                                                     onChange={(e) =>
-                                                      onNumberChange(it.id, "noTrays", e.target.value)
+                                                      onNumberChange(
+                                                        it.id,
+                                                        "noTrays",
+                                                        e.target.value,
+                                                      )
                                                     }
                                                     onKeyDown={(e) => {
-                                                      if (e.key === "-" || e.key === "e" || e.key === "E")
+                                                      if (
+                                                        e.key === "-" ||
+                                                        e.key === "e" ||
+                                                        e.key === "E"
+                                                      )
                                                         e.preventDefault();
                                                     }}
                                                     className="w-24 text-right"
@@ -911,7 +1222,9 @@ export default function ClientBillsPage() {
                                                     min={0}
                                                   />
                                                 ) : (
-                                                  <span className="font-medium">{n(it.noTrays)}</span>
+                                                  <span className="font-medium">
+                                                    {n(it.noTrays)}
+                                                  </span>
                                                 )}
                                               </td>
 
@@ -920,10 +1233,18 @@ export default function ClientBillsPage() {
                                                   <Input
                                                     value={edit.loose}
                                                     onChange={(e) =>
-                                                      onNumberChange(it.id, "loose", e.target.value)
+                                                      onNumberChange(
+                                                        it.id,
+                                                        "loose",
+                                                        e.target.value,
+                                                      )
                                                     }
                                                     onKeyDown={(e) => {
-                                                      if (e.key === "-" || e.key === "e" || e.key === "E")
+                                                      if (
+                                                        e.key === "-" ||
+                                                        e.key === "e" ||
+                                                        e.key === "E"
+                                                      )
                                                         e.preventDefault();
                                                     }}
                                                     className="w-24 text-right"
@@ -932,7 +1253,9 @@ export default function ClientBillsPage() {
                                                     step="0.1"
                                                   />
                                                 ) : (
-                                                  <span className="font-medium">{n(it.loose).toFixed(1)}</span>
+                                                  <span className="font-medium">
+                                                    {n(it.loose).toFixed(1)}
+                                                  </span>
                                                 )}
                                               </td>
 
@@ -941,10 +1264,18 @@ export default function ClientBillsPage() {
                                                   <Input
                                                     value={edit.pricePerKg}
                                                     onChange={(e) =>
-                                                      onNumberChange(it.id, "pricePerKg", e.target.value)
+                                                      onNumberChange(
+                                                        it.id,
+                                                        "pricePerKg",
+                                                        e.target.value,
+                                                      )
                                                     }
                                                     onKeyDown={(e) => {
-                                                      if (e.key === "-" || e.key === "e" || e.key === "E")
+                                                      if (
+                                                        e.key === "-" ||
+                                                        e.key === "e" ||
+                                                        e.key === "E"
+                                                      )
                                                         e.preventDefault();
                                                     }}
                                                     className="w-28 text-right"
@@ -953,7 +1284,11 @@ export default function ClientBillsPage() {
                                                     min={0}
                                                   />
                                                 ) : (
-                                                  <span className="font-medium">{n(it.pricePerKg).toFixed(2)}</span>
+                                                  <span className="font-medium">
+                                                    {n(it.pricePerKg).toFixed(
+                                                      2,
+                                                    )}
+                                                  </span>
                                                 )}
                                               </td>
 
@@ -972,14 +1307,22 @@ export default function ClientBillsPage() {
                                               <td className="p-4 text-center">
                                                 {!isEditing ? (
                                                   <div className="flex justify-center gap-2">
-                                                    <Button size="sm" variant="ghost" onClick={() => startEdit(it)}>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() =>
+                                                        startEdit(it)
+                                                      }
+                                                    >
                                                       <Edit className="w-4 h-4" />
                                                     </Button>
                                                     <Button
                                                       size="sm"
                                                       variant="ghost"
                                                       className="text-red-600 hover:bg-red-50"
-                                                      onClick={() => openDeleteItemDialog(it)}
+                                                      onClick={() =>
+                                                        openDeleteItemDialog(it)
+                                                      }
                                                     >
                                                       <Trash2 className="w-4 h-4" />
                                                     </Button>
@@ -988,13 +1331,25 @@ export default function ClientBillsPage() {
                                                   <div className="flex justify-center gap-2">
                                                     <Button
                                                       size="sm"
-                                                      onClick={() => saveRow(it)}
+                                                      onClick={() =>
+                                                        saveRow(it)
+                                                      }
                                                       disabled={isSaving}
                                                       className="bg-green-600 hover:bg-green-700 text-white"
                                                     >
-                                                      {isSaving ? "..." : <Check className="w-4 h-4" />}
+                                                      {isSaving ? (
+                                                        "..."
+                                                      ) : (
+                                                        <Check className="w-4 h-4" />
+                                                      )}
                                                     </Button>
-                                                    <Button size="sm" variant="ghost" onClick={() => cancelEdit(it.id)}>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() =>
+                                                        cancelEdit(it.id)
+                                                      }
+                                                    >
                                                       <X className="w-4 h-4" />
                                                     </Button>
                                                   </div>
@@ -1029,7 +1384,10 @@ export default function ClientBillsPage() {
                     <span className="font-medium text-gray-900">
                       {Math.min(page * PAGE_SIZE, bills.length)}
                     </span>{" "}
-                    of <span className="font-medium text-gray-900">{bills.length}</span>
+                    of{" "}
+                    <span className="font-medium text-gray-900">
+                      {bills.length}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap justify-center">
@@ -1050,7 +1408,9 @@ export default function ClientBillsPage() {
                           size="sm"
                           variant={page === pageNo ? "default" : "outline"}
                           onClick={() => setPage(pageNo)}
-                          className={page === pageNo ? "bg-blue-600 text-white" : ""}
+                          className={
+                            page === pageNo ? "bg-blue-600 text-white" : ""
+                          }
                         >
                           {pageNo}
                         </Button>
@@ -1061,7 +1421,9 @@ export default function ClientBillsPage() {
                       variant="outline"
                       size="sm"
                       disabled={page === totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
                     >
                       Next
                     </Button>
@@ -1091,7 +1453,9 @@ export default function ClientBillsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
-              <div className="text-xs font-semibold text-gray-500 mb-1">Bill</div>
+              <div className="text-xs font-semibold text-gray-500 mb-1">
+                Bill
+              </div>
               <Select value={addLoadingId} onValueChange={setAddLoadingId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Bill No / Client" />
@@ -1134,13 +1498,16 @@ export default function ClientBillsPage() {
                 </Select>
 
                 <div className="mt-2 text-sm text-slate-700">
-                  {availableVarieties.find((v) => v.code === addVarietyCode)?.name || "—"}
+                  {availableVarieties.find((v) => v.code === addVarietyCode)
+                    ?.name || "—"}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs font-semibold text-slate-500 mb-1">Trays</div>
+                  <div className="text-xs font-semibold text-slate-500 mb-1">
+                    Trays
+                  </div>
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -1148,12 +1515,16 @@ export default function ClientBillsPage() {
                     className="h-11 w-full rounded-xl border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
                     value={addTrays}
                     disabled={!addVarietyCode}
-                    onChange={(e) => setAddTrays(Math.max(0, Number(e.target.value) || 0))}
+                    onChange={(e) =>
+                      setAddTrays(Math.max(0, Number(e.target.value) || 0))
+                    }
                   />
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold text-slate-500 mb-1">Loose</div>
+                  <div className="text-xs font-semibold text-slate-500 mb-1">
+                    Loose
+                  </div>
                   <Input
                     type="number"
                     inputMode="decimal"
@@ -1161,7 +1532,9 @@ export default function ClientBillsPage() {
                     className="h-11 w-full rounded-xl border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30"
                     value={addLoose}
                     disabled={!addVarietyCode}
-                    onChange={(e) => setAddLoose(Math.max(0, Number(e.target.value) || 0))}
+                    onChange={(e) =>
+                      setAddLoose(Math.max(0, Number(e.target.value) || 0))
+                    }
                   />
                 </div>
               </div>
@@ -1169,7 +1542,11 @@ export default function ClientBillsPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={addingItem}>
+            <Button
+              variant="outline"
+              onClick={() => setAddOpen(false)}
+              disabled={addingItem}
+            >
               Cancel
             </Button>
             <Button onClick={addItemToBill} disabled={addingItem}>
@@ -1190,6 +1567,110 @@ export default function ClientBillsPage() {
         }? If this is the last item, the bill will be deleted automatically.`}
         confirmText="Delete Item"
       />
+      {/* ── Hidden printable content ── */}
+      <div className="hidden">
+        {bills.map((bill) => (
+          <div
+            key={bill.id}
+            id={`print-bill-${bill.id}`}
+            className="print-container"
+          >
+            {/* Header */}
+            <div className="header">
+              <div className="logo">
+                <img
+                  src="/assets/favicon.png" // ← confirm this path works
+                  alt="RS Fisheries Logo"
+                  className="w-full h-auto"
+                />
+              </div>
+
+              <div className="center">
+                <h1>RS FISHERIES PVT LTD</h1>
+                <p className="contact">
+                  Hyderabad, Telangana - 500081
+                  <br />
+                  Phone: +919494288997, +919440011704
+                  <br />
+                  Email: n.vamsikiran4@gmail.com
+                </p>
+              </div>
+
+              <div className="address">
+                <strong>Office Address:</strong>
+                <br />
+                3rd floor, Above Varun Bajaj showroom,ViP Hills, 100 feet Road
+                Madhapur, Hyderabad 500081 India
+              </div>
+            </div>
+
+            <hr />
+
+            <div className="title">Billing</div>
+
+            <div className="meta">
+              <div className="meta-row">
+                <div>
+                  <strong>Bill No:</strong> {bill.billNo || "—"}
+                </div>
+                <div>
+                  <strong>Date:</strong>{" "}
+                  {bill.date
+                    ? new Date(bill.date).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : new Date().toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                </div>
+              </div>
+
+              <div>
+                <strong>Party:</strong> {bill.clientName || "—"}
+                {bill.village && ` • Village: ${bill.village}`}
+                {bill.vehicleNo && ` • Vehicle: ${bill.vehicleNo}`}
+              </div>
+            </div>
+
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Variety</th>
+                  <th>Trays</th>
+                  <th>Loose (kg)</th>
+                  <th>Price/Kg</th>
+                  <th>Total (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bill.items.map((item, index) => (
+                  <tr key={item.id}>
+                    <td>{index + 1}</td>
+                    <td>{item.varietyCode || "—"}</td>
+                    <td>{n(item.noTrays)}</td>
+                    <td>{n(item.loose).toFixed(1)}</td>
+                    <td>{n(item.pricePerKg).toFixed(2)}</td>
+                    <td>{n(item.totalPrice).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5} className="text-right font-bold">
+                    Grand Total
+                  </td>
+                  <td className="font-bold">{n(bill.totalPrice).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
