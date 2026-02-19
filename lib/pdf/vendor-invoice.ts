@@ -41,16 +41,19 @@ export type VendorInvoiceAssets = {
 };
 
 /* ---------------- COMPANY (EDIT HERE) ---------------- */
-
+// 3rd floor, Above Varun Bajaj showroom, ViP Hills , 100 feet Road
+// Madhapur, Hyderabad 500081
+// 9494288997 , 9440011704
+// n.vamsikiran4@gmail.com
 const COMPANY = {
     name: "RS FISHERIES PVT LTD",
-    title: "Payment Receipt ",
-    addressLine: "Hyderabad, Telangana - 500072",
+    title: " Receipt ",
+    addressLine: "3rd floor, Above Varun Bajaj showroom, ViP Hills , 100 feet Road\n Madhapur, Hyderabad 500081",
 
-    phone: "+91 40 1234 5678",
-    email: "accounts@rsfisheries.com",
-    gstin: "36AAAAA0000A1Z5",
-    state: "Telangana",
+    phone: "+919494288997 , +919440011704",
+    email: "n.vamsikiran4@gmail.com",
+    // gstin: "36AAAAA0000A1Z5",
+    // state: "Telangana",
     placeOfSupplyDefault: "Telangana",
 
     bankName: "HDFC BANK LIMITED, JUBILEE HILLS ROAD",
@@ -318,6 +321,9 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
     const roundedTotal = Math.round(total);
     const roundOff = +(roundedTotal - total).toFixed(2);
 
+    const hasGst = gst > 0;
+    const hasHsn = !!data.hsn?.trim();
+
     /* ---------------- TITLE ---------------- */
     setBlack(doc);
     doc.setFont("Helvetica", "bold");
@@ -353,8 +359,8 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
     doc.setFontSize(7.2);
     oneLineClamp(doc, `Phone: ${COMPANY.phone}`, rightX + pad, y + 7.0, maxW, 7.2);
     oneLineClamp(doc, `Email: ${COMPANY.email}`, rightX + pad, y + 10.6, maxW, 7.2);
-    oneLineClamp(doc, `GSTIN: ${COMPANY.gstin}`, rightX + pad, y + 14.2, maxW, 7.2);
-    oneLineClamp(doc, `State: ${COMPANY.state}`, rightX + pad, y + 17.8, maxW, 7.2);
+    // oneLineClamp(doc, `GSTIN: ${COMPANY.gstin}`, rightX + pad, y + 14.2, maxW, 7.2);
+    // oneLineClamp(doc, `State: ${COMPANY.state}`, rightX + pad, y + 17.8, maxW, 7.2);
 
     y += headerH;
 
@@ -387,7 +393,7 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
 
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(7.6);
-    doc.text("Invoice Details:", invX + 2, y + 6);
+    doc.text("Billing Details:", invX + 2, y + 6);
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(7.2);
@@ -400,9 +406,28 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
 
     textBox(doc, invBlock, invX, y + 6, invW, topRowH - 6, 7.2, 3.6);
 
-    y += topRowH + 4;
+    y += topRowH + 2;
 
     /* ---------------- ITEMS TABLE ---------------- */
+    const head = hasHsn
+        ? [["#", "Description", "Amount (Rs.)"]]
+        : [["#", "Description", "Amount (Rs.)"]];
+
+    const bodyRow = hasHsn
+        ? ["1", data.description || "Goods / Service", money(taxable)]
+        : ["1", data.description || "Goods / Service", money(taxable)];
+
+    const columnStyles: any = {
+        0: { cellWidth: 12, halign: "center" },
+    };
+
+    if (hasHsn) {
+        columnStyles[2] = { cellWidth: 25, halign: "center" };
+        columnStyles[3] = { cellWidth: 40, halign: "right" };
+    } else {
+        columnStyles[2] = { cellWidth: 40, halign: "right" };
+    }
+
     autoTable(doc, {
         startY: y,
         theme: "grid",
@@ -424,17 +449,9 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
             fillColor: [255, 255, 255],
             textColor: [0, 0, 0],
         },
-        columnStyles: {
-            0: { cellWidth: 12, halign: "center" },
-            1: { cellWidth: 66 },
-            2: { cellWidth: 22, halign: "center" },
-            3: { cellWidth: 18, halign: "right" },
-            4: { cellWidth: 28, halign: "right" },
-            5: { cellWidth: 18, halign: "right" },
-            6: { cellWidth: 22, halign: "right" },
-        },
-        head: [["#", "Description", "HSN / SAC", "Quantity", "Price / Unit (Rs.)", "GST (Rs.)", "Amount (Rs.)"]],
-        body: [["1", data.description || "Goods / Service", data.hsn, "1", money(taxable), money(gst), money(total)]],
+        columnStyles,
+        head,
+        body: [bodyRow],
     });
 
     y = (doc as any).lastAutoTable.finalY + 2;
@@ -444,12 +461,12 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(8);
     doc.text("Total", L + 60, y + 5.6);
-    doc.text(`Rs. ${money(total)}`, R - 4, y + 5.6, { align: "right" });
+    doc.text(`Rs. ${money(taxable)}`, R - 4, y + 5.6, { align: "right" });
 
-    y += 10;
+    y += 8;
 
     /* ---------------- TAX SUMMARY + TOTALS ---------------- */
-    const lowerH = 38;
+    const lowerH = hasGst ? 42 : 38;
     rect(doc, L, y, W, lowerH);
 
     const leftLowerW = 112;
@@ -462,42 +479,26 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
     doc.setFontSize(7.6);
     doc.text("Tax Summary:", L + 2, y + 5);
 
-    const taxTableY = y + taxTitleH;
-    autoTable(doc, {
-        startY: taxTableY,
-        theme: "grid",
-        margin: { left: L },
-        tableWidth: leftLowerW,
-        styles: {
-            fontSize: 7.0,
-            cellPadding: 1.2,
-            lineWidth: 0.35,
-            lineColor: [0, 0, 0],
-            fillColor: [255, 255, 255],
-            textColor: [0, 0, 0],
-        },
-        headStyles: {
-            fontStyle: "bold",
-            halign: "center",
-            lineWidth: 0.35,
-            lineColor: [0, 0, 0],
-            fillColor: [255, 255, 255],
-            textColor: [0, 0, 0],
-        },
-        columnStyles: {
-            0: { cellWidth: 24, halign: "center" },
-            1: { cellWidth: 44, halign: "right" },
-            2: { cellWidth: 18, halign: "center" },
-            3: { cellWidth: 26, halign: "right" },
-        },
-        head: [["HSN / SAC", "Taxable amount (Rs.)", "Rate (%)", "Amt (Rs.)"]],
-        body: [[data.hsn, money(taxable), `${gstPercent.toFixed(0)}%`, money(gst)]],
-        foot: [["TOTAL", money(taxable), "", money(gst)]],
-    });
+    if (hasGst) {
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(7.0);
+        let taxY = y + taxTitleH + 3;
+        const placeOfSupply = data.placeOfSupply ?? COMPANY.placeOfSupplyDefault;
+        const isIntra = placeOfSupply === COMPANY.state;
+        if (isIntra) {
+            const halfGst = gst / 2;
+            const halfPercent = gstPercent / 2;
+            doc.text(`CGST @ ${halfPercent}% on Rs. ${money(taxable)}: Rs. ${money(halfGst)}`, L + 2, taxY);
+            taxY += 4;
+            doc.text(`SGST @ ${halfPercent}% on Rs. ${money(taxable)}: Rs. ${money(halfGst)}`, L + 2, taxY);
+        } else {
+            doc.text(`IGST @ ${gstPercent}% on Rs. ${money(taxable)}: Rs. ${money(gst)}`, L + 2, taxY);
+        }
+    }
 
     const rightX2 = L + leftLowerW;
 
-    const row1H = 12;
+    const row1H = hasGst ? 16 : 12;
     const row2H = 14;
     const row3H = lowerH - row1H - row2H;
 
@@ -508,14 +509,22 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
     doc.setFontSize(7.0);
 
     doc.text("Sub Total", rightX2 + 2, y + 4.5);
-    doc.text(`Rs. ${money(total)}`, R - 3, y + 4.5, { align: "right" });
+    doc.text(`Rs. ${money(taxable)}`, R - 3, y + 4.5, { align: "right" });
 
-    doc.text("Round Off", rightX2 + 2, y + 8.5);
-    doc.text(`${roundOff >= 0 ? "" : "-"}Rs. ${money(Math.abs(roundOff))}`, R - 3, y + 8.5, { align: "right" });
+    let offset = 4.5;
+    if (hasGst) {
+        hLine(doc, rightX2, R, y + 8);
+        doc.text("GST", rightX2 + 2, y + 8.5);
+        doc.text(`Rs. ${money(gst)}`, R - 3, y + 8.5, { align: "right" });
+        offset += 4;
+    }
+
+    doc.text("Round Off", rightX2 + 2, y + offset + 4);
+    doc.text(`${roundOff >= 0 ? "" : "-"}Rs. ${money(Math.abs(roundOff))}`, R - 3, y + offset + 4, { align: "right" });
 
     doc.setFont("Helvetica", "bold");
-    doc.text("Total", rightX2 + 2, y + 11.3);
-    doc.text(`Rs. ${money(roundedTotal)}`, R - 3, y + 11.3, { align: "right" });
+    doc.text("Total", rightX2 + 2, y + offset + 6.8);
+    doc.text(`Rs. ${money(roundedTotal)}`, R - 3, y + offset + 6.8, { align: "right" });
 
     const wordsY = y + row1H;
     doc.setFont("Helvetica", "bold");
@@ -533,9 +542,8 @@ async function renderVendorInvoice(doc: Doc, data: VendorInvoiceData, assets?: V
     doc.text("0.00", R - 3, r3Y + 5.0, { align: "right" });
 
     doc.text("Balance", rightX2 + 2, r3Y + 9.0);
-    doc.text(`Rs. ${money(total)}`, R - 3, r3Y + 9.0, { align: "right" });
+    doc.text(`Rs. ${money(roundedTotal)}`, R - 3, r3Y + 9.0, { align: "right" });
 
-    // ✅ IMPORTANT: remove extra gap so next box sits in empty space
     y += lowerH;
 
     /* ---------------- PAYMENT DETAILS (SAME AS CLIENT) ---------------- */
@@ -616,7 +624,7 @@ Account holder's name : ${COMPANY.accountHolder}`;
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(7.2);
-    doc.text("This is a Computer Generated Invoice", (L + R) / 2, 292, { align: "center" });
+    doc.text("", (L + R) / 2, 292, { align: "center" });
 }
 
 /* ---------------- EXPORTS ---------------- */
