@@ -53,7 +53,7 @@ const COMPANY = {
     phone: "+919494288997 , +919440011704",
     email: "n.vamsikiran4@gmail.com",
     // gstin: "36AAAAA0000A1Z5",
-    // state: "Telangana",
+    state: "Telangana",
     placeOfSupplyDefault: "Telangana",
 
     bankName: "HDFC BANK LIMITED, JUBILEE HILLS ROAD",
