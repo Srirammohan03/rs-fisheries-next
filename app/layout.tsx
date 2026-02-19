@@ -19,11 +19,10 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: "/assets/favicon.png",
-    apple: "/icons/512.png",
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 
-/* 🔥 NEW — required in Next 16 */
 export const viewport: Viewport = {
   themeColor: "#139BC3",
 };
@@ -39,6 +38,11 @@ export default function RootLayout({
         <meta name="application-name" content="RS Fisheries" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="RS Fisheries" />
+
+        {/* iOS icon */}
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
 
       <body
