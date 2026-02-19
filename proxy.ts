@@ -1,3 +1,4 @@
+// proxy.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
@@ -25,7 +26,16 @@ function isPublicApi(pathname: string) {
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("session")?.value;
-
+  /* ===== ALLOW PWA + STATIC FILES ===== */
+  if (
+    pathname.startsWith("/manifest") ||
+    pathname.startsWith("/icons") ||
+    pathname.startsWith("/sw.js") ||
+    pathname.startsWith("/favicon") ||
+    pathname.startsWith("/_next")
+  ) {
+    return NextResponse.next();
+  }
   /* ===== NEVER BLOCK API ===== */
   if (isPublicApi(pathname)) {
     return NextResponse.next();
@@ -69,5 +79,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|assets).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|assets|manifest|icons|sw.js).*)",],
 };
