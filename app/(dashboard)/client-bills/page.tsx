@@ -779,35 +779,37 @@ export default function ClientBillsPage() {
           ) : (
             <>
               {/* ✅ Mobile */}
-              <div className="mt-6 grid grid-cols-1 gap-3 md:hidden">
+              <div className="mt-6 grid grid-cols-1 gap-4 md:hidden">
                 {paginatedBills.map((bill) => {
                   const open = !!expandedBills[bill.id];
 
                   return (
                     <div
                       key={bill.id}
-                      className="rounded-2xl border bg-white p-4 shadow-sm"
+                      className="rounded-2xl border bg-white p-5 shadow-sm space-y-4"
                     >
+                      {/* HEADER */}
                       <button
                         type="button"
                         onClick={() => toggleBill(bill.id)}
-                        className="w-full flex items-start justify-between gap-3"
+                        className="w-full flex items-start justify-between gap-4"
                       >
-                        <div className="text-left">
-                          <div className="text-sm font-semibold">
+                        <div className="text-left space-y-1">
+                          <div className="text-base font-semibold text-gray-900">
                             {bill.billNo}
                           </div>
-                          <div className="text-xs text-gray-600">
+                          <div className="text-sm text-gray-600">
                             {bill.clientName}
                           </div>
-                          {bill.date ? (
-                            <div className="text-[11px] text-gray-500 mt-1">
+
+                          {bill.date && (
+                            <div className="text-xs text-gray-500">
                               {bill.date}
                             </div>
-                          ) : null}
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <div className="text-right">
                             <div className="text-xs text-gray-500">
                               Varieties
@@ -816,6 +818,7 @@ export default function ClientBillsPage() {
                               {bill.varietyCount}
                             </div>
                           </div>
+
                           {open ? (
                             <ChevronDown className="w-5 h-5 text-gray-700 mt-1" />
                           ) : (
@@ -824,20 +827,35 @@ export default function ClientBillsPage() {
                         </div>
                       </button>
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="text-xs text-gray-500">Total</div>
-                        <div className="font-bold text-green-600">
-                          {n(bill.totalPrice).toFixed(2)}
+                      {/* TOTAL + PRINT */}
+                      <div className="flex items-center justify-between pt-3 border-t">
+                        <div>
+                          <div className="text-xs text-gray-500">Total</div>
+                          <div className="text-lg font-bold text-green-600">
+                            {n(bill.totalPrice).toFixed(2)}
+                          </div>
                         </div>
+
+                        {bill.totalPrice > 0 &&
+                          bill.items.every((it) => n(it.pricePerKg) > 0) && (
+                            <Button
+                              size="sm"
+                              onClick={() => handlePrint(bill.id)}
+                              className="h-9 px-4 border-green-600 text-green-700 bg-green-50 hover:bg-green-100"
+                            >
+                              Print
+                            </Button>
+                          )}
                       </div>
 
+                      {/* EXPANDED */}
                       {open && (
-                        <div className="mt-4 space-y-3">
-                          <div className="rounded-xl border bg-gray-50 p-3 text-xs text-gray-700">
-                            {bill.vehicleNo ? (
+                        <div className="space-y-4 pt-3 border-t">
+                          <div className="rounded-xl border bg-gray-50 p-3 text-sm text-gray-700">
+                            {bill.vehicleNo && (
                               <>Vehicle: {bill.vehicleNo} • </>
-                            ) : null}
-                            {bill.village ? <>Address: {bill.village}</> : null}
+                            )}
+                            {bill.village && <>Address: {bill.village}</>}
                           </div>
 
                           <div className="space-y-3">
@@ -849,9 +867,10 @@ export default function ClientBillsPage() {
                               return (
                                 <div
                                   key={it.id}
-                                  className="rounded-xl border bg-white p-3"
+                                  className="rounded-xl border bg-white p-4 space-y-3"
                                 >
-                                  <div className="flex items-start justify-between gap-3">
+                                  {/* ITEM HEADER */}
+                                  <div className="flex items-start justify-between">
                                     <div>
                                       <div className="text-sm font-semibold">
                                         {it.varietyCode || "-"}
@@ -864,25 +883,6 @@ export default function ClientBillsPage() {
                                             : n(it.totalPrice).toFixed(2)}
                                         </span>
                                       </div>
-                                      {open &&
-                                        bill.totalPrice > 0 &&
-                                        bill.items.every(
-                                          (it) => n(it.pricePerKg) > 0,
-                                        ) && (
-                                          <div className="mt-4 flex justify-end">
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              onClick={() =>
-                                                handlePrint(bill.id)
-                                              }
-                                              className="border-green-600 text-green-700 hover:bg-green-50"
-                                            >
-                                              <Download className="w-4 h-4 mr-2" />
-                                              Print Bill
-                                            </Button>
-                                          </div>
-                                        )}
                                     </div>
 
                                     {!isEditing ? (
@@ -894,6 +894,7 @@ export default function ClientBillsPage() {
                                         >
                                           <Edit className="w-4 h-4" />
                                         </Button>
+
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -919,6 +920,7 @@ export default function ClientBillsPage() {
                                             <Check className="w-4 h-4" />
                                           )}
                                         </Button>
+
                                         <Button
                                           size="sm"
                                           variant="ghost"
@@ -930,9 +932,10 @@ export default function ClientBillsPage() {
                                     )}
                                   </div>
 
-                                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                  {/* INPUT GRID */}
+                                  <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-gray-500 mb-1">
                                         Trays
                                       </div>
                                       {isEditing ? (
@@ -945,7 +948,7 @@ export default function ClientBillsPage() {
                                               e.target.value,
                                             )
                                           }
-                                          className="h-9"
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                         />
@@ -957,7 +960,7 @@ export default function ClientBillsPage() {
                                     </div>
 
                                     <div>
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-gray-500 mb-1">
                                         Loose (Kgs)
                                       </div>
                                       {isEditing ? (
@@ -970,7 +973,7 @@ export default function ClientBillsPage() {
                                               e.target.value,
                                             )
                                           }
-                                          className="h-9"
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                           step="0.1"
@@ -983,7 +986,7 @@ export default function ClientBillsPage() {
                                     </div>
 
                                     <div className="col-span-2">
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-gray-500 mb-1">
                                         Price/Kg
                                       </div>
                                       {isEditing ? (
@@ -996,7 +999,7 @@ export default function ClientBillsPage() {
                                               e.target.value,
                                             )
                                           }
-                                          className="h-9"
+                                          className="h-10"
                                           type="number"
                                           min={0}
                                           step="0.01"
@@ -1135,7 +1138,23 @@ export default function ClientBillsPage() {
                                         </>
                                       ) : null}
                                     </div>
-
+                                    {open &&
+                                      bill.totalPrice > 0 &&
+                                      bill.items.every(
+                                        (it) => n(it.pricePerKg) > 0,
+                                      ) && (
+                                        <div className="mt-4 flex justify-end">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handlePrint(bill.id)}
+                                            className="border-green-600 text-green-700 hover:bg-green-50"
+                                          >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Print Bill
+                                          </Button>
+                                        </div>
+                                      )}
                                     <div className="text-sm font-semibold text-green-700">
                                       Total: {n(bill.totalPrice).toFixed(2)}
                                     </div>
