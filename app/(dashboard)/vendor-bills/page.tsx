@@ -3202,7 +3202,7 @@ font-family: 'Cinzel', cursive;
                             </span>
                           </div>
                           <div className="amount-row grand-total">
-                            <span>Remaining Amount</span>
+                            <span>Pending Bill Amount</span>
                             <span>:</span>
                             <span className="value">
                               {remainingAmount.toLocaleString("en-IN")}

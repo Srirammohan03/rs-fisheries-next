@@ -350,18 +350,15 @@ export default function ClientBillsPage() {
       const computedTotal = Number(
         items.reduce((sum, it) => sum + n(it.totalPrice), 0).toFixed(2),
       );
-      const pending = calculatePreviousPending(
-        rec.clientId!,
-        rec.id,
-        records,
-        payments,
-      );
+      const pending =
+        (rec.clientId ? (clientBalances[rec.clientId] ?? 0) : 0) -
+        (rec.grandTotal || 0);
 
       const grandTotal =
         computedTotal +
         n(rec.dispatchChargesTotal) +
         n(rec.packingAmountTotal) +
-        n(pending);
+        Math.max(0, pending);
       const totalTrays = items.reduce((sum, it) => sum + n(it.noTrays), 0);
       const varietyCount = items.length;
       const uniqueVarietyCount = new Set(
@@ -1095,8 +1092,11 @@ font-family: 'Cinzel', cursive;
     clientId: string,
     currentBillId: string,
     records: ClientRecord[],
-    payments: any[], // pass payments here
+    payments: any[],
   ) {
+    if (!clientId) return 0;
+
+    // ONLY this client's bills
     const clientBills = records
       .filter((r) => r.clientId === clientId)
       .sort(
@@ -1105,28 +1105,39 @@ font-family: 'Cinzel', cursive;
           new Date(b.createdAt || b.date || "").getTime(),
       );
 
-    let totalLoadings = 0;
+    let previousBillsTotal = 0;
 
+    // ADD ALL PREVIOUS BILLS BEFORE CURRENT BILL
     for (const bill of clientBills) {
       if (bill.id === currentBillId) break;
 
-      const itemTotal = Number(bill.totalPrice || 0);
+      const billItemsTotal =
+        (bill.items || []).reduce(
+          (sum, item) => sum + Number(item.totalPrice || 0),
+          0,
+        ) || Number(bill.totalPrice || 0);
+
       const dispatch = Number(bill.dispatchChargesTotal || 0);
       const packing = Number(bill.packingAmountTotal || 0);
 
-      if (dispatch > 0 || packing > 0) {
-        totalLoadings += itemTotal + dispatch + packing;
-      } else {
-        totalLoadings += itemTotal;
-      }
+      previousBillsTotal += billItemsTotal + dispatch + packing;
     }
 
-    const totalPayments = payments.reduce(
-      (sum, p) => sum + Number(p.amount || 0),
+    // ONLY THIS CLIENT PAYMENTS
+    const clientPayments = payments.filter(
+      (p) =>
+        p.clientId === clientId ||
+        p.clientDetailsId === clientId ||
+        p.clientKey === `client:${clientBills[0]?.clientName || ""}`,
+    );
+
+    const totalPayments = clientPayments.reduce(
+      (sum, payment) => sum + Number(payment.amount || 0),
       0,
     );
 
-    return Math.max(0, totalLoadings - totalPayments);
+    // REAL OLD BALANCE
+    return Math.max(0, previousBillsTotal - totalPayments);
   }
   const sortOtherCharges = (
     charges: { label?: string; amount: number }[] = [],
@@ -2111,7 +2122,7 @@ font-family: 'Cinzel', cursive;
 
           // Previous balance before current bill
           const oldBalance = calculatePreviousPending(
-            bill.clientId!,
+            bill.clientId || "",
             bill.id,
             records,
             payments,
@@ -2349,7 +2360,7 @@ font-family: 'Cinzel', cursive;
                         {/* <span>₹</span> */}
                         <span className="value">
                           {calculatePreviousPending(
-                            bill.clientId!,
+                            bill.clientId || "",
                             bill.id,
                             records,
                             payments,
@@ -2368,7 +2379,7 @@ font-family: 'Cinzel', cursive;
                       </div>
                     </div>
                     <div className="amount-row grand-total">
-                      <span>Remaining Amount</span>
+                      <span>Pending Bill Amount</span>
                       <div className="right">
                         <span>:</span>
                         <span className="value">

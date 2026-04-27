@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/withAuth";
 import { TicketXIcon } from "lucide-react";
 import { NextResponse } from "next/server";
 
-const TRAY_KG = 35;
+const DEFAULT_TRAY_KG = 35;
 
 type Params = {
   id: string;
@@ -93,7 +93,12 @@ export const PATCH = withAuth(
             ? Math.max(0, Number(body.loose) || 0)
             : Number(existing.loose || 0);
 
-        const trayKgs = nextTrays * TRAY_KG;
+        const trayWeight =
+          existing.noTrays > 0
+            ? Number(existing.trayKgs || 0) / Number(existing.noTrays)
+            : DEFAULT_TRAY_KG;
+
+        const trayKgs = nextTrays * trayWeight;
         const nextTotalKgs = trayKgs + nextLoose;
 
         if (isQtyChange) {

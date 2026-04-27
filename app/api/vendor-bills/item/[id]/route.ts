@@ -1,10 +1,10 @@
+// app\api\vendor-bills\item\[id]\route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/withAuth";
 import { logAudit } from "@/lib/auditLogger";
 import { diffObjects } from "@/lib/auditDiff";
-
-const TRAY_KG = 35;
+const DEFAULT_TRAY_KG = 35;
 const PRICE_DEDUCTION_PERCENT = 5;
 
 const toNum = (v: unknown) => {
@@ -50,10 +50,12 @@ export const PATCH = withAuth(
         finalNoTrays: number,
         finalLoose: number,
         finalPrice: number,
+        trayWeight: number,
       ) => {
-        const trayKgs = finalNoTrays * TRAY_KG;
+        const trayKgs = finalNoTrays * trayWeight;
         const totalKgs = round2(trayKgs + finalLoose);
         const totalPrice = calcTotalPrice(totalKgs, finalPrice);
+
         return { trayKgs, totalKgs, totalPrice };
       };
 
@@ -70,10 +72,16 @@ export const PATCH = withAuth(
           const finalLoose = loose ?? fItem.loose;
           const finalPrice = pricePerKg ?? fItem.pricePerKg;
 
+          const trayWeight =
+            fItem.noTrays > 0
+              ? round2(fItem.trayKgs / fItem.noTrays)
+              : DEFAULT_TRAY_KG;
+
           const { trayKgs, totalKgs, totalPrice } = computeFields(
             finalNoTrays,
             finalLoose,
             finalPrice,
+            trayWeight,
           );
 
           const updatedItem = await tx.formerItem.update({
@@ -149,10 +157,16 @@ export const PATCH = withAuth(
           const finalLoose = loose ?? aItem.loose;
           const finalPrice = pricePerKg ?? aItem.pricePerKg;
 
+          const trayWeight =
+            aItem.noTrays > 0
+              ? round2(aItem.trayKgs / aItem.noTrays)
+              : DEFAULT_TRAY_KG;
+
           const { trayKgs, totalKgs, totalPrice } = computeFields(
             finalNoTrays,
             finalLoose,
             finalPrice,
+            trayWeight,
           );
 
           const updatedItem = await tx.agentItem.update({

@@ -100,7 +100,7 @@ export default function ClientLoadingForm() {
 
   // manual entry (only when "Other")
   const [clientName, setClientName] = useState("");
-  const [trayWeight, setTrayWeight] = useState(35);
+  const [trayWeight, setTrayWeight] = useState(TRAY_WEIGHT_OPTIONS[0]);
 
   //  NEW: vehicle toggle checkbox
   const [useVehicle, setUseVehicle] = useState(false);
