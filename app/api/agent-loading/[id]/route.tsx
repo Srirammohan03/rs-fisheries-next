@@ -86,8 +86,9 @@ export async function PUT(
       where: { agentLoadingId: id },
     });
 
+    const trayKg = Number(body.trayWeight) || 35;
     const items = body.items.map((i: any) => {
-      const trayKgs = i.noTrays * 35;
+      const trayKgs = i.noTrays * trayKg;
       const totalKgs = trayKgs + i.loose;
 
       return {

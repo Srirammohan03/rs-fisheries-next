@@ -19,7 +19,7 @@ type FormerLoadingBody = {
   FarmerName?: string;
   village?: string;
   date?: string;
-
+  trayWeight?: number;
   //  NEW
   useVehicle?: boolean;
 
@@ -47,7 +47,7 @@ export const POST = withAuth(async (req: Request) => {
     if (!billNo) {
       return NextResponse.json(
         { success: false, message: "Bill number is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -55,14 +55,14 @@ export const POST = withAuth(async (req: Request) => {
     if (!farmerName) {
       return NextResponse.json(
         { success: false, message: "Farmer name is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json(
         { success: false, message: "At least one item is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -70,7 +70,7 @@ export const POST = withAuth(async (req: Request) => {
     if (Number.isNaN(loadingDate.getTime())) {
       return NextResponse.json(
         { success: false, message: "Invalid date provided" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -86,12 +86,13 @@ export const POST = withAuth(async (req: Request) => {
         ? body.vehicleNo.trim()
         : null;
 
+    const trayKg = Number(body.trayWeight) || 35;
     const items = body.items.map((it) => {
       const varietyCode = asTrim(it.varietyCode);
       const noTrays = Math.max(0, Math.floor(toNum(it.noTrays)));
       const loose = Math.max(0, toNum(it.loose));
 
-      const trayKgs = noTrays * TRAY_KG;
+      const trayKgs = noTrays * trayKg;
       const totalKgs = trayKgs + loose;
 
       return {
@@ -115,8 +116,9 @@ export const POST = withAuth(async (req: Request) => {
       ? Math.round(totalKgs)
       : Math.round(totalKgs * (1 - DEDUCTION_PERCENT / 100));
 
-    const createData: Parameters<typeof prisma.formerLoading.create>[0]["data"] =
-    {
+    const createData: Parameters<
+      typeof prisma.formerLoading.create
+    >[0]["data"] = {
       fishCode: asTrim(body.fishCode) || "NA",
       billNo,
       FarmerName: farmerName, // keep string (not null)
@@ -183,7 +185,7 @@ export const POST = withAuth(async (req: Request) => {
         message: "Failed to save farmer loading",
         prisma: { code: err?.code, meta: err?.meta }, //  debug
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 });

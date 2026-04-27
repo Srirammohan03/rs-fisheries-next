@@ -2022,6 +2022,15 @@ font-family: 'Cinzel', cursive;
       {/* ── Hidden printable content ── */}
       <div className="hidden">
         {bills.map((bill) => {
+          const paidForThisBill = payments
+            .filter((p) => p.clientId?.toString() === bill.id)
+            .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+          const remainingAmount = Math.max(
+            0,
+            n(bill.grandTotal) - paidForThisBill,
+          );
+
           return (
             <div
               key={bill.id}
@@ -2259,6 +2268,15 @@ font-family: 'Cinzel', cursive;
                         {/* <span>₹</span> */}
                         <span className="value">
                           {n(bill.grandTotal).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="amount-row grand-total">
+                      <span>Remaining Amount</span>
+                      <div className="right">
+                        <span>:</span>
+                        <span className="value">
+                          {remainingAmount.toLocaleString("en-IN")}
                         </span>
                       </div>
                     </div>

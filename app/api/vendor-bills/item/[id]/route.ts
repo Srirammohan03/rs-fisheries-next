@@ -27,7 +27,7 @@ export const PATCH = withAuth(
       if (!itemId) {
         return NextResponse.json(
           { success: false, message: "Missing item id" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -49,7 +49,7 @@ export const PATCH = withAuth(
       const computeFields = (
         finalNoTrays: number,
         finalLoose: number,
-        finalPrice: number
+        finalPrice: number,
       ) => {
         const trayKgs = finalNoTrays * TRAY_KG;
         const totalKgs = round2(trayKgs + finalLoose);
@@ -73,7 +73,7 @@ export const PATCH = withAuth(
           const { trayKgs, totalKgs, totalPrice } = computeFields(
             finalNoTrays,
             finalLoose,
-            finalPrice
+            finalPrice,
           );
 
           const updatedItem = await tx.formerItem.update({
@@ -104,7 +104,7 @@ export const PATCH = withAuth(
           const totalTrayKgs = round2(items.reduce((s, i) => s + i.trayKgs, 0));
           const totalKgsAll = round2(items.reduce((s, i) => s + i.totalKgs, 0));
           const totalBillPrice = round2(
-            items.reduce((s, i) => s + i.totalPrice, 0)
+            items.reduce((s, i) => s + i.totalPrice, 0),
           );
 
           await tx.formerLoading.update({
@@ -152,7 +152,7 @@ export const PATCH = withAuth(
           const { trayKgs, totalKgs, totalPrice } = computeFields(
             finalNoTrays,
             finalLoose,
-            finalPrice
+            finalPrice,
           );
 
           const updatedItem = await tx.agentItem.update({
@@ -183,7 +183,7 @@ export const PATCH = withAuth(
           const totalTrayKgs = round2(items.reduce((s, i) => s + i.trayKgs, 0));
           const totalKgsAll = round2(items.reduce((s, i) => s + i.totalKgs, 0));
           const totalBillPrice = round2(
-            items.reduce((s, i) => s + i.totalPrice, 0)
+            items.reduce((s, i) => s + i.totalPrice, 0),
           );
 
           await tx.agentLoading.update({
@@ -229,7 +229,7 @@ export const PATCH = withAuth(
       if (!result) {
         return NextResponse.json(
           { success: false, message: "Item not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
@@ -242,20 +242,21 @@ export const PATCH = withAuth(
           success: false,
           message: error?.message || "Failed to update item",
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
-  }
+  },
 );
+
 export const DELETE = withAuth(
-  async (_req: Request, context: { params: Promise<{ id: string }> }) => {
+  async (request: Request, context: { params: Promise<{ id: string }> }) => {
     try {
       const { id: itemId } = await context.params;
 
       if (!itemId) {
         return NextResponse.json(
           { success: false, message: "Missing item id" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -264,29 +265,61 @@ export const DELETE = withAuth(
 
         const fItem = await tx.formerItem.findUnique({
           where: { id: itemId },
+          include: { loading: true },
         });
 
         if (fItem) {
           const loadingId = fItem.formerLoadingId;
 
+          const oldValues = {
+            varietyCode: fItem.varietyCode,
+            noTrays: fItem.noTrays,
+            loose: fItem.loose,
+            totalKgs: fItem.totalKgs,
+            pricePerKg: fItem.pricePerKg,
+            billNo: fItem.loading.billNo,
+            name: fItem.loading.FarmerName,
+          };
+
           await tx.formerItem.delete({
             where: { id: itemId },
+          });
+
+          await logAudit({
+            user: (request as any).user,
+            action: "DELETE",
+            module: "Farmer Item",
+            recordId: itemId,
+            request,
+            oldValues,
+            newValues: null,
           });
 
           const remaining = await tx.formerItem.findMany({
             where: { formerLoadingId: loadingId },
           });
 
-          // If no items left → delete whole bill
           if (remaining.length === 0) {
             await tx.formerLoading.delete({
               where: { id: loadingId },
             });
 
+            await logAudit({
+              user: (request as any).user,
+              action: "DELETE",
+              module: "Farmer Bill",
+              recordId: loadingId,
+              request,
+              oldValues: {
+                billNo: fItem.loading.billNo,
+                name: fItem.loading.FarmerName,
+              },
+              newValues: null,
+            });
+
             return { deletedBill: true };
           }
 
-          // recompute totals
           const totalTrays = remaining.reduce((s, i) => s + i.noTrays, 0);
           const totalLooseKgs = remaining.reduce((s, i) => s + i.loose, 0);
           const totalTrayKgs = remaining.reduce((s, i) => s + i.trayKgs, 0);
@@ -312,13 +345,34 @@ export const DELETE = withAuth(
 
         const aItem = await tx.agentItem.findUnique({
           where: { id: itemId },
+          include: { loading: true },
         });
 
         if (aItem) {
           const loadingId = aItem.agentLoadingId;
 
+          const oldValues = {
+            varietyCode: aItem.varietyCode,
+            noTrays: aItem.noTrays,
+            loose: aItem.loose,
+            totalKgs: aItem.totalKgs,
+            pricePerKg: aItem.pricePerKg,
+            billNo: aItem.loading.billNo,
+            name: aItem.loading.agentName,
+          };
+
           await tx.agentItem.delete({
             where: { id: itemId },
+          });
+
+          await logAudit({
+            user: (request as any).user,
+            action: "DELETE",
+            module: "Agent Item",
+            recordId: itemId,
+            request,
+            oldValues,
+            newValues: null,
           });
 
           const remaining = await tx.agentItem.findMany({
@@ -328,6 +382,19 @@ export const DELETE = withAuth(
           if (remaining.length === 0) {
             await tx.agentLoading.delete({
               where: { id: loadingId },
+            });
+
+            await logAudit({
+              user: (request as any).user,
+              action: "DELETE",
+              module: "Agent Bill",
+              recordId: loadingId,
+              request,
+              oldValues: {
+                billNo: aItem.loading.billNo,
+                name: aItem.loading.agentName,
+              },
+              newValues: null,
             });
 
             return { deletedBill: true };
@@ -360,7 +427,7 @@ export const DELETE = withAuth(
       if (!result) {
         return NextResponse.json(
           { success: false, message: "Item not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
@@ -376,8 +443,8 @@ export const DELETE = withAuth(
           success: false,
           message: error?.message || "Failed to delete item",
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
-  }
+  },
 );

@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import FarmerLoadingList from "./FarmerLoadingList";
 
-const TRAY_WEIGHT = 35;
+const TRAY_WEIGHT_OPTIONS = [35, 40, 42];
 const DEDUCTION_PERCENT = 5;
 const OTHER_VEHICLE_VALUE = "__OTHER__";
 
@@ -69,6 +69,7 @@ const cleanName = (value: string) =>
 export default function FormerLoading() {
   const queryClient = useQueryClient();
 
+  const [trayWeight, setTrayWeight] = useState(35);
   const [farmerName, setFarmerName] = useState("");
   const [village, setVillage] = useState("");
   const [date, setDate] = useState(todayYMD());
@@ -153,12 +154,12 @@ export default function FormerLoading() {
 
   // ---- helpers ----
   const calculateRowTotal = (item: ItemRow) => {
-    return safeNum(item.noTrays) * TRAY_WEIGHT + safeNum(item.loose);
+    return safeNum(item.noTrays) * trayWeight + safeNum(item.loose);
   };
 
   const totalKgs = useMemo(
     () => items.reduce((sum, item) => sum + calculateRowTotal(item), 0),
-    [items],
+    [items, trayWeight],
   );
 
   const totalTrays = useMemo(
@@ -195,6 +196,7 @@ export default function FormerLoading() {
     setVehicleId("");
     setOtherVehicleNo("");
     setLocalVehicle("");
+    setTrayWeight(35);
 
     setItems([
       { id: crypto.randomUUID(), varietyCode: "", noTrays: 0, loose: 0 },
@@ -243,6 +245,7 @@ export default function FormerLoading() {
     setVehicleId(loading.vehicleId || "");
     setOtherVehicleNo(loading.vehicleNo || "");
     setLocalVehicle(loading.localVehicle || "");
+    setTrayWeight(loading.trayWeight || 35);
 
     const rows = loading.items.map((i: any) => ({
       id: crypto.randomUUID(),
@@ -338,6 +341,7 @@ export default function FormerLoading() {
         noTrays: safeNum(i.noTrays),
         loose: safeNum(i.loose),
       })),
+      trayWeight,
     };
 
     try {
@@ -465,6 +469,27 @@ export default function FormerLoading() {
             />
             Add Vehicle? (If checked: No 5% deduction)
           </label>
+        </Field>
+
+        <Field>
+          <FieldLabel>Tray Weight *</FieldLabel>
+
+          <Select
+            value={String(trayWeight)}
+            onValueChange={(v) => setTrayWeight(Number(v))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select Tray Weight" />
+            </SelectTrigger>
+
+            <SelectContent>
+              {TRAY_WEIGHT_OPTIONS.map((weight) => (
+                <SelectItem key={weight} value={String(weight)}>
+                  {weight} Kgs
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
 
         {/*  Vehicle fields only when checkbox checked */}
