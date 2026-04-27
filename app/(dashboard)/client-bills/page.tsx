@@ -179,6 +179,12 @@ export default function ClientBillsPage() {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<ClientRecord[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<UIItem | null>(
+    null,
+  );
   const [editing, setEditing] = useState<
     Record<
       string,
@@ -558,30 +564,106 @@ export default function ClientBillsPage() {
     setDeleteItemTarget(null);
   };
 
+  // FRONTEND — replace ONLY inside confirmDeleteItem()
+
+  // REPLACE YOUR FULL confirmDeleteItem FUNCTION ONLY
+
   const confirmDeleteItem = async () => {
-    if (deletingItem) return;
-    if (!deleteItemTarget?.id) return;
+    if (deletingItem || !deleteItemTarget?.id) return;
 
     try {
       setDeletingItem(true);
+
+      // Correct API route
+      const meRes = await axios.get("/api/me");
+      const userRole = meRes.data?.user?.role?.toLowerCase?.() || "";
+
+      // Find bill
+      const bill = bills.find((b) => b.id === deleteItemTarget.loadingId);
+
+      // LAST ITEM IN BILL
+      if (bill && bill.items.length === 1) {
+        // ADMIN → direct delete
+        if (userRole === "admin") {
+          const res = await axios.delete(
+            `/api/client-bills/item/${deleteItemTarget.id}`,
+          );
+
+          await refreshRecords();
+
+          if (res.data?.deletedBill) {
+            toast.success("Last item deleted • Bill removed");
+          } else {
+            toast.success("Item deleted");
+          }
+
+          closeDeleteItemDialog();
+          return;
+        }
+
+        // NON-ADMIN → OTP
+        await axios.post("/api/client-bills/send-delete-otp", {
+          billId: bill.id,
+          itemId: deleteItemTarget.id,
+          source: "CLIENT", // REQUIRED
+        });
+
+        setPendingDeleteItem(deleteItemTarget);
+        setOtpDialogOpen(true);
+        setDeleteItemOpen(false);
+
+        toast.success("OTP sent to admin Gmail");
+        return;
+      }
+
+      // NORMAL DELETE (not last item)
       const res = await axios.delete(
         `/api/client-bills/item/${deleteItemTarget.id}`,
       );
+
       await refreshRecords();
 
-      if (res.data?.deletedBill)
-        toast.success("Item deleted  Bill also removed (last item)");
-      else toast.success("Item deleted");
+      if (res.data?.deletedBill) {
+        toast.success("Item deleted • Bill removed");
+      } else {
+        toast.success("Item deleted");
+      }
 
       closeDeleteItemDialog();
     } catch (e: any) {
-      console.error(e);
-      toast.error(e?.response?.data?.message || "Delete failed");
+      console.error("DELETE ERROR:", e);
+
+      toast.error(e?.response?.data?.message || e?.message || "Delete failed");
     } finally {
       setDeletingItem(false);
     }
   };
+  const verifyOtpAndDelete = async () => {
+    if (!pendingDeleteItem || !otpCode) {
+      return toast.error("Enter OTP");
+    }
 
+    try {
+      setOtpLoading(true);
+
+      await axios.post("/api/client-bills/verify-delete-otp", {
+        itemId: pendingDeleteItem.id,
+        otp: otpCode,
+      });
+
+      toast.success("OTP verified • Bill deleted");
+
+      setOtpDialogOpen(false);
+      setOtpCode("");
+      setPendingDeleteItem(null);
+
+      await refreshRecords();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Invalid OTP");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
   const exportToExcel = () => {
     const data = records.flatMap((rec) => {
       const hasVehicle =
@@ -2022,13 +2104,32 @@ font-family: 'Cinzel', cursive;
       {/* ── Hidden printable content ── */}
       <div className="hidden">
         {bills.map((bill) => {
-          const paidForThisBill = payments
-            .filter((p) => p.clientId?.toString() === bill.id)
+          // Only payments for this specific client
+          const totalClientPayments = payments
+            .filter((p) => p.clientId?.toString() === bill.clientId?.toString())
             .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
+          // Previous balance before current bill
+          const oldBalance = calculatePreviousPending(
+            bill.clientId!,
+            bill.id,
+            records,
+            payments,
+          );
+
+          // Payment applied to old balance first
+          const paymentAfterOldBalance = Math.max(
+            0,
+            totalClientPayments - oldBalance,
+          );
+
+          // Remaining only for CURRENT bill
           const remainingAmount = Math.max(
             0,
-            n(bill.grandTotal) - paidForThisBill,
+            n(bill.totalPrice) +
+              n(bill.packingAmountTotal) +
+              n(bill.dispatchChargesTotal) -
+              paymentAfterOldBalance,
           );
 
           return (
@@ -2199,7 +2300,6 @@ font-family: 'Cinzel', cursive;
                         </div>
                       </div>
                     )}
-
                     {bill.dispatchBreakdown?.iceCooling > 0 && (
                       <div className="amount-row">
                         <span>Packing Charges</span>
@@ -2214,7 +2314,6 @@ font-family: 'Cinzel', cursive;
                         </div>
                       </div>
                     )}
-
                     {bill.dispatchBreakdown?.transportCharges > 0 && (
                       <div className="amount-row">
                         <span>Local Transport</span>
@@ -2229,7 +2328,6 @@ font-family: 'Cinzel', cursive;
                         </div>
                       </div>
                     )}
-
                     {sortOtherCharges(bill.dispatchBreakdown?.otherCharges).map(
                       (charge, index) => (
                         <div key={index} className="amount-row">
@@ -2244,7 +2342,6 @@ font-family: 'Cinzel', cursive;
                         </div>
                       ),
                     )}
-
                     <div className="amount-row">
                       <span>Old Balance</span>
                       <div className="right">
@@ -2260,7 +2357,6 @@ font-family: 'Cinzel', cursive;
                         </span>
                       </div>
                     </div>
-
                     <div className="amount-row grand-total">
                       <span>Grand Total</span>
                       <div className="right">
@@ -2276,7 +2372,24 @@ font-family: 'Cinzel', cursive;
                       <div className="right">
                         <span>:</span>
                         <span className="value">
-                          {remainingAmount.toLocaleString("en-IN")}
+                          {Math.max(
+                            0,
+                            // Current full bill including all charges
+                            n(bill.totalPrice) +
+                              n(bill.packingAmountTotal) +
+                              n(bill.dispatchChargesTotal) -
+                              // Payments ONLY for this exact bill
+                              payments
+                                .filter(
+                                  (p) =>
+                                    p.clientId?.toString() ===
+                                    bill.id.toString(),
+                                )
+                                .reduce(
+                                  (sum, p) => sum + Number(p.amount || 0),
+                                  0,
+                                ),
+                          ).toLocaleString("en-IN")}
                         </span>
                       </div>
                     </div>
@@ -2287,6 +2400,41 @@ font-family: 'Cinzel', cursive;
           );
         })}
       </div>
+      <Dialog open={otpDialogOpen} onOpenChange={setOtpDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify OTP</DialogTitle>
+            <DialogDescription>
+              Last item deletion requires email OTP verification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Input
+              placeholder="Enter OTP"
+              value={otpCode}
+              maxLength={6}
+              onChange={(e) => setOtpCode(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOtpDialogOpen(false);
+                setOtpCode("");
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button onClick={verifyOtpAndDelete} disabled={otpLoading}>
+              {otpLoading ? "Verifying..." : "Verify & Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

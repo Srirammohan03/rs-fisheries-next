@@ -1,6 +1,12 @@
 // app/(dashboard)/vendor-bills/page.tsx
 "use client";
-
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
@@ -27,6 +33,7 @@ import {
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import LoadingDeleteDialog from "@/components/helpers/LoadingDeleteDialog";
+import { DialogFooter } from "@/components/ui/dialog";
 
 interface VendorItem {
   id: string;
@@ -174,6 +181,16 @@ export default function VendorBillsPage() {
   const [activeTab, setActiveTab] = useState<"farmer" | "agent">("farmer");
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<LoadingRecord[]>([]);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<VendorItem | null>(
+    null,
+  );
+
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+
+  const [otpCode, setOtpCode] = useState("");
+
+  const [otpLoading, setOtpLoading] = useState(false);
+
   const [vendorPayments, setVendorPayments] = useState<
     Array<{
       id: string;
@@ -700,8 +717,17 @@ export default function VendorBillsPage() {
     }
   };
 
-  const openDeleteItemDialog = (row: VendorItem) => {
-    setDeleteItemTarget(row);
+  const openDeleteItemDialog = (row: VendorItem, billId: string) => {
+    setDeleteItemTarget({
+      ...row,
+      loadingId: billId,
+    });
+
+    console.log("DELETE TARGET SET:", {
+      ...row,
+      loadingId: billId,
+    });
+
     setDeleteItemOpen(true);
   };
 
@@ -712,11 +738,58 @@ export default function VendorBillsPage() {
   };
 
   const confirmDeleteItem = async () => {
-    if (!deleteItemTarget?.id) return;
+    if (deletingItem || !deleteItemTarget?.id) return;
 
     try {
       setDeletingItem(true);
 
+      const meRes = await axios.get("/api/me");
+      const userRole = meRes.data?.user?.role?.toLowerCase?.() || "";
+
+      const bill = bills.find(
+        (b) =>
+          b.id === deleteItemTarget.loadingId ||
+          b.items.some((i) => i.id === deleteItemTarget.id),
+      );
+
+      // LAST ITEM
+      if (bill && bill.items.length === 1) {
+        // ADMIN → direct delete
+        if (userRole === "admin") {
+          const res = await axios.delete(
+            `/api/vendor-bills/item/${deleteItemTarget.id}`,
+          );
+
+          await refreshRecords();
+
+          if (res.data?.deletedBill) {
+            toast.success("Last item deleted • Bill removed");
+          } else {
+            toast.success("Item deleted");
+          }
+
+          closeDeleteItemDialog();
+          return;
+        }
+
+        // NON-ADMIN → OTP
+
+        // NON-ADMIN → OTP
+        await axios.post("/api/vendor-bills/send-delete-otp", {
+          billId: bill.id,
+          itemId: deleteItemTarget.id,
+          source: activeTab === "farmer" ? "FORMER" : "AGENT", // REQUIRED
+        });
+
+        setPendingDeleteItem(deleteItemTarget);
+        setOtpDialogOpen(true);
+        setDeleteItemOpen(false);
+
+        toast.success("OTP sent to admin Gmail");
+        return;
+      }
+
+      // NORMAL DELETE
       const res = await axios.delete(
         `/api/vendor-bills/item/${deleteItemTarget.id}`,
       );
@@ -724,16 +797,51 @@ export default function VendorBillsPage() {
       await refreshRecords();
 
       if (res.data?.deletedBill) {
-        toast.success("Item deleted  Bill also removed (last item)");
+        toast.success("Item deleted • Bill removed");
       } else {
         toast.success("Item deleted");
       }
 
       closeDeleteItemDialog();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Delete failed");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || "Delete failed");
     } finally {
       setDeletingItem(false);
+    }
+  };
+
+  const verifyOtpAndDelete = async () => {
+    if (!pendingDeleteItem?.id || !otpCode.trim()) {
+      toast.error("Enter OTP");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+
+      const res = await axios.post("/api/vendor-bills/verify-delete-otp", {
+        itemId: pendingDeleteItem.id,
+        otp: otpCode.trim(),
+      });
+
+      await refreshRecords();
+
+      toast.success(res.data?.message || "Item deleted successfully");
+
+      // RESET ALL
+      setOtpDialogOpen(false);
+      setOtpCode("");
+      setPendingDeleteItem(null);
+      setDeleteItemTarget(null);
+      setDeleteItemOpen(false);
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          "OTP verification failed",
+      );
+    } finally {
+      setOtpLoading(false);
     }
   };
   const addChargeField = (billId: string) => {
@@ -1929,7 +2037,10 @@ font-family: 'Cinzel', cursive;
                                                       variant="ghost"
                                                       className="text-red-600 hover:bg-red-50"
                                                       onClick={() =>
-                                                        openDeleteItemDialog(it)
+                                                        openDeleteItemDialog(
+                                                          it,
+                                                          bill.id,
+                                                        )
                                                       }
                                                     >
                                                       <Trash2 className="w-4 h-4" />
@@ -2323,7 +2434,7 @@ font-family: 'Cinzel', cursive;
                                           variant="ghost"
                                           className="text-red-600 hover:bg-red-50"
                                           onClick={() =>
-                                            openDeleteItemDialog(it)
+                                            openDeleteItemDialog(it, bill.id)
                                           }
                                         >
                                           <Trash2 className="w-4 h-4" />
@@ -3107,6 +3218,41 @@ font-family: 'Cinzel', cursive;
           );
         })}
       </div>
+      <Dialog open={otpDialogOpen} onOpenChange={setOtpDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify OTP</DialogTitle>
+            <DialogDescription>
+              Last item deletion requires email OTP verification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Input
+              placeholder="Enter OTP"
+              value={otpCode}
+              maxLength={6}
+              onChange={(e) => setOtpCode(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOtpDialogOpen(false);
+                setOtpCode("");
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button onClick={verifyOtpAndDelete} disabled={otpLoading}>
+              {otpLoading ? "Verifying..." : "Verify & Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
