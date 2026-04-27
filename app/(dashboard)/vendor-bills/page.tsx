@@ -1,6 +1,12 @@
 // app/(dashboard)/vendor-bills/page.tsx
 "use client";
-
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
@@ -27,6 +33,7 @@ import {
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import LoadingDeleteDialog from "@/components/helpers/LoadingDeleteDialog";
+import { DialogFooter } from "@/components/ui/dialog";
 
 interface VendorItem {
   id: string;
@@ -174,6 +181,16 @@ export default function VendorBillsPage() {
   const [activeTab, setActiveTab] = useState<"farmer" | "agent">("farmer");
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<LoadingRecord[]>([]);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<VendorItem | null>(
+    null,
+  );
+
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+
+  const [otpCode, setOtpCode] = useState("");
+
+  const [otpLoading, setOtpLoading] = useState(false);
+
   const [vendorPayments, setVendorPayments] = useState<
     Array<{
       id: string;
@@ -700,8 +717,17 @@ export default function VendorBillsPage() {
     }
   };
 
-  const openDeleteItemDialog = (row: VendorItem) => {
-    setDeleteItemTarget(row);
+  const openDeleteItemDialog = (row: VendorItem, billId: string) => {
+    setDeleteItemTarget({
+      ...row,
+      loadingId: billId,
+    });
+
+    console.log("DELETE TARGET SET:", {
+      ...row,
+      loadingId: billId,
+    });
+
     setDeleteItemOpen(true);
   };
 
@@ -712,11 +738,58 @@ export default function VendorBillsPage() {
   };
 
   const confirmDeleteItem = async () => {
-    if (!deleteItemTarget?.id) return;
+    if (deletingItem || !deleteItemTarget?.id) return;
 
     try {
       setDeletingItem(true);
 
+      const meRes = await axios.get("/api/me");
+      const userRole = meRes.data?.user?.role?.toLowerCase?.() || "";
+
+      const bill = bills.find(
+        (b) =>
+          b.id === deleteItemTarget.loadingId ||
+          b.items.some((i) => i.id === deleteItemTarget.id),
+      );
+
+      // LAST ITEM
+      if (bill && bill.items.length === 1) {
+        // ADMIN → direct delete
+        if (userRole === "admin") {
+          const res = await axios.delete(
+            `/api/vendor-bills/item/${deleteItemTarget.id}`,
+          );
+
+          await refreshRecords();
+
+          if (res.data?.deletedBill) {
+            toast.success("Last item deleted • Bill removed");
+          } else {
+            toast.success("Item deleted");
+          }
+
+          closeDeleteItemDialog();
+          return;
+        }
+
+        // NON-ADMIN → OTP
+
+        // NON-ADMIN → OTP
+        await axios.post("/api/vendor-bills/send-delete-otp", {
+          billId: bill.id,
+          itemId: deleteItemTarget.id,
+          source: activeTab === "farmer" ? "FORMER" : "AGENT", // REQUIRED
+        });
+
+        setPendingDeleteItem(deleteItemTarget);
+        setOtpDialogOpen(true);
+        setDeleteItemOpen(false);
+
+        toast.success("OTP sent to admin Gmail");
+        return;
+      }
+
+      // NORMAL DELETE
       const res = await axios.delete(
         `/api/vendor-bills/item/${deleteItemTarget.id}`,
       );
@@ -724,16 +797,51 @@ export default function VendorBillsPage() {
       await refreshRecords();
 
       if (res.data?.deletedBill) {
-        toast.success("Item deleted  Bill also removed (last item)");
+        toast.success("Item deleted • Bill removed");
       } else {
         toast.success("Item deleted");
       }
 
       closeDeleteItemDialog();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Delete failed");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || "Delete failed");
     } finally {
       setDeletingItem(false);
+    }
+  };
+
+  const verifyOtpAndDelete = async () => {
+    if (!pendingDeleteItem?.id || !otpCode.trim()) {
+      toast.error("Enter OTP");
+      return;
+    }
+
+    try {
+      setOtpLoading(true);
+
+      const res = await axios.post("/api/vendor-bills/verify-delete-otp", {
+        itemId: pendingDeleteItem.id,
+        otp: otpCode.trim(),
+      });
+
+      await refreshRecords();
+
+      toast.success(res.data?.message || "Item deleted successfully");
+
+      // RESET ALL
+      setOtpDialogOpen(false);
+      setOtpCode("");
+      setPendingDeleteItem(null);
+      setDeleteItemTarget(null);
+      setDeleteItemOpen(false);
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          "OTP verification failed",
+      );
+    } finally {
+      setOtpLoading(false);
     }
   };
   const addChargeField = (billId: string) => {
@@ -1929,7 +2037,10 @@ font-family: 'Cinzel', cursive;
                                                       variant="ghost"
                                                       className="text-red-600 hover:bg-red-50"
                                                       onClick={() =>
-                                                        openDeleteItemDialog(it)
+                                                        openDeleteItemDialog(
+                                                          it,
+                                                          bill.id,
+                                                        )
                                                       }
                                                     >
                                                       <Trash2 className="w-4 h-4" />
@@ -2323,7 +2434,7 @@ font-family: 'Cinzel', cursive;
                                           variant="ghost"
                                           className="text-red-600 hover:bg-red-50"
                                           onClick={() =>
-                                            openDeleteItemDialog(it)
+                                            openDeleteItemDialog(it, bill.id)
                                           }
                                         >
                                           <Trash2 className="w-4 h-4" />
@@ -2875,209 +2986,273 @@ font-family: 'Cinzel', cursive;
       />
       {/* ── Hidden printable content ── with better spacing ── */}
       <div className="hidden">
-        {bills.map((bill) => (
-          <div
-            key={bill.id}
-            id={`print-bill-${bill.id}`}
-            className="print-container"
-          >
-            {/* Header with more breathing space */}
-            <div className="header">
-              {/* Logo */}
-              <div className="logo">
-                <img
-                  src="/assets/printlogo.jpeg"
-                  alt="RS Fisheries Logo"
-                  className="logo-img"
-                />
-              </div>
+        {bills.map((bill) => {
+          const paidForThisBill = vendorPayments
+            .filter((p) => p.sourceRecordId?.toString() === bill.id)
+            .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-              {/* Company Name */}
-              <div className="center">
-                <h1 className="company-short">RSF</h1>
-                <h2 className="company-full">RAMA SATYANARAYANA FISHERIES</h2>
-              </div>
-              {/* Address */}
-              <div className="address">
-                <strong>Office Address</strong>
-                <p>
-                  NH16, Jio Petrol Pump
-                  <br />
-                  Golden Ice Factory
-                  <br />
-                  Kovuru, Nellore - 524366
-                </p>
-              </div>
-            </div>
-
-            <hr className="separator" />
-
-            <div className="bill-header-row">
-              <div className="bill-left">
-                <strong>Bill No:</strong> {bill.billNo || "—"}
-              </div>
-
-              <div className="bill-title">ESTIMATION / BILLING</div>
-
-              <div className="bill-right">
-                <strong>Date:</strong>{" "}
-                {bill.date
-                  ? new Date(bill.date).toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })
-                  : ""}
-              </div>
-            </div>
-
-            <hr className="separator" />
-            <div className="bill-body">
-              <div className="farmer-row">
-                <div className="farmer-row-left">
-                  <strong>
-                    {activeTab === "farmer" ? "Farmer" : "Agent"}:
-                  </strong>{" "}
-                  {bill.name || "—"}
+          const remainingAmount = Math.max(
+            0,
+            Number(bill.grandTotal || 0) - paidForThisBill,
+          );
+          return (
+            <div
+              key={bill.id}
+              id={`print-bill-${bill.id}`}
+              className="print-container"
+            >
+              {/* Header with more breathing space */}
+              <div className="header">
+                {/* Logo */}
+                <div className="logo">
+                  <img
+                    src="/assets/printlogo.jpeg"
+                    alt="RS Fisheries Logo"
+                    className="logo-img"
+                  />
                 </div>
 
-                <div className="farmer-row-center">
-                  <strong>Address:</strong> {bill.village || "—"}
+                {/* Company Name */}
+                <div className="center">
+                  <h1 className="company-short">RSF</h1>
+                  <h2 className="company-full">RAMA SATYANARAYANA FISHERIES</h2>
                 </div>
-                <div className="farmer-row-right">
-                  <strong>Vehicle No:</strong>{" "}
-                  <span>{bill.localVehicle || " "}</span>
+                {/* Address */}
+                <div className="address">
+                  <strong>Office Address</strong>
+                  <p>
+                    NH16, Jio Petrol Pump
+                    <br />
+                    Golden Ice Factory
+                    <br />
+                    Kovuru, Nellore - 524366
+                  </p>
                 </div>
               </div>
-              <img src="/assets/bg-fish.png" className="watermark" />
-              <table className="items-table">
-                <thead>
-                  <tr>
-                    <th>S.No</th>
-                    <th>Variety</th>
-                    <th>Trays</th>
-                    <th>Loose (kg)</th>
-                    <th>Price/Kg</th>
-                    <th>Total (₹)</th>
-                  </tr>
-                </thead>
 
-                <tbody>
-                  {bill.items.map((item, index) => (
-                    <tr key={item.id}>
-                      <td>{index + 1}</td>
-                      <td>{item.varietyCode}</td>
-                      <td>{item.noTrays}</td>
-                      <td>{(item.loose || 0).toFixed(2)}</td>
-                      <td>{(item.pricePerKg || 0).toFixed(2)}</td>
-                      <td>
-                        {(item.totalPrice || 0).toLocaleString("en-IN", {
+              <hr className="separator" />
+
+              <div className="bill-header-row">
+                <div className="bill-left">
+                  <strong>Bill No:</strong> {bill.billNo || "—"}
+                </div>
+
+                <div className="bill-title">ESTIMATION / BILLING</div>
+
+                <div className="bill-right">
+                  <strong>Date:</strong>{" "}
+                  {bill.date
+                    ? new Date(bill.date).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : ""}
+                </div>
+              </div>
+
+              <hr className="separator" />
+              <div className="bill-body">
+                <div className="farmer-row">
+                  <div className="farmer-row-left">
+                    <strong>
+                      {activeTab === "farmer" ? "Farmer" : "Agent"}:
+                    </strong>{" "}
+                    {bill.name || "—"}
+                  </div>
+
+                  <div className="farmer-row-center">
+                    <strong>Address:</strong> {bill.village || "—"}
+                  </div>
+                  <div className="farmer-row-right">
+                    <strong>Vehicle No:</strong>{" "}
+                    <span>{bill.localVehicle || " "}</span>
+                  </div>
+                </div>
+                <img src="/assets/bg-fish.png" className="watermark" />
+                <table className="items-table">
+                  <thead>
+                    <tr>
+                      <th>S.No</th>
+                      <th>Variety</th>
+                      <th>Trays</th>
+                      <th>Loose (kg)</th>
+                      <th>Price/Kg</th>
+                      <th>Total (₹)</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {bill.items.map((item, index) => (
+                      <tr key={item.id}>
+                        <td>{index + 1}</td>
+                        <td>{item.varietyCode}</td>
+                        <td>{item.noTrays}</td>
+                        <td>{(item.loose || 0).toFixed(2)}</td>
+                        <td>{(item.pricePerKg || 0).toFixed(2)}</td>
+                        <td>
+                          {(item.totalPrice || 0).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td></td>
+                      <td className="text-right font-semibold">
+                        Total Trays :
+                      </td>
+                      <td style={{ textAlign: "center", fontWeight: 700 }}>
+                        {bill.totalTrays}
+                      </td>
+                      <td></td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>
+                        Bill Amount :
+                      </td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>
+                        ₹
+                        {n(bill.totalPrice).toLocaleString("en-IN", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td></td>
-                    <td className="text-right font-semibold">Total Trays :</td>
-                    <td style={{ textAlign: "center", fontWeight: 700 }}>
-                      {bill.totalTrays}
-                    </td>
-                    <td></td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>
-                      Bill Amount :
-                    </td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>
-                      ₹
-                      {n(bill.totalPrice).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-              {/* Charges Summary */}
-              <div className="charges-wrapper">
-                <div className="amount-section">
-                  <div className="amount-row">
-                    <span>Bill Amount :</span>
-                    <span>:</span>
-                    <span className="value">
-                      {n(bill.totalPrice).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                  {bill.dispatchBreakdown?.otherCharges?.map(
-                    (charge, index) => (
-                      <div key={index} className="amount-row">
-                        <span>{charge.label}</span>
-                        <span>:</span>
-                        <span className="value">
-                          ₹
-                          {n(charge.amount).toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </span>
-                      </div>
-                    ),
-                  )}
+                  </tfoot>
+                </table>
+                {/* Charges Summary */}
+                <div className="charges-wrapper">
+                  <div className="amount-section">
+                    <div className="amount-row">
+                      <span>Bill Amount :</span>
+                      <span>:</span>
+                      <span className="value">
+                        {n(bill.totalPrice).toLocaleString("en-IN", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    {bill.dispatchBreakdown?.otherCharges?.map(
+                      (charge, index) => (
+                        <div key={index} className="amount-row">
+                          <span>{charge.label}</span>
+                          <span>:</span>
+                          <span className="value">
+                            ₹
+                            {n(charge.amount).toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                      ),
+                    )}
 
-                  {(() => {
-                    const previousPending = calculatePreviousPending(bill);
-                    return previousPending > 0 ? (
-                      <>
-                        <div className="amount-row">
-                          <span>Old Balance</span>
-                          <span>:</span>
-                          <span className="value">
-                            ₹
-                            {n(previousPending).toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                        <div className="amount-row grand-total">
-                          <span>Grand Total</span>
-                          <span>:</span>
-                          <span className="value">
-                            ₹
-                            {n(
-                              bill.grandTotal + previousPending,
-                            ).toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="amount-row grand-total">
-                        <span>Grand Total</span>
-                        <span>:</span>
-                        <span className="value">
-                          ₹
-                          {n(bill.grandTotal).toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </span>
-                      </div>
-                    );
-                  })()}
+                    {(() => {
+                      const previousPending = calculatePreviousPending(bill);
+                      return previousPending > 0 ? (
+                        <>
+                          <div className="amount-row">
+                            <span>Old Balance</span>
+                            <span>:</span>
+                            <span className="value">
+                              ₹
+                              {n(previousPending).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          <div className="amount-row grand-total">
+                            <span>Grand Total</span>
+                            <span>:</span>
+                            <span className="value">
+                              ₹
+                              {n(
+                                bill.grandTotal + previousPending,
+                              ).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+
+                          <div className="amount-row grand-total">
+                            <span>Remaining Amount</span>
+                            <span>:</span>
+                            <span className="value">
+                              {remainingAmount.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="amount-row grand-total">
+                            <span>Grand Total</span>
+                            <span>:</span>
+                            <span className="value">
+                              ₹
+                              {n(bill.grandTotal).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          <div className="amount-row grand-total">
+                            <span>Pending Bill Amount</span>
+                            <span>:</span>
+                            <span className="value">
+                              {remainingAmount.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      <Dialog open={otpDialogOpen} onOpenChange={setOtpDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify OTP</DialogTitle>
+            <DialogDescription>
+              Last item deletion requires email OTP verification.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Input
+              placeholder="Enter OTP"
+              value={otpCode}
+              maxLength={6}
+              onChange={(e) => setOtpCode(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOtpDialogOpen(false);
+                setOtpCode("");
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button onClick={verifyOtpAndDelete} disabled={otpLoading}>
+              {otpLoading ? "Verifying..." : "Verify & Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

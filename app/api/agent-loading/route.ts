@@ -25,10 +25,10 @@ type AgentLoadingBody = {
   vehicleNo?: string | null;
   localVehicle?: string | null;
   items: AgentItemInput[];
+  trayWeight?: number;
 };
 
-const asTrim = (v: unknown): string =>
-  typeof v === "string" ? v.trim() : "";
+const asTrim = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 const toNum = (v: unknown): number => {
   const n = typeof v === "string" ? Number(v.trim()) : Number(v);
@@ -47,21 +47,21 @@ export const POST = withAuth(async (req: Request) => {
     if (!agentName) {
       return NextResponse.json(
         { success: false, message: "Agent name is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!billNo) {
       return NextResponse.json(
         { success: false, message: "Bill number is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json(
         { success: false, message: "At least one item is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -69,7 +69,7 @@ export const POST = withAuth(async (req: Request) => {
     if (Number.isNaN(loadingDate.getTime())) {
       return NextResponse.json(
         { success: false, message: "Invalid date provided" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -78,12 +78,13 @@ export const POST = withAuth(async (req: Request) => {
     const vehicleNo = asTrim(body.vehicleNo) || null;
 
     /* ---------- ITEMS ---------- */
+    const trayKg = Number(body.trayWeight) || 35;
     const items = body.items.map((it) => {
       const varietyCode = asTrim(it.varietyCode);
       const noTrays = Math.max(0, Math.floor(toNum(it.noTrays)));
       const loose = Math.max(0, toNum(it.loose));
 
-      const trayKgs = noTrays * TRAY_KG;
+      const trayKgs = noTrays * trayKg;
       const totalKgs = trayKgs + loose;
 
       return {
@@ -178,13 +179,20 @@ export const POST = withAuth(async (req: Request) => {
     console.error("AgentLoading POST error:", err);
     if (err.code === "P2002") {
       return NextResponse.json(
-        { success: false, message: `A loading record with Bill No ${asTrim(err?.meta?.target?.[0] || 'Unknown')} already exists` },
-        { status: 400 }
+        {
+          success: false,
+          message: `A loading record with Bill No ${asTrim(err?.meta?.target?.[0] || "Unknown")} already exists`,
+        },
+        { status: 400 },
       );
     }
     return NextResponse.json(
-      { success: false, message: "Failed to save agent loading", error: err.message },
-      { status: 500 }
+      {
+        success: false,
+        message: "Failed to save agent loading",
+        error: err.message,
+      },
+      { status: 500 },
     );
   }
 });
@@ -269,7 +277,9 @@ export async function GET(req: Request) {
       );
 
       const grandTotal = round2(
-        itemTotal + breakdown.dispatchChargesTotal + toNum(l.packingAmountTotal),
+        itemTotal +
+          breakdown.dispatchChargesTotal +
+          toNum(l.packingAmountTotal),
       );
 
       return {
@@ -285,7 +295,7 @@ export async function GET(req: Request) {
     console.error("AgentLoading GET error:", err);
     return NextResponse.json(
       { success: false, message: "Failed to fetch agent loadings" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

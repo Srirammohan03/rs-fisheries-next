@@ -210,39 +210,108 @@ const ClientViewPage = () => {
     );
     const filteredPending = filteredBillAmount - filteredPaymentAmount;
 
+    // Prepare data in exact column order matching your Excel image
     const sheetData = filteredLedgerRows.map((row) => ({
       Date: formatDate(row.date),
-      "Invoice / Bill": row.billNo ?? row.invoiceNo ?? "-",
-      "Bill Amount": row.billAmount,
-      Payment: row.paymentAmount,
+      "Invoice / Bill No": row.billNo ?? row.invoiceNo ?? "-",
+      "Bill Amount": row.billAmount || 0,
+      Payment: row.paymentAmount || 0,
       "Payment Mode": row.paymentMode ?? "-",
-      Debit: row.debit,
-      Credit: row.credit,
-      "Closing Balance": row.balance,
+      Debit: row.debit || 0,
+      Credit: row.credit || 0,
+      "Closing Balance": row.balance || 0,
     }));
 
-    sheetData.push({
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+
+    // Add TOTAL row at the bottom
+    const totalRow = {
       Date: "TOTAL",
-      "Invoice / Bill": "",
+      "Invoice / Bill No": "",
       "Bill Amount": filteredBillAmount,
       Payment: filteredPaymentAmount,
       "Payment Mode": "",
       Debit: filteredBillAmount,
       Credit: filteredPaymentAmount,
       "Closing Balance": filteredPending,
+    };
+
+    XLSX.utils.sheet_add_json(ws, [totalRow], {
+      origin: -1,
+      skipHeader: true,
     });
 
-    const ws = XLSX.utils.json_to_sheet(sheetData);
+    // ====================== EXCEL FORMATTING ======================
+
+    // Make header row bold with background
+    const range = XLSX.utils.decode_range(ws["!ref"]!);
+
+    for (let C = 0; C <= range.e.c; C++) {
+      const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (ws[headerCell]) {
+        ws[headerCell].s = {
+          font: { bold: true, color: { rgb: "000000" } },
+          alignment: { horizontal: "center", vertical: "center" },
+          fill: { fgColor: { rgb: "E2E8F0" } }, // Light gray background
+        };
+      }
+    }
+
+    // Format all amount columns (Bill Amount, Payment, Debit, Credit, Closing Balance)
+    const amountColumns = [2, 3, 5, 6, 7]; // 0-based indices: Bill Amount, Payment, Debit, Credit, Closing Balance
+
+    for (let R = 1; R <= range.e.r; R++) {
+      amountColumns.forEach((colIdx) => {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: colIdx });
+        const cell = ws[cellAddress];
+
+        if (cell && typeof cell.v === "number") {
+          cell.t = "n";
+          cell.z = "₹ #,##0"; // Indian Rupee format with comma separator
+          cell.s = {
+            alignment: { horizontal: "right" },
+          };
+        }
+      });
+
+      // Make TOTAL row bold and highlighted
+      if (R === range.e.r) {
+        for (let C = 0; C <= range.e.c; C++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+          if (ws[cellAddress]) {
+            ws[cellAddress].s = {
+              font: { bold: true },
+              alignment: { horizontal: C === 0 ? "center" : "right" },
+            };
+          }
+        }
+      }
+    }
+
+    // Set column widths for clean professional look
+    ws["!cols"] = [
+      { wch: 12 }, // Date
+      { wch: 20 }, // Invoice / Bill No
+      { wch: 15 }, // Bill Amount
+      { wch: 14 }, // Payment
+      { wch: 14 }, // Payment Mode
+      { wch: 15 }, // Debit
+      { wch: 15 }, // Credit
+      { wch: 16 }, // Closing Balance
+    ];
+
+    // Create workbook and trigger download
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Client Ledger");
 
     const safeName = (client.partyName || "client")
-      .replace(/[^a-zA-Z0-9]+/g, "_")
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .toLowerCase()
       .slice(0, 40);
 
     XLSX.writeFile(
       wb,
-      `ledger_${safeName}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `client_ledger_${safeName}_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
 

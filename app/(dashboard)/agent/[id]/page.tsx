@@ -213,21 +213,36 @@ const AgentViewPage = () => {
     );
     const filteredPending = filteredBillAmount - filteredPaymentAmount;
 
+    // Prepare data for Excel - matching your desired format
     const sheetData = filteredLedgerRows.map((row) => ({
       Date: formatDate(row.date),
-      "Invoice / Bill": row.billNo ?? row.invoiceNo ?? "-",
-      "Bill Amount": row.billAmount,
-      Payment: row.paymentAmount,
+      "Invoice / Bill No": row.billNo ?? row.invoiceNo ?? "-",
+      "Bill Amount": row.billAmount || 0,
+      Payment: row.paymentAmount || 0,
       "Payment Mode": row.paymentMode ?? "-",
-      Debit: row.debit,
-      Credit: row.credit,
-      "Closing Balance": row.balance,
+      Debit: row.debit || 0,
+      Credit: row.credit || 0,
+      "Closing Balance": row.balance || 0,
     }));
 
-    const ws = XLSX.utils.json_to_sheet(sheetData);
-    const summaryRow = {
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(sheetData, {
+      header: [
+        "Date",
+        "Invoice / Bill No",
+        "Bill Amount",
+        "Payment",
+        "Payment Mode",
+        "Debit",
+        "Credit",
+        "Closing Balance",
+      ],
+    });
+
+    // Add TOTAL row at the bottom
+    const totalRow = {
       Date: "TOTAL",
-      "Invoice / Bill": "",
+      "Invoice / Bill No": "",
       "Bill Amount": filteredBillAmount,
       Payment: filteredPaymentAmount,
       "Payment Mode": "",
@@ -236,11 +251,94 @@ const AgentViewPage = () => {
       "Closing Balance": filteredPending,
     };
 
-    XLSX.utils.sheet_add_json(ws, [summaryRow], {
+    XLSX.utils.sheet_add_json(ws, [totalRow], {
       origin: -1,
       skipHeader: true,
     });
 
+    // === STYLING & FORMATTING ===
+    const range = XLSX.utils.decode_range(ws["!ref"]!);
+
+    // Make header bold
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const headerCell = XLSX.utils.encode_cell({ r: 0, c: C });
+      if (!ws[headerCell]) continue;
+      ws[headerCell].s = {
+        font: { bold: true },
+        alignment: { horizontal: "center" },
+        fill: { fgColor: { rgb: "E2E8F0" } }, // Light gray background
+      };
+    }
+
+    // Format currency columns (Bill Amount, Payment, Debit, Credit, Closing Balance)
+    const currencyColumns = [
+      "Bill Amount",
+      "Payment",
+      "Debit",
+      "Credit",
+      "Closing Balance",
+    ];
+    const colIndices = {
+      Date: 0,
+      "Invoice / Bill No": 1,
+      "Bill Amount": 2,
+      Payment: 3,
+      "Payment Mode": 4,
+      Debit: 5,
+      Credit: 6,
+      "Closing Balance": 7,
+    };
+
+    for (let R = 1; R <= range.e.r; R++) {
+      // Start from row 1 (data rows)
+      currencyColumns.forEach((colName) => {
+        const colIdx = colIndices[colName as keyof typeof colIndices];
+        const cellRef = XLSX.utils.encode_cell({ r: R, c: colIdx });
+        const cell = ws[cellRef];
+        if (cell && typeof cell.v === "number") {
+          cell.t = "n"; // number type
+          cell.z = "₹ #,##0"; // Indian Rupee format with comma
+          cell.s = {
+            alignment: { horizontal: "right" },
+          };
+        }
+      });
+
+      // Make TOTAL row bold
+      if (R === range.e.r) {
+        for (let C = 0; C <= range.e.c; C++) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          if (ws[cellRef]) {
+            ws[cellRef].s = {
+              font: { bold: true },
+              alignment: { horizontal: "right" },
+            };
+          }
+        }
+        // Center "TOTAL" text
+        if (ws["A" + (R + 1)]) {
+          ws["A" + (R + 1)].s = {
+            font: { bold: true },
+            alignment: { horizontal: "center" },
+          };
+        }
+      }
+    }
+
+    // Auto-adjust column widths
+    const colWidths = [
+      { wch: 12 }, // Date
+      { wch: 18 }, // Invoice / Bill No
+      { wch: 14 }, // Bill Amount
+      { wch: 12 }, // Payment
+      { wch: 12 }, // Payment Mode
+      { wch: 14 }, // Debit
+      { wch: 14 }, // Credit
+      { wch: 16 }, // Closing Balance
+    ];
+    ws["!cols"] = colWidths;
+
+    // Create workbook and download
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Agent Ledger");
 

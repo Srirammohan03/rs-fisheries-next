@@ -80,8 +80,9 @@ export async function PUT(
       );
     }
 
+    const trayKg = Number(body.trayWeight) || 35;
     const items: FormerItemPayload[] = body.items.map((i: any) => {
-      const trayKgs = i.noTrays * TRAY_KG;
+      const trayKgs = i.noTrays * trayKg;
       const totalKgs = trayKgs + i.loose;
 
       return {

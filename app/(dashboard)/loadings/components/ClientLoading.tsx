@@ -19,7 +19,7 @@ import {
 import { PlusCircle, Save, Trash2 } from "lucide-react";
 import { Field, FieldLabel } from "@/components/ui/field";
 
-const TRAY_KG = 35;
+const TRAY_WEIGHT_OPTIONS = [35, 40, 42];
 const DEDUCTION_PERCENT = 5;
 
 const OTHER_VEHICLE_VALUE = "__OTHER__";
@@ -100,6 +100,7 @@ export default function ClientLoadingForm() {
 
   // manual entry (only when "Other")
   const [clientName, setClientName] = useState("");
+  const [trayWeight, setTrayWeight] = useState(TRAY_WEIGHT_OPTIONS[0]);
 
   //  NEW: vehicle toggle checkbox
   const [useVehicle, setUseVehicle] = useState(false);
@@ -280,7 +281,7 @@ export default function ClientLoadingForm() {
           const code = String(value ?? "");
           const nextNoTrays = safeNum(row.noTrays);
           const nextLoose = safeNum(row.loose);
-          const trayKgs = nextNoTrays * TRAY_KG;
+          const trayKgs = nextNoTrays * trayWeight;
           const totalKgs = trayKgs + nextLoose;
 
           return {
@@ -297,7 +298,7 @@ export default function ClientLoadingForm() {
         if (field === "noTrays" || field === "loose") {
           const n = Math.max(0, safeNum(value));
           const next = { ...row, [field]: n } as ItemRow;
-          const trayKgs = safeNum(next.noTrays) * TRAY_KG;
+          const trayKgs = safeNum(next.noTrays) * trayWeight;
           const totalKgs = trayKgs + safeNum(next.loose);
           return { ...next, trayKgs, totalKgs };
         }
@@ -321,14 +322,14 @@ export default function ClientLoadingForm() {
     if (!row?.varietyCode) return { trays: nextTrays, loose: nextLoose };
 
     const maxKgs = remainingKgsForRow(row.varietyCode, rowId);
-    const want = nextTrays * TRAY_KG + nextLoose;
+    const want = nextTrays * trayWeight + nextLoose;
 
     if (want <= maxKgs) return { trays: nextTrays, loose: nextLoose };
 
-    const maxTrays = Math.floor(maxKgs / TRAY_KG);
+    const maxTrays = Math.floor(maxKgs / trayWeight);
     const trays = Math.min(nextTrays, maxTrays);
 
-    const left = maxKgs - trays * TRAY_KG;
+    const left = maxKgs - trays * trayWeight;
     const loose = Math.min(nextLoose, Math.max(0, left));
 
     toast.error(`Stock exceeded. Max allowed: ${maxKgs} Kgs`);
@@ -344,7 +345,7 @@ export default function ClientLoadingForm() {
       const after = total * (1 - DEDUCTION_PERCENT / 100);
       setGrandTotal(Math.round(after));
     }
-  }, [items, useVehicle]);
+  }, [items, useVehicle, trayWeight]);
 
   //  if user unticks checkbox, clear vehicle fields immediately
   useEffect(() => {
@@ -353,6 +354,21 @@ export default function ClientLoadingForm() {
       setOtherVehicleNo("");
     }
   }, [useVehicle]);
+
+  useEffect(() => {
+    setItems((prev) =>
+      prev.map((row) => {
+        const trayKgs = safeNum(row.noTrays) * trayWeight;
+        const totalKgs = trayKgs + safeNum(row.loose);
+
+        return {
+          ...row,
+          trayKgs,
+          totalKgs,
+        };
+      }),
+    );
+  }, [trayWeight]);
 
   const addRow = () => {
     setItems((prev) => [
@@ -385,6 +401,7 @@ export default function ClientLoadingForm() {
     setVehicleId("");
     setOtherVehicleNo("");
     setLocalVehicle("");
+    setTrayWeight(35);
 
     setItems([
       {
@@ -514,6 +531,7 @@ export default function ClientLoadingForm() {
         noTrays: safeNum(r.noTrays),
         loose: safeNum(r.loose),
       })),
+      trayWeight,
     };
 
     try {
@@ -677,6 +695,27 @@ export default function ClientLoadingForm() {
               />
               Add Vehicle? (If checked: No 5% deduction)
             </label>
+          </Field>
+
+          <Field>
+            <FieldLabel>Tray Weight *</FieldLabel>
+
+            <Select
+              value={String(trayWeight)}
+              onValueChange={(v) => setTrayWeight(Number(v))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Tray Weight" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {TRAY_WEIGHT_OPTIONS.map((weight) => (
+                  <SelectItem key={weight} value={String(weight)}>
+                    {weight} Kgs
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           {useVehicle && (

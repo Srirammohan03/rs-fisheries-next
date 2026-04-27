@@ -19,7 +19,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import AgentLoadingList from "./AgentLoadingList";
 
-const TRAY_WEIGHT = 35;
+const TRAY_WEIGHT_OPTIONS = [35, 40, 42];
 const DEDUCTION_PERCENT = 5;
 
 const todayYMD = () => {
@@ -66,6 +66,7 @@ export default function AgentLoading() {
   const [village, setVillage] = useState("");
   const [date, setDate] = useState(todayYMD());
   const [agentSelectId, setAgentSelectId] = useState<string>("");
+  const [trayWeight, setTrayWeight] = useState(35);
 
   const [vehicleId, setVehicleId] = useState("");
   const [otherVehicleNo, setOtherVehicleNo] = useState("");
@@ -123,6 +124,21 @@ export default function AgentLoading() {
     }
   }, [selectedAgent]);
 
+  useEffect(() => {
+    setItems((prev) =>
+      prev.map((row) => {
+        const trayKgs = safeNum(row.noTrays) * trayWeight;
+        const totalKgs = trayKgs + safeNum(row.loose);
+
+        return {
+          ...row,
+          trayKgs,
+          totalKgs,
+        };
+      }),
+    );
+  }, [trayWeight]);
+
   const { data: vehicles = [] } = useQuery({
     queryKey: ["assigned-vehicles"],
     queryFn: async () => {
@@ -175,7 +191,7 @@ export default function AgentLoading() {
     setLocalVehicle(loading.localVehicle || "");
 
     const rows = loading.items.map((i: any) => {
-      const trayKgs = i.noTrays * TRAY_WEIGHT;
+      const trayKgs = i.noTrays * trayWeight;
       const totalKgs = trayKgs + i.loose;
 
       return {
@@ -217,8 +233,8 @@ export default function AgentLoading() {
             // reset quantities when variety changes (optional but cleaner)
             noTrays: row.noTrays,
             loose: row.loose,
-            trayKgs: safeNum(row.noTrays) * TRAY_WEIGHT,
-            totalKgs: safeNum(row.noTrays) * TRAY_WEIGHT + safeNum(row.loose),
+            trayKgs: safeNum(row.noTrays) * trayWeight,
+            totalKgs: safeNum(row.noTrays) * trayWeight + safeNum(row.loose),
           };
         }
 
@@ -229,7 +245,7 @@ export default function AgentLoading() {
         if (field === "noTrays" || field === "loose") {
           const n = Math.max(0, safeNum(value)); //  clamp no negative
           const next = { ...row, [field]: n } as ItemRow;
-          const trayKgs = safeNum(next.noTrays) * TRAY_WEIGHT;
+          const trayKgs = safeNum(next.noTrays) * trayWeight;
           const totalKgs = trayKgs + safeNum(next.loose);
           return { ...next, trayKgs, totalKgs };
         }
@@ -262,7 +278,7 @@ export default function AgentLoading() {
 
   const totalKgs = useMemo(
     () => items.reduce((sum, r) => sum + safeNum(r.totalKgs), 0),
-    [items],
+    [items, trayWeight],
   );
 
   const totalTrays = useMemo(
@@ -290,6 +306,7 @@ export default function AgentLoading() {
     setVehicleId("");
     setOtherVehicleNo("");
     setLocalVehicle("");
+    setTrayWeight(35);
     setItems([
       {
         id: crypto.randomUUID(),
@@ -314,14 +331,12 @@ export default function AgentLoading() {
     }
 
     const name = agentName.trim();
-    if (!name && !agentSelectId) return (toast.error("Enter Agent Name"), false);
-    
+    if (!name && !agentSelectId)
+      return (toast.error("Enter Agent Name"), false);
+
     // Regex skip if agent is selected from dropdown, otherwise validate
     if (name && !AGENT_NAME_REGEX.test(name))
-      return (
-        toast.error("Agent Name contains invalid characters"),
-        false
-      );
+      return (toast.error("Agent Name contains invalid characters"), false);
 
     // const vil = village.trim();
     // if (vil && !VILLAGE_REGEX.test(vil))
@@ -390,6 +405,7 @@ export default function AgentLoading() {
         noTrays: safeNum(r.noTrays),
         loose: safeNum(r.loose),
       })),
+      trayWeight,
     };
 
     try {
@@ -482,7 +498,7 @@ export default function AgentLoading() {
               placeholder="Enter full address"
               className={cn(
                 "border-slate-200 focus-visible:ring-2 focus-visible:ring-[#139BC3]/30",
-                !!agentSelectId && "bg-slate-50"
+                !!agentSelectId && "bg-slate-50",
               )}
             />
           </Field>
@@ -516,6 +532,28 @@ export default function AgentLoading() {
               Add vehicle (no 5% deduction)
             </label>
           </Field>
+
+          <Field>
+            <FieldLabel>Tray Weight *</FieldLabel>
+
+            <Select
+              value={String(trayWeight)}
+              onValueChange={(v) => setTrayWeight(Number(v))}
+            >
+              <SelectTrigger className="border-slate-200">
+                <SelectValue placeholder="Select Tray Weight" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {TRAY_WEIGHT_OPTIONS.map((weight) => (
+                  <SelectItem key={weight} value={String(weight)}>
+                    {weight} Kgs
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
           {useVehicle && (
             <Field className="sm:col-span-2 md:col-span-1">
               <FieldLabel>Select Vehicle</FieldLabel>
