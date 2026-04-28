@@ -927,8 +927,15 @@ font-family: 'Cinzel', cursive;
   font-weight: 700;
   color: #111;
   border-top: 2px solid #000;
+  border-bottom: 2px solid #000;
   padding-top: 8px;
 }
+  .bill-total{
+    font-size: 16px;
+  font-weight: 700;
+  color: #111;
+  padding-top: 8px;
+  }
 .totals-section{
   display:flex;
   justify-content:space-between;
@@ -2117,7 +2124,12 @@ font-family: 'Cinzel', cursive;
         {bills.map((bill) => {
           // Only payments for this specific client
           const totalClientPayments = payments
-            .filter((p) => p.clientId?.toString() === bill.clientId?.toString())
+            .filter(
+              (p) =>
+                p.clientKey === `client:${bill.clientName}` &&
+                (p.client?.billNo === bill.billNo ||
+                  p.clientInvoice?.invoiceNo),
+            )
             .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
           // Previous balance before current bill
@@ -2357,13 +2369,14 @@ font-family: 'Cinzel', cursive;
                       <span>Old Balance</span>
                       <div className="right">
                         <span>:</span>
-                        {/* <span>₹</span> */}
                         <span className="value">
-                          {calculatePreviousPending(
-                            bill.clientId || "",
-                            bill.id,
-                            records,
-                            payments,
+                          {Math.round(
+                            calculatePreviousPending(
+                              bill.clientId || "",
+                              bill.id,
+                              records,
+                              payments,
+                            ),
                           ).toLocaleString("en-IN")}
                         </span>
                       </div>
@@ -2378,28 +2391,43 @@ font-family: 'Cinzel', cursive;
                         </span>
                       </div>
                     </div>
-                    <div className="amount-row grand-total">
+                    <div className="amount-row bill-total">
+                      <span>Total Bill Amount</span>
+                      <div className="right">
+                        <span>:</span>
+                        <span className="value">
+                          {(
+                            n(bill.totalPrice) +
+                            n(bill.packingAmountTotal) +
+                            n(bill.dispatchChargesTotal)
+                          ).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="amount-row bill-total">
                       <span>Pending Bill Amount</span>
                       <div className="right">
                         <span>:</span>
                         <span className="value">
                           {Math.max(
                             0,
-                            // Current full bill including all charges
-                            n(bill.totalPrice) +
-                              n(bill.packingAmountTotal) +
-                              n(bill.dispatchChargesTotal) -
-                              // Payments ONLY for this exact bill
-                              payments
-                                .filter(
-                                  (p) =>
-                                    p.clientId?.toString() ===
-                                    bill.id.toString(),
-                                )
-                                .reduce(
-                                  (sum, p) => sum + Number(p.amount || 0),
-                                  0,
-                                ),
+                            Math.round(
+                              n(bill.totalPrice) +
+                                n(bill.packingAmountTotal) +
+                                n(bill.dispatchChargesTotal) -
+                                payments
+                                  .filter(
+                                    (p) =>
+                                      p.clientKey ===
+                                        `client:${bill.clientName}` &&
+                                      p.client?.billNo === bill.billNo,
+                                  )
+                                  .reduce(
+                                    (sum, p) => sum + Number(p.amount || 0),
+                                    0,
+                                  ),
+                            ),
                           ).toLocaleString("en-IN")}
                         </span>
                       </div>

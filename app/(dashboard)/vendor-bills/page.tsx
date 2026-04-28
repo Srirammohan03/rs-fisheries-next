@@ -465,7 +465,12 @@ export default function VendorBillsPage() {
 
         const items = Array.isArray(rec.items) ? rec.items : [];
         const totalPrice = items.reduce((sum, it) => sum + n(it.totalPrice), 0);
-        const totalCharges = n(rec.dispatchBreakdown?.dispatchChargesTotal);
+        const isAgent = rec.source === "agent";
+
+        const totalCharges = isAgent
+          ? n(rec.dispatchBreakdown?.dispatchChargesTotal)
+          : 0;
+
         const grandTotal = totalPrice + totalCharges;
         const totalTrays = items.reduce((sum, it) => sum + n(it.noTrays), 0);
         const createdAt = rec.createdAt || rec.date || "";
@@ -573,7 +578,10 @@ export default function VendorBillsPage() {
         if (bill.id === currentBill.id) break;
 
         const paid = paymentMap.get(bill.id) || 0;
-        const pending = Math.max(0, bill.grandTotal - paid);
+        const billAmount =
+          bill.source === "agent" ? n(bill.grandTotal) : n(bill.totalPrice);
+
+        const pending = Math.max(0, billAmount - paid);
         previousPending += pending;
       }
 
@@ -1008,6 +1016,27 @@ export default function VendorBillsPage() {
   const handlePrint = (billId: string) => {
     const printContent = document.getElementById(`print-bill-${billId}`);
     if (!printContent) {
+      const bill = bills.find((b) => b.id === billId);
+      if (!bill) {
+        toast.error("Bill not found");
+        return;
+      }
+
+      const isAgentBill = bill.source === "agent";
+
+      const oldBalance = calculatePreviousPending(bill);
+
+      const billAmount = n(bill.totalPrice);
+
+      const extraCharges = isAgentBill ? n(bill.totalCharges) : 0;
+
+      const grandTotal = billAmount + extraCharges + oldBalance;
+
+      const currentBillPayments = vendorPayments
+        .filter((p) => p.sourceRecordId === bill.id)
+        .reduce((sum, p) => sum + n(p.amount), 0);
+
+      const pendingAmount = Math.max(0, grandTotal - currentBillPayments);
       toast.error("Print content not found");
       return;
     }
@@ -1309,12 +1338,19 @@ font-family: 'Cinzel', cursive;
 }
 
 .grand-total {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 2px solid #000;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
+  color: #111;
+  border-top: 2px solid #000;
+  border-bottom: 2px solid #000;
+  padding-top: 8px;
 }
+  .bill-total{
+    font-size: 16px;
+  font-weight: 700;
+  color: #111;
+  padding-top: 8px;
+  }
 /* Ensure all content stays above */
 .bill-body * {
   z-index: 2;
@@ -3201,11 +3237,32 @@ font-family: 'Cinzel', cursive;
                               })}
                             </span>
                           </div>
-                          <div className="amount-row grand-total">
+                          <div className="amount-row bill-total">
+                            <span>Total Bill Amount</span>
+                            <span>:</span>
+                            <span className="value">
+                              {(
+                                n(bill.totalPrice) + n(bill.totalCharges)
+                              ).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+
+                          {/* PENDING = TOTAL BILL - CURRENT BILL PAYMENTS */}
+                          <div className="amount-row bill-total">
                             <span>Pending Bill Amount</span>
                             <span>:</span>
                             <span className="value">
-                              {remainingAmount.toLocaleString("en-IN")}
+                              {Math.max(
+                                0,
+                                n(bill.totalPrice) +
+                                  n(bill.totalCharges) -
+                                  vendorPayments
+                                    .filter((p) => p.sourceRecordId === bill.id)
+                                    .reduce(
+                                      (sum, p) => sum + Number(p.amount || 0),
+                                      0,
+                                    ),
+                              ).toLocaleString("en-IN")}
                             </span>
                           </div>
                         </>

@@ -1,14 +1,18 @@
-// app\api\client-bills\send-delete-otp\route.ts
 import nodemailer from "nodemailer";
 
-const ADMIN_EMAIL = "sriram9491@gmail.com";
-const ADMIN_EMAIL_PASS = "jsyobkgvwevwkwsg";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_EMAIL_PASS = process.env.ADMIN_EMAIL_PASS;
+
+if (!ADMIN_EMAIL || !ADMIN_EMAIL_PASS) {
+    throw new Error(
+        "ADMIN_EMAIL or ADMIN_EMAIL_PASS missing in environment variables",
+    );
+}
 
 export async function POST(req: Request) {
     try {
         const { billId, itemId, source } = await req.json();
 
-        // source must be FORMER | AGENT | CLIENT
         if (!billId || !itemId || !source) {
             return Response.json(
                 {
@@ -39,7 +43,7 @@ export async function POST(req: Request) {
             otp,
             billId,
             source,
-            expiresAt: Date.now() + 5 * 60 * 1000, // 5 min
+            expiresAt: Date.now() + 5 * 60 * 1000,
         };
 
         const transporter = nodemailer.createTransport({
@@ -76,8 +80,7 @@ export async function POST(req: Request) {
         return Response.json(
             {
                 message:
-                    error?.message ||
-                    "Failed to send OTP",
+                    error?.message || "Failed to send OTP",
             },
             { status: 500 },
         );
