@@ -1,8 +1,13 @@
-// app\api\vendor-bills\send-delete-otp\route.ts
 import nodemailer from "nodemailer";
 
-const ADMIN_EMAIL = "sriram9491@gmail.com";
-const ADMIN_EMAIL_PASS = "jsyobkgvwevwkwsg";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_EMAIL_PASS = process.env.ADMIN_EMAIL_PASS;
+
+if (!ADMIN_EMAIL || !ADMIN_EMAIL_PASS) {
+    throw new Error(
+        "ADMIN_EMAIL or ADMIN_EMAIL_PASS missing in environment variables",
+    );
+}
 
 export async function POST(req: Request) {
     try {
