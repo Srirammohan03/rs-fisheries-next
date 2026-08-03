@@ -3056,12 +3056,14 @@ font-family: 'Cinzel', cursive;
                 {/* Address */}
                 <div className="address">
                   <strong>Office Address</strong>
-                  <p>
-                    NH16, Jio Petrol Pump
+                 <p>
+                    Nh16 service road, Jio Petrol Pump
                     <br />
-                    Golden Ice Factory
+                    Dimond ice factory,
                     <br />
-                    Kovuru, Nellore - 524366
+                     beside metro furniture
+                    <br />
+                    kovuru, Nellore,Ap-524137.
                   </p>
                 </div>
               </div>
