@@ -2182,13 +2182,13 @@ font-family: 'Cinzel', cursive;
                 <div className="address">
                   <strong>Office Address</strong>
                     <p>
-                    Nh16 service road, Jio Petrol Pump
+                    NH-16, Service Road,
                     <br />
-                    Dimond ice factory,
+                    Diamond Ice Factory,
                     <br />
-                     beside metro furniture
+                     Beside Metro Furniture
                     <br />
-                    kovuru, Nellore,Ap-524137.
+                    Kovuru, Nellore, A.P - 524137.
                   </p>
                 </div>
               </div>
