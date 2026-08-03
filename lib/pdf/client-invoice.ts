@@ -41,7 +41,7 @@ const COMPANY = {
   name: "RSF",
   title: "Tax Invoice",
   fullName: `Rama Satyanarayana Fisheries`,
-  addressLine: `Nh16 service road,Dimond ice factory, beside metro furniture, kovuru, Nellore,Ap-524137.`,
+  addressLine: `NH-16, Service Road, Diamond Ice Factory, Beside Metro Furniture, Kovuru, Nellore, A.P - 524137.`,
 
   phone: "+919494288997 , +919440011704",
   email: "n.vamsikiran4@gmail.com",
@@ -162,7 +162,14 @@ function vLine(doc: Doc, x: number, y1: number, y2: number, lw = 0.25) {
   doc.setLineWidth(lw);
   doc.line(x, y1, x, y2);
 }
-function oneLineClamp(doc: Doc, text: string, x: number, y: number, maxW: number, fontSize = 7.2) {
+function oneLineClamp(
+  doc: Doc,
+  text: string,
+  x: number,
+  y: number,
+  maxW: number,
+  fontSize = 7.2,
+) {
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(fontSize);
 
@@ -194,7 +201,7 @@ function multiLineClamp(
   maxW: number,
   maxLines = 2,
   fontSize = 7.2,
-  lineH = 3.6
+  lineH = 3.6,
 ) {
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(fontSize);
@@ -228,7 +235,7 @@ function textBox(
   h: number,
   fontSize = 8,
   lineH = 3.4,
-  bold = false
+  bold = false,
 ) {
   const pad = 2;
   doc.setFont("Helvetica", bold ? "bold" : "normal");
@@ -252,7 +259,7 @@ async function addImageSafe(
   maxW: number,
   maxH: number,
   logoWidth?: number,
-  logoHeight?: number
+  logoHeight?: number,
 ) {
   if (!dataUrl) return;
 
@@ -324,7 +331,7 @@ const BW_TABLE = {
 async function renderClientInvoice(
   doc: Doc,
   data: ClientInvoiceData,
-  assets?: ClientInvoiceAssets
+  assets?: ClientInvoiceAssets,
 ) {
   const L = 12;
   const R = 198;
@@ -348,8 +355,7 @@ async function renderClientInvoice(
   const roundedTotal = Math.round(total);
   const roundOff = +(roundedTotal - total).toFixed(2);
 
-  const description =
-    (data.description || "").trim() || "Supply of Fresh Fish";
+  const description = (data.description || "").trim() || "Supply of Fresh Fish";
   const hsn = (data.hsn || "").trim() || "0302";
 
   /* ---------------- TITLE ---------------- */
@@ -381,7 +387,7 @@ async function renderClientInvoice(
     logoAreaW - logoPadding * 2,
     headerH - logoPadding * 2,
     assets?.logoWidth,
-    assets?.logoHeight
+    assets?.logoHeight,
   );
 
   doc.setFont("Cinzel", "bold");
@@ -401,9 +407,30 @@ async function renderClientInvoice(
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.2);
   multiLineClamp(doc, COMPANY.addressLine, rightX + pad, y + 7.0, maxW, 7.2);
-  oneLineClamp(doc, `Phone: ${COMPANY.phone}`, rightX + pad, y + 14.2, maxW, 7.2);
-  oneLineClamp(doc, `Email: ${COMPANY.email}`, rightX + pad, y + 17.8, maxW, 7.2);
-  oneLineClamp(doc, `GSTIN: ${COMPANY.gstin}`, rightX + pad, y + 21.4, maxW, 7.2);
+  oneLineClamp(
+    doc,
+    `Phone: ${COMPANY.phone}`,
+    rightX + pad,
+    y + 14.2,
+    maxW,
+    7.2,
+  );
+  oneLineClamp(
+    doc,
+    `Email: ${COMPANY.email}`,
+    rightX + pad,
+    y + 17.8,
+    maxW,
+    7.2,
+  );
+  oneLineClamp(
+    doc,
+    `GSTIN: ${COMPANY.gstin}`,
+    rightX + pad,
+    y + 21.4,
+    maxW,
+    7.2,
+  );
   // oneLineClamp(doc, `State: ${COMPANY.state}`, rightX + pad, y + 17.8, maxW, 7.2);
 
   y += headerH;
@@ -412,7 +439,7 @@ async function renderClientInvoice(
   const topRowH = 26;
   rect(doc, L, y, W, topRowH);
 
-  const billW = 112;  
+  const billW = 112;
   vLine(doc, L + billW, y, y + topRowH);
 
   doc.setFont("Helvetica", "bold");
@@ -568,7 +595,7 @@ async function renderClientInvoice(
     `${roundOff >= 0 ? "" : "-"}Rs. ${money(Math.abs(roundOff))}`,
     R - 3,
     y + 8.5,
-    { align: "right" }
+    { align: "right" },
   );
 
   doc.setFont("Helvetica", "bold");
@@ -589,7 +616,7 @@ async function renderClientInvoice(
     R - rightX2,
     row2H - 5,
     6.9,
-    3.2
+    3.2,
   );
 
   const r3Y = y + row1H + row2H;
@@ -647,13 +674,25 @@ Account holder's name : ${COMPANY.accountHolder}`;
   doc.setFontSize(7.4);
   doc.text(`For ${COMPANY.name}:`, rightMid + 2, y + 6);
 
-  await addImageSafe(doc, assets?.signatureDataUrl, rightMid + 8, y + 9, 40, 12);
+  await addImageSafe(
+    doc,
+    assets?.signatureDataUrl,
+    rightMid + 8,
+    y + 9,
+    40,
+    12,
+  );
 
   doc.setFont("Helvetica", "normal");
   doc.setFontSize(7.2);
-  doc.text("Authorized Signatory", rightMid + (W - bankW) / 4, y + footerH - 5, {
-    align: "center",
-  });
+  doc.text(
+    "Authorized Signatory",
+    rightMid + (W - bankW) / 4,
+    y + footerH - 5,
+    {
+      align: "center",
+    },
+  );
 
   doc.setFontSize(7.2);
   doc.text("This is a Computer Generated Invoice", (L + R) / 2, 292, {
@@ -665,7 +704,7 @@ Account holder's name : ${COMPANY.accountHolder}`;
 export async function buildClientInvoicePDF(
   JsPDF: typeof jsPDF,
   data: ClientInvoiceData,
-  assets?: ClientInvoiceAssets
+  assets?: ClientInvoiceAssets,
 ) {
   const doc = new JsPDF("p", "mm", "a4");
   await renderClientInvoice(doc, data, assets);
@@ -675,7 +714,7 @@ export async function buildClientInvoicePDF(
 export async function generateClientInvoicePDF(
   JsPDF: typeof jsPDF,
   data: ClientInvoiceData,
-  assets?: ClientInvoiceAssets
+  assets?: ClientInvoiceAssets,
 ) {
   const buf = await buildClientInvoicePDF(JsPDF, data, assets);
   const blob = new Blob([buf], { type: "application/pdf" });
