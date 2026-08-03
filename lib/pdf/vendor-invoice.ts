@@ -49,7 +49,7 @@ const COMPANY = {
     name: "RSF",
     title: " Receipt ",
     fullName: `Rama Satyanarayana Fisheries`,
-    addressLine: `NH16, Jio Petrol Pump, Golden Ice Factory, Kovuru, Nellore - 524366.`,
+    addressLine: `Nh16 service road,Dimond ice factory, beside metro furniture, kovuru, Nellore,Ap-524137.`,
 
     phone: "+919494288997 , +919440011704",
     email: "n.vamsikiran4@gmail.com",
